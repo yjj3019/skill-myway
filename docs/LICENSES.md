@@ -145,3 +145,18 @@
 - 복제하지 않은 것:
 - 검증: validate / tests / 40자 대조 / 플랫폼 CLI
 - 버전:
+
+## 원본 저장소 보존 상태 (2026-11-02)
+
+- 통합 대상이던 여섯 저장소는 2026-11-02에 GitHub에서 삭제됐다.
+- 삭제 전 전체 이력을 `git clone --mirror`로 백업했다(작업공간 밖 `_archive/repos-deleted-2026-11-02`).
+  - writing-style-doc: HEAD 5b81292, 13 refs
+  - blog-style: HEAD f1573c5, 1 ref
+  - redhat-cve-analysis: HEAD 0e7222d, 2 refs
+  - claude-skills: HEAD d21541d, 1 ref
+  - ChatGPT: HEAD 7b40bd5, 24 refs
+  - Claude: HEAD dbf196a, 43 refs
+- 로컬 최신 상태는 `archive/upstream-main`, `archive/origin-main` 브랜치로 보존했다.
+- 분석용 클론(`_integration-src`, `_integration-src2`)은 2026-11-02에 제거했다.
+- 이 저장소는 여섯 저장소에 실행·설치 의존이 없다(참조 0건 확인). 문서의 저장소 이름은 출처 기록으로만 남는다.
+- 삭제 후 원문 대조·출처 재감사는 백업 미러로만 가능하다.

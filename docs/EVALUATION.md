@@ -55,3 +55,14 @@ python3 scripts/blind_review.py --cases cases.json \
 - 같은 seed로 재현할 수 있고, 기존 파일은 덮어쓰지 않는다.
 - 도구는 모델 호출·채점·의미 동등성 판정을 하지 않는다. 판정은 사람이 한다.
 - 패킷에서도 후보 출처를 알 수 없지만, 문장 자체에 출처·민감정보가 남을 수 있으므로 두 파일과 키를 보호한다.
+
+## 실행 평가 (2단계)
+
+1. **가상 테스트** — `python3 scripts/simulate_eval.py`
+   - `tests/eval_cases/cases.json`의 케이스 스키마·id 중복·스킬 커버리지·민감 패턴을 검사한다.
+   - 케이스별 요청 해시와 스킬 본문 해시로 manifest를 만든다. 모델은 호출하지 않는다.
+2. **실제 테스트** — `python3 scripts/run_eval.py --platform claude`
+   - 각 케이스에 스킬 지침을 적용해 모델을 실행하고 출력을 저장한다.
+   - 필수 요소·금지 패턴·최대 길이를 자동 검사한다. `eval-results/summary.json`에 기록한다.
+   - 자동 검사는 형식과 필수 요소만 본다. 문장 품질·사실 정확성은 사람이 판정한다.
+   - 결과는 `docs/EVALUATION-RESULTS-2026-11-01.md`에 기록했다.

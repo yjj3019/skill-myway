@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "skill": "writing",
+      "id": "writing-01",
+      "request": "가상의 노트북 거치대 사용기를 써 줘. 제공된 정보만 사용해. 2026-01-02에 4만원대에 구매했고 알루미늄 재질, 높이 6단계 조절, 책상 폭 120cm. 계기는 목이 아팠기 때문. 아쉬운 점은 각도 조절이 뻑뻑한 것. 제목과 본문을 쓰고 마지막에 '끝.'을 붙여. 제공되지 않은 성능 수치는 쓰지 마.",
+      "required": [
+        [
+          "거치대",
+          "받침대",
+          "스탠드"
+        ],
+        "끝."
+      ],
+      "forbidden": [],
+      "max_chars": 6000
+    },
+    {
+      "skill": "office-docs",
+      "id": "office-docs-01",
+      "request": "가상의 3장 발표자료 계획만 표로 만들어 줘. 1장 표지, 2장 문제, 3장 제안 구성이고 각 장에 판단이 담긴 결론형 제목과 근거 수치(가상 20% 절감)를 넣어. 실제 파일은 만들지 마.",
+      "required": [
+        "결론",
+        "20%"
+      ],
+      "forbidden": [],
+      "max_chars": 5000
+    },
+    {
+      "skill": "rhel-cve",
+      "id": "rhel-cve-01",
+      "request": "다음 가상 데이터만으로 단건 리포트를 작성해. CVE-2099-00001, 패키지 pkg-a, 영향 제품 RHEL 9 x86_64, fix_state Not affected, RHSA-2099:0001, EPSS 0.01, CVSS 5.0. 제공된 값 외의 수치·출처를 만들지 말고, 개요·영향·근거·조치·출처 항목을 포함해.",
+      "required": [
+        "CVE-2099-00001",
+        "Not affected"
+      ],
+      "forbidden": [],
+      "max_chars": 8000
+    },
+    {
+      "skill": "admission-helper",
+      "id": "admission-helper-01",
+      "request": "가상 학생의 환산 점수를 계산해 줘. 국어 90, 수학 85, 영어 2등급(90점으로 가정), 탐구 2과목 평균 80. 가상 대학 A의 환산식은 국어*0.3 + 수학*0.3 + 영어*0.2 + 탐구*0.2야. 계산 과정과 결과를 보여 줘.",
+      "required": [
+        [
+          "계산",
+          "산출",
+          "환산"
+        ],
+        "86.5"
+      ],
+      "forbidden": [],
+      "max_chars": 5000
+    },
+    {
+      "skill": "devlog",
+      "id": "devlog-01",
+      "request": "가상 프로젝트의 세션 기록 블록을 만들어 줘. 날짜 2026-01-03, 로그인 기능 구현 완료, 테스트 5건 통과, 다음 작업은 비밀번호 재설정. Notion 연결이 없다고 가정하고 SESSION_LOG.md에 붙일 형식으로 써 줘.",
+      "required": [
+        "2026-01-03",
+        "다음"
+      ],
+      "forbidden": [],
+      "max_chars": 5000
+    },
+    {
+      "skill": "incident-rca",
+      "id": "incident-rca-01",
+      "request": "다음 가상 사실만으로 RCA 보고서를 작성해. 2026-01-04 10:05 가상 서비스 A의 조회 지연 시작, 10:20 캐시 만료 직후 동시 요청 증가를 원인 후보로 관측, 10:40 동시 요청 제한으로 완화. 요약·타임라인·가설·조치·미확인 항목을 포함해.",
+      "required": [
+        "타임라인",
+        "가설",
+        "조치"
+      ],
+      "forbidden": [],
+      "max_chars": 8000
+    },
+    {
+      "skill": "code-review",
+      "id": "code-review-01",
+      "request": "다음 파이썬 함수를 리뷰해 줘. def average(values): total = 0; for v in values: total += v; return total / len(values). 빈 리스트 처리, 형 변환, 테스트 누락을 지적하고 심각도와 수정안을 제시해.",
+      "required": [
+        "빈",
+        "0"
+      ],
+      "forbidden": [],
+      "max_chars": 6000
+    },
+    {
+      "skill": "prompt-engineering",
+      "id": "prompt-engineering-01",
+      "request": "가상 고객 문의 분류 프롬프트를 설계해 줘. 입력은 문의 텍스트, 출력은 JSON {category, urgency}, 카테고리는 배송·결제·기타 3종이고 애매하면 기타로 분류. 평가 케이스 3개와 통과 기준을 포함해.",
+      "required": [
+        "JSON",
+        "평가"
+      ],
+      "forbidden": [],
+      "max_chars": 8000
+    },
+    {
+      "skill": "research-brief",
+      "id": "research-brief-01",
+      "request": "다음 가상 자료 3개로 리서치 브리프를 써 줘. 공식 문서: 기능 X 지원. 전문 매체: 성능 20% 향상 주장. 커뮤니티: 간헐 버그 보고. 결론, 근거 표, 출처 등급, 한계와 불확실성을 포함해.",
+      "required": [
+        "등급",
+        "한계"
+      ],
+      "forbidden": [],
+      "max_chars": 8000
+    },
+    {
+      "skill": "evidence-first",
+      "id": "evidence-first-01",
+      "request": "다음 가상 검증 상황을 근거 우선 관점으로 보고해 줘. 기능 구현 완료 주장, 테스트 12건 통과 1건 skip, 실행하지 않은 수동 확인 2건이 있어. 완료 여부 판정과 남은 위험, 다음 행동을 포함해.",
+      "required": [
+        [
+          "미검증",
+          "UNVERIFIED",
+          "unverified",
+          "미확인"
+        ],
+        [
+          "skip",
+          "SKIP"
+        ]
+      ],
+      "forbidden": [],
+      "max_chars": 6000
+    }
+  ]
+}

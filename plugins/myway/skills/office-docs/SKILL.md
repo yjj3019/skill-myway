@@ -33,6 +33,7 @@ HWP/HWPX 원문 읽기 요청은 `references/hwp-read.md`를 따른다. 읽기�
 | .xlsx 표·데이터·모델 | `references/xlsx.md` | `xlsx` |
 | 브랜드 디자인 시스템이 별도 문서로 주어진 발표자료 | `references/branded-deck.md` | `pptx` |
 | 챕터 다수의 장문 .docx, 정적 목차·쪽번호 필요 | `references/long-manual.md` (스크립트: `scripts/long-manual/`) | 없음(자체 파이프라인) |
+| PDF 읽기·병합·분할·폼·OCR | `references/pdf.md` | 환경에 설치된 PDF 도구 |
 
 ## 2. 우선순위
 
@@ -82,6 +83,7 @@ HWP/HWPX 원문 읽기 요청은 `references/hwp-read.md`를 따른다. 읽기�
 
 - 산출물 공통 규칙(원본 보존, 수치 검산, 접근성, 파일과 정보)은 `references/office-work.md`를 따른다.
 - 발표자료의 근거·시각 검증 절차는 `references/deck-evidence.md`를 따른다.
+- PDF 작업은 `references/pdf.md`를 따른다. 공식 document skills(PDF·DOCX·PPTX·XLSX)는 필요하면 마켓플레이스에서 설치해 쓰고, 그 구현을 복사하지 않는다.
 - 리뷰 심각도와 증거 요건은 `docs/REVIEW-CONTRACT.md`를 따른다. 실행하지 않은 검증을 완료로 쓰지 않는다.
 
 ## 특정 정보가 필요할 때

@@ -63,3 +63,9 @@ description: 코드 변경을 리뷰할 때 사용한다. "코드 리뷰", "변�
 2. 항목 목록: 심각도, 위치, 근거, 수정안.
 3. Validation Gap.
 4. 리뷰 범위와 확인한 검증 명령.
+
+## 8. 참고 파일
+
+- `references/review-workflow.md`: 리뷰 요청 패킷, 5축 리뷰, 피드백 수용 순서, 품질 기준 약화 신호, 최소 변경 확인
+- `references/security.md`: 신뢰 경계·STRIDE·OWASP 점검, 의존성·공급망, LLM 출력 취급
+

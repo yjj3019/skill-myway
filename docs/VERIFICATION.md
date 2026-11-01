@@ -67,3 +67,9 @@
 - 삭제 저장소를 가리키는 git 원격 참조 0건, 분석용 클론 2개 제거
 - skill-myway: validate PASS, 테스트 70건 0실패
 - 삭제 후 원문 대조·출처 재감사는 백업 미러로만 가능
+
+## 방법론 보강 (2026-11-02)
+
+- MIT 원천(superpowers·agent-skills·ponytail)의 절차를 재작성해 반영, 원문 복사 0건
+- Anthropic 공식 document skills는 설치 안내만, 코드·문서 미복사
+- validate PASS, 테스트 70건 0실패, 플랫폼 매니페스트 validate 통과

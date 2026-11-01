@@ -83,3 +83,9 @@ AI-Harness(Apache-2.0)를 검토해 이 저장소에 맞는 검증·평가 자�
 - 반영: `evidence-first` 스킬, `report-editing`·`deck-evidence`·`handoff` 레퍼런스, `scripts/blind_review.py`, `docs/REVIEW-CONTRACT.md`·`docs/EVALUATION.md` 보강.
 - 제외: phase-gate 워크플로, 훅·서브에이전트, ToolBroker, attestation, 지식 그래프, 성숙도·배포 문서는 런타임 하네스 전용이라 반영하지 않는다(D-005·D-014 유지).
 - 원문을 복사하지 않고 재작성했으며, 제3자 MIT 고지는 `docs/LICENSES.md`에 기록했다.
+
+## D-024 방법론 보강과 라이선스 경계 (1.7.0)
+MIT 저장소(obra/superpowers, addyosmani/agent-skills, DietrichGebert/ponytail)의 검증·디버깅·리뷰·품질 기준 개념을 재작성해 반영했다. 원문 복사는 없고 출처는 `docs/LICENSES.md`에 기록했다.
+- 반영: `evidence-first` 검증 게이트, `code-review` 리뷰 워크플로·보안·최소 변경, `incident-rca` 디버깅 절차, `writing` ADR, `office-docs` PDF·공식 문서 스킬 안내, `docs/QUALITY-BAR.md`·`docs/SKILL-AUTHORING.md`.
+- 경계: anthropics/skills는 라이선스상 복사 불가 → 설치 안내만. 라이선스 없는 저장소(document-specialist, ProposalSkills)는 개념·병행 안내만. superpowers·addyosmani의 전체 스킬 이식은 범위·트리거 충돌로 하지 않는다.
+- 스킬 수는 10개를 유지하고, 기존 스킬의 references와 문서를 보강하는 방식으로 반영했다.

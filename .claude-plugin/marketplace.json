@@ -5,14 +5,14 @@
   },
   "metadata": {
     "description": "한국어 글쓰기, 업무 문서, RHEL CVE 조사, 운영매뉴얼 빌드, 개발 이력 기록, 장애 원인 분석, 코드 리뷰·프롬프트·리서치·검토 스킬 모음",
-    "version": "1.6.3"
+    "version": "1.7.0"
   },
   "plugins": [
     {
       "name": "myway",
       "source": "./plugins/myway",
       "description": "한국어 글쓰기 편집, 브랜드 프로필 기반 Office 문서, RHEL CVE 리포트, 장문 DOCX 매뉴얼 빌드, 대입 요강 분석, 개발 이력 기록, 장애 원인 분석, 코드 리뷰, 프롬프트 설계, 리서치 브리프, 근거 우선 검토",
-      "version": "1.6.3",
+      "version": "1.7.0",
       "category": "productivity",
       "keywords": [
         "korean",

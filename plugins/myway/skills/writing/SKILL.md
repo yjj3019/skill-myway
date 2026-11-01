@@ -105,6 +105,7 @@ description: 한국어 블로그·사용기·설정 기록·기술 기고·조�
 - `references/platform-notes.md`: Claude·Codex·Grok 실행 환경별 보정
 - `references/blog-types.md`: 글 유형·제목·섹션명 변주
 - `references/executive-summary.md`: 1페이지 임원 요약
+- `references/adr.md`: 결정 기록(ADR) 형식
 - `references/meeting-notes.md`: 회의록과 결정·할 일 기록
 - `references/report-editing.md`: 보고서·PR 설명 문장 편집(근거 보존)
 

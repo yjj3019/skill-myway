@@ -93,6 +93,10 @@ python3 scripts/install_skills.py --dest <경로>         # 원하는 위치
 
 `office-docs`는 요청에서 제공된 값, 작업 디렉터리의 `brand-profile.md`, `~/.claude/myway/brand-profile.md`, 중립 기본값 순서로 브랜드 설정을 찾습니다. 프로필 양식은 [brand-profile.md](plugins/myway/skills/office-docs/references/brand-profile.md)에 있습니다. 조직 고유 값은 저장소에 두지 않습니다.
 
+## 함께 쓰는 스킬
+
+제안서·RFP·장표 제작과 제출 검토는 [ProposalSkills](https://github.com/yjj3019/ProposalSkills)를 별도 플러그인으로 함께 씁니다. 이 저장소는 일상 글쓰기·문서·보안·장애 분석·코드 리뷰를 담당하고, 제안서 전용 콘텐츠·PPTX 빌드·제출 게이트는 ProposalSkills가 맡습니다. 두 저장소의 파일을 서로 복사하지 않습니다.
+
 ## 검증과 유지보수
 
 ```sh
@@ -103,7 +107,7 @@ python3 scripts/package_skill.py --skill all            # 업로드용 ZIP 생�
 
 검증기는 매니페스트, 버전 일치, 스킬 지침과 참조 파일, 스크립트 문법, 민감 패턴을 확인합니다. 저장소에 둘 수 없는 검사 용어는 `--terms 파일` 또는 `MYWAY_BANNED_TERMS_FILE` 환경변수로 전달하고 커밋하지 않습니다.
 
-리뷰 심각도와 증거 기준은 [리뷰 계약](docs/REVIEW-CONTRACT.md)에, 스킬 변경의 품질 비교는 [스킬 평가](docs/EVALUATION.md)에 있습니다. 블라인드 비교 패킷은 `python3 scripts/blind_review.py --help`로, 가상·실제 평가는 `python3 scripts/simulate_eval.py`와 `python3 scripts/run_eval.py --help`로 실행합니다. 실행 평가 결과는 [평가 결과](docs/EVALUATION-RESULTS-2026-11-01.md)에 있습니다.
+품질 기준은 [품질 기준](docs/QUALITY-BAR.md)에, 스킬 추가·수정 절차는 [스킬 작성 안내](docs/SKILL-AUTHORING.md)에 있습니다. 리뷰 심각도와 증거 기준은 [리뷰 계약](docs/REVIEW-CONTRACT.md)에, 스킬 변경의 품질 비교는 [스킬 평가](docs/EVALUATION.md)에 있습니다. 블라인드 비교 패킷은 `python3 scripts/blind_review.py --help`로, 가상·실제 평가는 `python3 scripts/simulate_eval.py`와 `python3 scripts/run_eval.py --help`로 실행합니다. 실행 평가 결과는 [평가 결과](docs/EVALUATION-RESULTS-2026-11-01.md)에 있습니다.
 
 스킬을 수정할 때는 `VERSION`과 각 플랫폼 매니페스트의 버전을 함께 올립니다. 확인된 항목과 미검증 항목은 [검증 현황](docs/VERIFICATION.md)에 기록합니다.
 

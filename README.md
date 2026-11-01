@@ -1,6 +1,6 @@
 # skill-myway
 
-한국어 글쓰기, 업무 문서, 보안 분석, 진학 상담, 개발 이력, 장애 원인 분석, 코드 리뷰, 프롬프트 설계, 자료 조사를 위한 개인 스킬 모음입니다. 스킬 본문은 한 벌이고, Claude Code·ChatGPT(Codex)·Grok Build가 같은 `SKILL.md`를 읽습니다. Grok Bot에서는 대화에서 스킬로 저장해 씁니다.
+한국어 글쓰기, 업무 문서, 보안 분석, 진학 상담, 개발 이력, 장애 원인 분석, 코드 리뷰, 프롬프트 설계, 자료 조사, 근거 우선 검토를 위한 개인 스킬 모음입니다. 스킬 본문은 한 벌이고, Claude Code·ChatGPT(Codex)·Grok Build가 같은 `SKILL.md`를 읽습니다. Grok Bot에서는 대화에서 스킬로 저장해 씁니다.
 
 ## 스킬
 
@@ -15,6 +15,7 @@
 | `code-review` | 코드 변경 리뷰: 심각도·근거·Validation Gap, 테스트 약화 확인 |
 | `prompt-engineering` | 프롬프트 구조화·검토·평가 케이스 설계 |
 | `research-brief` | 출처 등급과 기준일을 밝힌 조사·리서치 브리프 |
+| `evidence-first` | 근거 우선 검토: 완료 증거, 지침 충돌·노후 판정, 독립 확인 |
 
 ## 설치
 
@@ -102,7 +103,7 @@ python3 scripts/package_skill.py --skill all            # 업로드용 ZIP 생�
 
 검증기는 매니페스트, 버전 일치, 스킬 지침과 참조 파일, 스크립트 문법, 민감 패턴을 확인합니다. 저장소에 둘 수 없는 검사 용어는 `--terms 파일` 또는 `MYWAY_BANNED_TERMS_FILE` 환경변수로 전달하고 커밋하지 않습니다.
 
-리뷰 심각도와 증거 기준은 [리뷰 계약](docs/REVIEW-CONTRACT.md)에, 스킬 변경의 품질 비교는 [스킬 평가](docs/EVALUATION.md)에 있습니다.
+리뷰 심각도와 증거 기준은 [리뷰 계약](docs/REVIEW-CONTRACT.md)에, 스킬 변경의 품질 비교는 [스킬 평가](docs/EVALUATION.md)에 있습니다. 블라인드 비교 패킷은 `python3 scripts/blind_review.py --help`로 만듭니다.
 
 스킬을 수정할 때는 `VERSION`과 각 플랫폼 매니페스트의 버전을 함께 올립니다. 확인된 항목과 미검증 항목은 [검증 현황](docs/VERIFICATION.md)에 기록합니다.
 

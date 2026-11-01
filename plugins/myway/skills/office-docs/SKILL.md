@@ -81,6 +81,7 @@ HWP/HWPX 원문 읽기 요청은 `references/hwp-read.md`를 따른다. 읽기�
 ## 7. 작업 규칙과 리뷰
 
 - 산출물 공통 규칙(원본 보존, 수치 검산, 접근성, 파일과 정보)은 `references/office-work.md`를 따른다.
+- 발표자료의 근거·시각 검증 절차는 `references/deck-evidence.md`를 따른다.
 - 리뷰 심각도와 증거 요건은 `docs/REVIEW-CONTRACT.md`를 따른다. 실행하지 않은 검증을 완료로 쓰지 않는다.
 
 ## 특정 정보가 필요할 때

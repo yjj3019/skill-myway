@@ -1,13 +1,28 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "myway",
-  "version": "1.5.0",
-  "description": "한국어 글쓰기 편집, 브랜드 프로필 기반 Office 문서, RHEL CVE 리포트, 장문 DOCX 매뉴얼 빌드, 대입 요강 분석, 개발 이력 기록, 장애 원인 분석, 코드 리뷰, 프롬프트 설계, 리서치 브리프",
+  "version": "1.6.0",
+  "description": "한국어 글쓰기 편집, 브랜드 프로필 기반 Office 문서, RHEL CVE 리포트, 장문 DOCX 매뉴얼 빌드, 대입 요강 분석, 개발 이력 기록, 장애 원인 분석, 코드 리뷰, 프롬프트 설계, 리서치 브리프, 근거 우선 검토",
   "author": {
     "name": "yjj3019"
   },
   "license": "Apache-2.0",
-  "keywords": ["korean", "writing", "docx", "pptx", "xlsx", "rhel", "cve", "devlog", "admission", "rca", "review", "prompt", "research"],
+  "keywords": [
+    "korean",
+    "writing",
+    "docx",
+    "pptx",
+    "xlsx",
+    "rhel",
+    "cve",
+    "devlog",
+    "admission",
+    "rca",
+    "review",
+    "prompt",
+    "research",
+    "evidence"
+  ],
   "extensions": {
     "com.openai": {
       "interface": {
@@ -15,8 +30,13 @@
         "shortDescription": "글쓰기·문서·보안·이력·리뷰·프롬프트",
         "developerName": "yjj3019",
         "category": "Productivity",
-        "capabilities": ["Instructions"],
-        "defaultPrompt": ["이 글을 다듬어줘", "이 코드 변경을 리뷰해줘"]
+        "capabilities": [
+          "Instructions"
+        ],
+        "defaultPrompt": [
+          "이 글을 다듬어줘",
+          "이 코드 변경을 리뷰해줘"
+        ]
       }
     }
   }

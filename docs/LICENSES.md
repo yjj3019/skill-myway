@@ -91,6 +91,13 @@
 
 흡수 후 원문 대조(40자 창)를 다시 실행했고, **이번에 새로 작성한 파일**에서는 본문 일치가 0건이었다(공식 문서 URL 제외).
 
+## AI-Harness (Apache-2.0) 검토
+
+- 라이선스: Apache-2.0. 이 저장소와 호환된다. 클론 98파일을 읽고 검토했다.
+- 흡수(재작성): `evidence-first` 스킬, `report-editing`·`deck-evidence`·`handoff` 레퍼런스, `scripts/blind_review.py`(개념 이식), `docs/REVIEW-CONTRACT.md`·`docs/EVALUATION.md` 보강.
+- 제외: phase-gate 워크플로, 훅·서브에이전트, ToolBroker, attestation, 지식 그래프, 성숙도·배포 문서. 이 저장소는 스킬 배포용이고 런타임 하네스가 아니다(D-005·D-014 유지).
+- 제3자: `design-evidence-harness` 스킬은 alchaincyf(花叔·花生) MIT, evidence-preserving 원칙은 blader/humanizer MIT를 참고한다. 이번 흡수는 개념 재작성이며 원문·코드 복사가 없다. 향후 코드를 직접 복사하면 Apache-2.0 고지와 MIT 고지를 함께 남긴다.
+
 ## 기존 유래 콘텐츠 (이번 작업 이전)
 
 이번 작업 전에 이미 통합돼 있던 일부 문장은 같은 작성자의 이전 저장소에서 유래했다. 예: `rhel-cve`의 판정 규칙과 참조 문서, `writing`·`office-docs`의 일부 규칙.

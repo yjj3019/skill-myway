@@ -7,8 +7,8 @@
 | 항목 | 상태 | 근거 |
 |---|---|---|
 | 저장소 구조·버전 일치·민감 패턴 | VERIFIED | `python scripts/validate_repo.py` 3회 연속 PASS (2026-11-01) |
-| 단위·통합 테스트 | VERIFIED | `python scripts/run_tests.py` 51건, 실패 0, skip 0. 2회 연속 실행에서도 동일 |
-| Python 버전 매트릭스 | VERIFIED | Python 3.11·3.13·3.14에서 각각 51건, 실패 0, skip 0. 3.11에서 테스트 탐색 결함을 찾아 `run_tests.py`를 수정 |
+| 단위·통합 테스트 | VERIFIED | `python scripts/run_tests.py` 59건, 실패 0, skip 0. 2회 연속 실행에서도 동일 |
+| Python 버전 매트릭스 | VERIFIED | Python 3.11·3.13·3.14에서 각각 59건, 실패 0, skip 0. 3.11에서 테스트 탐색 결함을 찾아 `run_tests.py`를 수정 |
 | 경로 공백·한글 | VERIFIED | 공백과 한글이 포함된 임시 경로에서 validate PASS, 51건 통과, ZIP 생성 성공 |
 | CRLF 체크아웃 | VERIFIED | 텍스트 68개를 CRLF로 바꾼 복사본에서 validate PASS, 51건 통과 |
 | 패키징 시뮬레이션 | VERIFIED | 9개 스킬 ZIP 생성, 같은 입력에서 같은 SHA-256, `__pycache__`·숨김 파일 미포함 |
@@ -29,8 +29,11 @@
 | Windows·macOS CI | VERIFIED(직전 푸시 기준) | 1.4.5 커밋의 CI 3개 OS 통과. 1.5.0 CI는 3개 OS × Python 3.11·3.12·3.13 매트릭스로 확장했고, 푸시 후 확인이 필요하다 |
 | 라이선스·출처 검토 | VERIFIED(파일 단위) | 대상 저장소 여섯 개의 라이선스 파일·제3자 표기·민감 자산 확인. 법적 판정은 아님 |
 | 원문 복사 대조 | VERIFIED(신규 파일 기준) | 이번에 새로 작성한 파일에서 40자 이상 연속 일치 0건(공식 문서 URL 제외). 대조 중 찾은 9건은 새 표현으로 교체 |
-| 잔여 일반 지침 흡수 | VERIFIED(구조 검사) | 소스 저장소의 일반 지침을 새 스킬 3개·레퍼런스 4개·문서 2개로 재작성. validate PASS, 테스트 51건 통과 |
+| 잔여 일반 지침 흡수 | VERIFIED(구조 검사) | 소스 저장소의 일반 지침을 새 스킬 3개·레퍼런스 4개·문서 2개로 재작성. validate PASS, 테스트 59건 통과 |
 | 기존 유래 콘텐츠 | PARTIAL | `rhel-cve` 등 이전 통합분은 같은 작성자의 저장소에서 유래. 공개 배포 전 저작자 확인 필요 |
+| AI-Harness 검토·반영 | VERIFIED(문서 판정) | Apache-2.0 확인, 98파일 분석. 흡수(evidence-first·레퍼런스 3종·blind_review·문서 보강)와 제외(게이트·훅·브로커) 내역을 LICENSES·DECISIONS에 기록 |
+| 블라인드 평가 도구 | VERIFIED(단위 테스트) | `scripts/blind_review.py` 8건 테스트 통과: 배정 결정성·후보 매핑·seed 재현·잘못된 입력 거부·덮어쓰기 방지 |
+| 실제 모델 비교 평가 | NOT VERIFIED | 도구만 제공. 모델 호출·사람 판정은 실행하지 않음 |
 
 ## 스킬 품질 확인 (기존 범위)
 

@@ -77,3 +77,9 @@ Humanizer의 문단 단위 재검토와 사실 보존 관점을 참고하되 별
 - 흡수: 리뷰 계약(`code-review`, `docs/REVIEW-CONTRACT.md`), 프롬프트 설계(`prompt-engineering`), 조사(`research-brief`), 글 유형·임원 요약·회의록(`writing/references/`), 오피스 작업 규칙(`office-docs/references/`), 평가 루브릭(`docs/EVALUATION.md`).
 - 제외: 조직·개인 실명, 실제 게시물 인용, 내부 목적지, 벤더 모델 코드명·가격·라우팅, 호스트 전용 설정, 생성 배포본, 권리 미확정 경로.
 - 판정 근거와 흡수 목록은 `docs/LICENSES.md`에 있고, 흡수 후 40자 원문 대조를 다시 실행해 본문 일치 0건을 확인했다.
+
+## D-023 AI-Harness 자산 선택 반영 (1.6.0)
+AI-Harness(Apache-2.0)를 검토해 이 저장소에 맞는 검증·평가 자산만 재작성해 반영했다.
+- 반영: `evidence-first` 스킬, `report-editing`·`deck-evidence`·`handoff` 레퍼런스, `scripts/blind_review.py`, `docs/REVIEW-CONTRACT.md`·`docs/EVALUATION.md` 보강.
+- 제외: phase-gate 워크플로, 훅·서브에이전트, ToolBroker, attestation, 지식 그래프, 성숙도·배포 문서는 런타임 하네스 전용이라 반영하지 않는다(D-005·D-014 유지).
+- 원문을 복사하지 않고 재작성했으며, 제3자 MIT 고지는 `docs/LICENSES.md`에 기록했다.

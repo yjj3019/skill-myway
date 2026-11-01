@@ -38,3 +38,20 @@
 - 자동 점수는 형식만 본다. 의미 품질은 사람이 판정한다.
 - 모델이 바뀌면 결과가 달라진다. 오래된 결과를 현재 성능으로 쓰지 않는다.
 - 표본이 적으면 우연과 차이를 구분할 수 없다.
+
+## 블라인드 패킷
+
+`scripts/blind_review.py`로 A/B 순서를 섞은 검토 패킷과 비공개 키를 만든다.
+
+```sh
+python3 scripts/blind_review.py --cases cases.json \
+  --candidate-1 a.json --candidate-2 b.json \
+  --packet packet.json --key key.json
+```
+
+- 케이스 형식: `id`, `source`, `required_claims`, `protected_spans`.
+- 후보 형식: 케이스 id마다 비어 있지 않은 문장.
+- 키에는 seed·배정·해시가 들어간다. 검토자에게 주지 않는다.
+- 같은 seed로 재현할 수 있고, 기존 파일은 덮어쓰지 않는다.
+- 도구는 모델 호출·채점·의미 동등성 판정을 하지 않는다. 판정은 사람이 한다.
+- 패킷에서도 후보 출처를 알 수 없지만, 문장 자체에 출처·민감정보가 남을 수 있으므로 두 파일과 키를 보호한다.

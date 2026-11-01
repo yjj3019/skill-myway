@@ -1,7 +1,7 @@
 {
   "name": "myway",
-  "version": "1.5.0",
-  "description": "한국어 글쓰기 편집, 브랜드 프로필 기반 Office 문서, RHEL CVE 리포트, 장문 DOCX 매뉴얼 빌드, 대입 요강 분석, 개발 이력 기록, 장애 원인 분석, 코드 리뷰, 프롬프트 설계, 리서치 브리프",
+  "version": "1.6.0",
+  "description": "한국어 글쓰기 편집, 브랜드 프로필 기반 Office 문서, RHEL CVE 리포트, 장문 DOCX 매뉴얼 빌드, 대입 요강 분석, 개발 이력 기록, 장애 원인 분석, 코드 리뷰, 프롬프트 설계, 리서치 브리프, 근거 우선 검토",
   "author": {
     "name": "yjj3019"
   },
@@ -19,13 +19,14 @@
     "rca",
     "review",
     "prompt",
-    "research"
+    "research",
+    "evidence"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "myway",
     "shortDescription": "글쓰기·문서·보안·이력·장애·리뷰·프롬프트 스킬",
-    "longDescription": "글쓰기 편집, Office 문서 규격과 장문 매뉴얼 빌드, RHEL CVE 조사, 대입 요강 분석, 개발 이력 기록, 장애 원인 분석, 코드 리뷰, 프롬프트 설계, 리서치 브리프를 하나의 플러그인으로 제공합니다.",
+    "longDescription": "글쓰기 편집, Office 문서 규격과 장문 매뉴얼 빌드, RHEL CVE 조사, 대입 요강 분석, 개발 이력 기록, 장애 원인 분석, 코드 리뷰, 프롬프트 설계, 리서치 브리프, 근거 우선 검토를 하나의 플러그인으로 제공합니다.",
     "developerName": "yjj3019",
     "category": "Productivity",
     "defaultPrompt": [

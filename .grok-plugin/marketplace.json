@@ -1,6 +1,6 @@
 {
   "name": "skill-myway",
-  "description": "한국어 글쓰기, Office 문서, RHEL CVE·매뉴얼, 개발 이력·장애 분석·코드 리뷰·프롬프트·리서치 스킬 모음",
+  "description": "한국어 글쓰기, Office 문서, RHEL CVE·매뉴얼, 개발 이력·장애 분석·코드 리뷰·프롬프트·리서치·검토 스킬 모음",
   "owner": {
     "name": "yjj3019"
   },
@@ -11,7 +11,7 @@
         "type": "local",
         "path": "./plugins/myway"
       },
-      "description": "한국어 글쓰기 편집, 브랜드 프로필 기반 Office 문서, RHEL CVE 리포트, 장문 DOCX 매뉴얼 빌드, 대입 요강 분석, 개발 이력 기록, 장애 원인 분석, 코드 리뷰, 프롬프트 설계, 리서치 브리프",
+      "description": "한국어 글쓰기 편집, 브랜드 프로필 기반 Office 문서, RHEL CVE 리포트, 장문 DOCX 매뉴얼 빌드, 대입 요강 분석, 개발 이력 기록, 장애 원인 분석, 코드 리뷰, 프롬프트 설계, 리서치 브리프, 근거 우선 검토",
       "category": "productivity",
       "keywords": [
         "korean",
@@ -26,9 +26,10 @@
         "rca",
         "review",
         "prompt",
-        "research"
+        "research",
+        "evidence"
       ],
-      "version": "1.5.0",
+      "version": "1.6.0",
       "author": {
         "name": "yjj3019"
       }

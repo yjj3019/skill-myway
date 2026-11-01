@@ -93,6 +93,9 @@ def check_manifests(root, errors):
         if not name or not str(src).startswith("./"):
             errors.append(f"marketplace.json: 플러그인 항목 형식 오류 {entry}")
             continue
+        if ".." in str(src):
+            errors.append(f"marketplace.json: source에 '..' 사용 불가 {src}")
+            continue
         pdir = root / src[2:]
         pj = pdir / ".claude-plugin" / "plugin.json"
         if not pj.is_file():
@@ -116,6 +119,16 @@ def check_manifests(root, errors):
             skills = cm.get("skills")
             if not isinstance(skills, str) or not skills.strip().lstrip("./") or not (pdir / skills.lstrip("./")).is_dir():
                 errors.append(f"{cx}: skills 경로 없음")
+        # Codex canonical 포터블 매니페스트. 없거나 버전이 어긋나면 설치본이 갱신되지 않는다.
+        rp = pdir / "plugin.json"
+        if not rp.is_file():
+            errors.append(f"{src}: plugin.json 없음 (Codex canonical)")
+        else:
+            rm = read_json(rp, errors) or {}
+            if rm.get("name") != name:
+                errors.append(f"{rp}: name '{rm.get('name')}' != '{name}'")
+            if version and rm.get("version") != version:
+                errors.append(f"버전 불일치: plugin.json={rm.get('version')}, VERSION={version}")
         plugin_dirs.append(pdir)
     check_codex_marketplace(root, [e.get("name") for e in plugins], errors)
     check_grok_marketplace(root, [e.get("name") for e in plugins], version, errors)
@@ -141,7 +154,9 @@ def check_codex_marketplace(root, names, errors):
             continue
         src = e.get("source")
         path = src.get("path") if isinstance(src, dict) else src
-        if not str(path).startswith("./") or not (root / str(path)[2:]).is_dir():
+        if ".." in str(path):
+            errors.append(f"Codex 마켓플레이스: '{n}' source에 '..' 사용 불가 {path}")
+        elif not str(path).startswith("./") or not (root / str(path)[2:]).is_dir():
             errors.append(f"Codex 마켓플레이스: '{n}' source 경로 오류 {path}")
         pol = e.get("policy") or {}
         if not (pol.get("installation") and pol.get("authentication") and e.get("category")):
@@ -167,7 +182,9 @@ def check_grok_marketplace(root, names, version, errors):
             continue
         src = e.get("source") or {}
         path = src.get("path", "")
-        if src.get("type") != "local" or not str(path).startswith("./") or not (root / str(path)[2:]).is_dir():
+        if ".." in str(path):
+            errors.append(f"Grok 마켓플레이스: '{n}' source에 '..' 사용 불가 {path}")
+        elif src.get("type") != "local" or not str(path).startswith("./") or not (root / str(path)[2:]).is_dir():
             errors.append(f"Grok 마켓플레이스: '{n}' source 오류 {src}")
         if version and e.get("version") != version:
             errors.append(f"버전 불일치: grok marketplace={e.get('version')}, VERSION={version}")

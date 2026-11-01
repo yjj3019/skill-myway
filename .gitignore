@@ -5,3 +5,4 @@ node_modules/
 /brand-profile.md
 .DS_Store
 /.claude/
+/dist/

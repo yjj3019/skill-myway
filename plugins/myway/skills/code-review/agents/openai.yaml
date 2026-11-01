@@ -1,0 +1,3 @@
+interface:
+  display_name: "코드 리뷰"
+  short_description: "근거 기반 코드 변경 리뷰"

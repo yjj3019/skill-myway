@@ -1,20 +1,53 @@
 # 검증 현황
 
-기준일 2026-10-28, 버전 1.4.5. 확인한 것만 VERIFIED로 적는다.
+기준일 2026-11-01, 버전 1.5.0. 확인한 것만 VERIFIED로 적는다. 이 표는 커밋 전 작업트리 기준이다.
+
+## 이번 변경에서 실행한 검증
 
 | 항목 | 상태 | 근거 |
 |---|---|---|
-| 저장소 구조·버전 일치·민감 패턴 | VERIFIED | Windows에서 `python scripts/validate_repo.py` PASS |
-| 검증 스크립트 단위 테스트 | VERIFIED | Windows에서 `python scripts/run_tests.py` 25건 실행, 실패 0, skip 0 |
-| Windows·macOS에서 검증 | VERIFIED(직전 푸시 기준) | 3f6d8b9 커밋의 CI 3개 OS 통과 |
-| Claude Code에서 플러그인 설치 | VERIFIED(로컬 경로) | Windows·Claude Code 2.1.310의 격리 설정에서 작업본 1.4.4 설치와 office-docs 지침 일치 확인. 원격 배포본과 대화 중 호출은 미검증 |
-| Codex에서 플러그인 설치 | VERIFIED(로컬 경로) | Windows의 격리된 CODEX_HOME에서 작업본 1.4.4 설치와 office-docs 지침 일치 확인. 원격 배포본은 미검증; 실제 사용자 설정에 설치된 것은 1.4.3 |
-| Claude·Codex 대화 중 스킬 실제 호출 | PARTIAL | Windows Codex CLI에서 설치된 1.4.3으로 합성 HWPX를 읽었다. 최종 1.4.4는 임시 프로젝트 스킬로 자동 선택과 추출을 확인했으며, 깨진 PowerShell 출력을 `chcp 65001`과 UTF-8 읽기로 복구했다. 무관한 계산 요청 1건에는 스킬을 호출하지 않았다. 1.4.4 설치본의 대화 호출·Claude 호출과 실제 문서 전체 정확도는 미검증 |
-| writing 비교 평가 | PARTIAL | `writing-evaluation.md`에 가상 원고 1건과 4개 사례의 블라인드 판정 기록. 자동 스킬 호출·반복 검증은 미실행 |
+| 저장소 구조·버전 일치·민감 패턴 | VERIFIED | `python scripts/validate_repo.py` 3회 연속 PASS (2026-11-01) |
+| 단위·통합 테스트 | VERIFIED | `python scripts/run_tests.py` 51건, 실패 0, skip 0. 2회 연속 실행에서도 동일 |
+| Python 버전 매트릭스 | VERIFIED | Python 3.11·3.13·3.14에서 각각 51건, 실패 0, skip 0. 3.11에서 테스트 탐색 결함을 찾아 `run_tests.py`를 수정 |
+| 경로 공백·한글 | VERIFIED | 공백과 한글이 포함된 임시 경로에서 validate PASS, 51건 통과, ZIP 생성 성공 |
+| CRLF 체크아웃 | VERIFIED | 텍스트 68개를 CRLF로 바꾼 복사본에서 validate PASS, 51건 통과 |
+| 패키징 시뮬레이션 | VERIFIED | 9개 스킬 ZIP 생성, 같은 입력에서 같은 SHA-256, `__pycache__`·숨김 파일 미포함 |
+| ZIP 소비 시뮬레이션 | VERIFIED | 9개 ZIP을 압축 해제해 SKILL.md frontmatter와 참조 파일 존재를 확인. 결함 0건 |
+| 설치 스크립트 시뮬레이션 | VERIFIED | 임시 디렉터리에서 claude·codex·grok 3개 대상 모두 9개 스킬 복사, 재설치 skip, `--force` 교체 확인 |
+| 롤백 시뮬레이션 | VERIFIED(재현) | 임시 복사본에서 `git restore` + 신규 파일 삭제 후 VERSION 1.4.5, validate PASS, 25건 실패 0 확인. 이 과정에서 원복 목록 누락 1건을 찾아 수정 |
+| 버전 전파 | VERIFIED | 1.5.1로 올린 복사본에서 Claude·Codex 설치 버전과 Grok 검증 버전이 1.5.1로 표시 |
+| 업그레이드 | VERIFIED(격리) | Claude 1.5.1→1.5.2 `plugin update`, Codex 경로 재추가+`plugin add`로 1.5.2, Grok `plugin update`로 1.5.0→1.5.1 반영 |
+| 부정 테스트 | VERIFIED | Claude·Codex가 깨진 매니페스트 JSON을 거부, Codex가 없는 source 경로를 설치 시 거부, Grok이 `name` 누락 manifest를 거부, 저장소 검증기가 `..` 경로를 거부 |
+| 보안·이력 스캔 | VERIFIED | 작업트리·전체 커밋에서 이메일·실제 CVE/RHSA·IP·토큰·홈경로 0건. 실행 파일·심볼릭 링크·의심 파일명 0건, 최대 파일 13KB |
+| Claude Code 마켓플레이스·플러그인 검증 | VERIFIED | `claude plugin validate .`와 `claude plugin validate ./plugins/myway` 통과 (1.5.0) |
+| Claude Code 설치·스킬 인식 | VERIFIED(격리 설정) | 임시 설정 디렉터리에서 1.5.0 설치, `claude plugin list`에서 enabled, 스킬 9개 확인 |
+| Codex 설치·스킬 인식 | VERIFIED(격리 설정) | 임시 `CODEX_HOME`에서 1.5.0 설치, `codex plugin list`에서 installed·enabled, 스킬 9개 확인 |
+| Grok Build 설치·스킬 인식 | VERIFIED(격리 홈) | 임시 홈에서 마켓플레이스 추가·설치 성공, 플러그인 목록에 표시, 스킬 9개 확인. 실제 사용자 홈은 변경되지 않음을 전후 비교로 확인 |
+| Grok Build 플러그인 검증 | VERIFIED | `grok plugin validate ./plugins/myway` 통과, 1.5.0 |
+| Grok Bot 스킬 저장 | NOT VERIFIED | 공식 문서의 대화 저장 절차만 확인. 실제 저장·호출 미실행 |
+| Claude 앱·ChatGPT Skills ZIP 업로드 | NOT VERIFIED | ZIP 생성·소비까지만 확인. 업로드 화면·한도는 계정·앱 버전에 따라 달라 미확인 |
+| Windows·macOS CI | VERIFIED(직전 푸시 기준) | 1.4.5 커밋의 CI 3개 OS 통과. 1.5.0 CI는 3개 OS × Python 3.11·3.12·3.13 매트릭스로 확장했고, 푸시 후 확인이 필요하다 |
+| 라이선스·출처 검토 | VERIFIED(파일 단위) | 대상 저장소 여섯 개의 라이선스 파일·제3자 표기·민감 자산 확인. 법적 판정은 아님 |
+| 원문 복사 대조 | VERIFIED(신규 파일 기준) | 이번에 새로 작성한 파일에서 40자 이상 연속 일치 0건(공식 문서 URL 제외). 대조 중 찾은 9건은 새 표현으로 교체 |
+| 잔여 일반 지침 흡수 | VERIFIED(구조 검사) | 소스 저장소의 일반 지침을 새 스킬 3개·레퍼런스 4개·문서 2개로 재작성. validate PASS, 테스트 51건 통과 |
+| 기존 유래 콘텐츠 | PARTIAL | `rhel-cve` 등 이전 통합분은 같은 작성자의 저장소에서 유래. 공개 배포 전 저작자 확인 필요 |
+
+## 스킬 품질 확인 (기존 범위)
+
+| 항목 | 상태 | 근거 |
+|---|---|---|
+| writing 비교 평가 | PARTIAL | `writing-evaluation.md`의 가상 원고 1건과 사례 4건 기록. 자동 호출·반복 검증은 미실행 |
+| incident-rca 보고서 | PARTIAL | 가상 예시와 구조·형식 검사만 확인. 실제 사고 자료 적용은 미검증 |
 | Office 문서 생성·시각 검증 | NOT VERIFIED | 이번 변경에서 실제 산출물 생성·렌더링·잘림 확인은 하지 않음 |
-| HWP/HWPX 선택 도구 읽기 | PARTIAL | Windows·Node 24·kordoc 4.24.13에서 합성 HWPX와 공개 HWP/HWPX 각 1건을 오프라인으로 읽음. 일부 표·경고 확인; 두 대응 PDF와 쪽 수 차이, 판본 일치 미확인. 편집·자동 호출 미검증 |
-| 래스터 이미지 OCR | PARTIAL | 같은 환경에서 공개 PDF 쪽을 이미지로 렌더한 1쪽을 오프라인 OCR로 읽음. 실제 스캔은 아님. 저신뢰 줄 폐기 경고, 표 열·셀의 차이와 문자 오인이 있어 원본 대조 필요. 스캔 PDF·반복·입시 요강 미검증 |
-| RHEL CVE 판정·보고서 | PARTIAL | 1.4.5 가상 예시와 구조 오류 테스트 통과. 실제 CVE·RHSB 조회, 값·출처 대조 및 Confluence 붙여넣기 결과는 미검증 |
-| 입시 요강·성적 산출 | NOT VERIFIED | 저장소의 산술식 테스트만으로 실제 요강 해석이나 성적 산출을 검증하지 않음 |
-| devlog 기록 | NOT VERIFIED | 이번 변경에서 외부 기록 서비스나 로컬 기록 흐름은 실행하지 않음 |
-| Grok Build 설치·실행 | NOT VERIFIED | CLI가 없어 실행하지 못함 |
+| HWP/HWPX 선택 도구 읽기 | PARTIAL | 이전 확인 범위 유지. 편집·자동 호출은 미검증 |
+| RHEL CVE 판정·보고서 | PARTIAL | 1.4.5 가상 예시와 구조 오류 테스트 통과. 실제 CVE·RHSB 조회와 값 대조는 미검증 |
+| 입시 요강·성적 산출 | NOT VERIFIED | 저장소의 산술식 테스트만 확인. 실제 요강 해석은 미검증 |
+| devlog 기록 | NOT VERIFIED | 외부 기록 서비스·로컬 기록 흐름 미실행 |
+
+## 확인하지 못한 것
+
+- Claude 앱·ChatGPT desktop의 Skills 업로드 화면과 파일 한도
+- Grok Bot 저장·호출
+- 대화 중 스킬 자동 선택과 실제 산출물의 주관적 품질
+- 공개 디렉터리 제출 심사(아이콘, 정책 검토)와 1.5.0의 원격 CI 결과
+- 실제 업무 문서·CVE·사고 자료에 대한 정확도

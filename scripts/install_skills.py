@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""myway 스킬을 Codex·Grok Build용 사용자 스킬 디렉터리에 복사한다.
+"""myway 스킬을 Claude Code·Codex·Grok Build용 사용자 스킬 디렉터리에 복사한다.
 
-사용: python3 scripts/install_skills.py [--target codex|grok|all] [--dest DIR] [--link]
-  codex: ~/.agents/skills, grok: ~/.grok/skills (프로젝트 한정은 --dest <저장소>/.agents/skills 등)
+사용: python3 scripts/install_skills.py [--target claude|codex|grok|all] [--dest DIR] [--link]
+  claude: ~/.claude/skills, codex: ~/.agents/skills, grok: ~/.grok/skills
+  프로젝트 한정은 --dest <저장소>/.claude/skills 또는 <저장소>/.agents/skills를 쓴다.
   --link: 복사 대신 심볼릭 링크(저장소를 pull하면 바로 반영, Windows는 권한 필요)
 같은 이름의 기존 스킬이 있으면 건드리지 않고 건너뛴다. 덮어쓰려면 --force.
 """
@@ -11,7 +12,7 @@ import shutil
 import sys
 from pathlib import Path
 
-TARGETS = {"codex": "~/.agents/skills", "grok": "~/.grok/skills"}
+TARGETS = {"claude": "~/.claude/skills", "codex": "~/.agents/skills", "grok": "~/.grok/skills"}
 SRC = Path(__file__).resolve().parent.parent / "plugins" / "myway" / "skills"
 
 

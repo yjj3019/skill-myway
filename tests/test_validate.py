@@ -55,9 +55,35 @@ class ValidateRepo(unittest.TestCase):
         p.write_bytes(p.read_bytes().replace(b"\n", b"\r\n"))
         self.assertEqual(self.errs(), [])
 
+    def test_bom_frontmatter_ok(self):
+        p = self.skill()
+        p.write_bytes(b"\xef\xbb\xbf" + p.read_bytes())
+        self.assertEqual(self.errs(), [])
+
+    def test_source_path_traversal_rejected(self):
+        mp = self.r / ".claude-plugin/marketplace.json"
+        data = json.loads(mp.read_text(encoding="utf-8"))
+        data["plugins"][0]["source"] = "./plugins/../../outside"
+        mp.write_text(json.dumps(data), encoding="utf-8")
+        self.assertTrue(any("'..'" in e for e in self.errs()))
+
+    def test_validation_is_repeatable(self):
+        self.assertEqual(self.errs(), self.errs())
+
     def test_version_mismatch(self):
         (self.r / "VERSION").write_text("9.9.9\n")
         self.assertTrue(any("버전" in e for e in self.errs()))
+
+    def test_root_plugin_version_mismatch(self):
+        p = self.r / "plugins/myway/plugin.json"
+        data = json.loads(p.read_text(encoding="utf-8"))
+        data["version"] = "0.0.1"
+        p.write_text(json.dumps(data), encoding="utf-8")
+        self.assertTrue(any("plugin.json" in e for e in self.errs()))
+
+    def test_missing_root_plugin(self):
+        (self.r / "plugins/myway/plugin.json").unlink()
+        self.assertTrue(any("plugin.json 없음" in e for e in self.errs()))
 
     def test_codex_version_mismatch(self):
         p = self.r / "plugins/myway/.codex-plugin/plugin.json"
@@ -188,20 +214,59 @@ class RunTests(unittest.TestCase):
 class InstallCodex(unittest.TestCase):
     def test_copy_and_skip(self):
         import install_skills
+        expected = len([p for p in (ROOT / "plugins/myway/skills").iterdir() if (p / "SKILL.md").is_file()])
         with tempfile.TemporaryDirectory() as d:
             done, skipped = install_skills.install(d)
-            self.assertEqual(len(done), 5)
+            self.assertEqual(len(done), expected)
             self.assertTrue((Path(d) / "writing" / "SKILL.md").is_file())
             done2, skipped2 = install_skills.install(d)
-            self.assertEqual((done2, len(skipped2)), ([], 5))
+            self.assertEqual((done2, len(skipped2)), ([], expected))
             done3, _ = install_skills.install(d, force=True)
-            self.assertEqual(len(done3), 5)
+            self.assertEqual(len(done3), expected)
 
     def test_main_target_grok_uses_dest(self):
         import install_skills
         with tempfile.TemporaryDirectory() as d:
             self.assertEqual(install_skills.main(["--dest", d]), 0)
             self.assertTrue((Path(d) / "devlog" / "SKILL.md").is_file())
+
+    def test_targets_include_claude(self):
+        import install_skills
+        self.assertEqual(install_skills.TARGETS["claude"], "~/.claude/skills")
+        self.assertEqual(install_skills.TARGETS["codex"], "~/.agents/skills")
+        self.assertEqual(install_skills.TARGETS["grok"], "~/.grok/skills")
+
+
+class PackageSkill(unittest.TestCase):
+    def build(self, out):
+        import package_skill
+        src = ROOT / "plugins/myway/skills/writing"
+        return package_skill.build(src, Path(out), "0.0.0")
+
+    def test_zip_contains_skill_and_references(self):
+        import zipfile
+        with tempfile.TemporaryDirectory() as d:
+            dest, count, digest = self.build(d)
+            self.assertTrue(dest.is_file())
+            self.assertEqual(dest.name, "myway-writing-0.0.0.zip")
+            with zipfile.ZipFile(dest) as archive:
+                names = archive.namelist()
+            self.assertIn("writing/SKILL.md", names)
+            self.assertIn("writing/references/blog-post.md", names)
+            self.assertFalse(any("__pycache__" in name for name in names))
+            self.assertEqual(len(digest), 64)
+            self.assertEqual(count, len(names))
+
+    def test_output_is_reproducible(self):
+        with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
+            _, _, first = self.build(a)
+            _, _, second = self.build(b)
+            self.assertEqual(first, second)
+
+    def test_unknown_skill_fails(self):
+        import package_skill
+        with self.assertRaises(SystemExit):
+            package_skill.skill_dirs(["no-such-skill"])
 
 
 if __name__ == "__main__":

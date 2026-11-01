@@ -34,7 +34,10 @@
 | AI-Harness 검토·반영 | VERIFIED(문서 판정) | Apache-2.0 확인, 98파일 분석. 흡수(evidence-first·레퍼런스 3종·blind_review·문서 보강)와 제외(게이트·훅·브로커) 내역을 LICENSES·DECISIONS에 기록 |
 | 블라인드 평가 도구 | VERIFIED(단위 테스트) | `scripts/blind_review.py` 8건 테스트 통과: 배정 결정성·후보 매핑·seed 재현·잘못된 입력 거부·덮어쓰기 방지 |
 | 가상 평가(1단계) | VERIFIED | `scripts/simulate_eval.py` 10케이스/10스킬 PASS. 스키마·id 중복·커버리지·민감 패턴 검사, manifest 해시 기록 |
-| 실제 모델 평가(2단계) | PARTIAL | Claude Code 2.1.316 headless로 10/10 자동 검사 통과(케이스당 1회, 빈 임시 디렉터리). 형식·필수 요소만 검사했고 문장 품질·반복 안정성·모델 간 비교는 미실시. 결과: `docs/EVALUATION-RESULTS-2026-11-01.md` |
+| 실제 모델 평가(2단계) | VERIFIED(자동 검사) | Claude Code 2.1.316 headless로 10/10 통과, 2회 반복에서 **20/20** 통과(케이스별 2/2). 빈 임시 디렉터리에서 실행. 형식·필수 요소만 검사하며 문장 품질은 별도 판정이다. 결과: `docs/EVALUATION-RESULTS-2026-11-01.md` |
+| 교차 플랫폼 모델 실행 | PARTIAL | Codex 3케이스 3/3(샌드박스 전체 접근 필요), Grok 2케이스 2/2(출력 길이 편차 큼, 1차에서 240초 타임아웃 1건). 각 1회 실행 |
+| 오피스 생성·재열기 | PARTIAL | 번들 Python으로 PPTX 3장·DOCX 제목/표·XLSX 수식 생성 후 재열기 확인. LibreOffice가 없어 시각(넘침·겹침) 검증은 미실시. 검사: `scripts/check_office.py` |
+| 스킬 유무 블라인드 비교 | PARTIAL | writing·code-review·research-brief 3케이스 A/B 블라인드 패킷에서 스킬 적용 3/3 선호. **단일 평가자(에이전트) 1명**·표본 3이라 독립 평가 아님 |
 | 교차 플랫폼 모델 실행 | NOT VERIFIED | Codex·Grok Build는 설치·스킬 인식만 확인. 실제 모델 실행·품질 비교는 하지 않음 |
 
 ## 스킬 품질 확인 (기존 범위)

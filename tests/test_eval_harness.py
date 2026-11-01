@@ -94,6 +94,21 @@ class RunEval(unittest.TestCase):
         with self.assertRaises(ValueError):
             run_eval.platform_command("nope", "hi")
 
+    def test_prepare_workdir(self):
+        import shutil
+        for platform, rel in (("claude", None), ("codex", ".agents/skills"), ("grok", ".grok/skills")):
+            workdir = run_eval.prepare_workdir(platform)
+            try:
+                if rel is None:
+                    self.assertEqual(list(workdir.iterdir()), [])
+                else:
+                    base = workdir / rel
+                    self.assertTrue(base.is_dir())
+                    names = {p.name for p in base.iterdir() if (p / "SKILL.md").is_file()}
+                    self.assertEqual(names, set(simulate_eval.skill_names()))
+            finally:
+                shutil.rmtree(workdir, ignore_errors=True)
+
 
 if __name__ == "__main__":
     unittest.main()

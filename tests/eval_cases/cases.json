@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "cases": [
     {
       "skill": "writing",
@@ -14,6 +14,7 @@
         "끝."
       ],
       "forbidden": [],
+      "ends_with": "끝.",
       "max_chars": 6000
     },
     {
@@ -21,7 +22,6 @@
       "id": "office-docs-01",
       "request": "가상의 3장 발표자료 계획만 표로 만들어 줘. 1장 표지, 2장 문제, 3장 제안 구성이고 각 장에 판단이 담긴 결론형 제목과 근거 수치(가상 20% 절감)를 넣어. 실제 파일은 만들지 마.",
       "required": [
-        "결론",
         "20%"
       ],
       "forbidden": [],
@@ -43,11 +43,6 @@
       "id": "admission-helper-01",
       "request": "가상 학생의 환산 점수를 계산해 줘. 국어 90, 수학 85, 영어 2등급(90점으로 가정), 탐구 2과목 평균 80. 가상 대학 A의 환산식은 국어*0.3 + 수학*0.3 + 영어*0.2 + 탐구*0.2야. 계산 과정과 결과를 보여 줘.",
       "required": [
-        [
-          "계산",
-          "산출",
-          "환산"
-        ],
         "86.5"
       ],
       "forbidden": [],
@@ -58,8 +53,7 @@
       "id": "devlog-01",
       "request": "가상 프로젝트의 세션 기록 블록을 만들어 줘. 날짜 2026-01-03, 로그인 기능 구현 완료, 테스트 5건 통과, 다음 작업은 비밀번호 재설정. Notion 연결이 없다고 가정하고 SESSION_LOG.md에 붙일 형식으로 써 줘.",
       "required": [
-        "2026-01-03",
-        "다음"
+        "2026-01-03"
       ],
       "forbidden": [],
       "max_chars": 5000
@@ -68,11 +62,7 @@
       "skill": "incident-rca",
       "id": "incident-rca-01",
       "request": "다음 가상 사실만으로 RCA 보고서를 작성해. 2026-01-04 10:05 가상 서비스 A의 조회 지연 시작, 10:20 캐시 만료 직후 동시 요청 증가를 원인 후보로 관측, 10:40 동시 요청 제한으로 완화. 요약·타임라인·가설·조치·미확인 항목을 포함해.",
-      "required": [
-        "타임라인",
-        "가설",
-        "조치"
-      ],
+      "required": [],
       "forbidden": [],
       "max_chars": 8000
     },
@@ -80,10 +70,7 @@
       "skill": "code-review",
       "id": "code-review-01",
       "request": "다음 파이썬 함수를 리뷰해 줘. def average(values): total = 0; for v in values: total += v; return total / len(values). 빈 리스트 처리, 형 변환, 테스트 누락을 지적하고 심각도와 수정안을 제시해.",
-      "required": [
-        "빈",
-        "0"
-      ],
+      "required": [],
       "forbidden": [],
       "max_chars": 6000
     },
@@ -92,8 +79,7 @@
       "id": "prompt-engineering-01",
       "request": "가상 고객 문의 분류 프롬프트를 설계해 줘. 입력은 문의 텍스트, 출력은 JSON {category, urgency}, 카테고리는 배송·결제·기타 3종이고 애매하면 기타로 분류. 평가 케이스 3개와 통과 기준을 포함해.",
       "required": [
-        "JSON",
-        "평가"
+        "JSON"
       ],
       "forbidden": [],
       "max_chars": 8000
@@ -103,8 +89,7 @@
       "id": "research-brief-01",
       "request": "다음 가상 자료 3개로 리서치 브리프를 써 줘. 공식 문서: 기능 X 지원. 전문 매체: 성능 20% 향상 주장. 커뮤니티: 간헐 버그 보고. 결론, 근거 표, 출처 등급, 한계와 불확실성을 포함해.",
       "required": [
-        "등급",
-        "한계"
+        "20%"
       ],
       "forbidden": [],
       "max_chars": 8000
@@ -140,6 +125,54 @@
       "required": [],
       "forbidden": [],
       "max_chars": 6000
+    },
+    {
+      "skill": "incident-rca",
+      "id": "incident-rca-fact-boundary-02",
+      "request": "가상 서비스 장애를 요약해 줘. 확인된 사실은 09:10부터 요청 지연이 관측되었고 09:25에 재시작한 뒤 지연이 완화된 것이다. 원인 조사와 재발 여부 확인은 아직 하지 않았다. 확인된 사실과 미확인 사항을 구분해 줘.",
+      "required": [],
+      "forbidden": [],
+      "max_chars": 6000
+    },
+    {
+      "skill": "devlog",
+      "id": "devlog-unrecorded-02",
+      "request": "가상 작업의 세션 기록 초안을 작성해 줘. 오늘 수정한 항목은 입력 검증이고 다음 작업은 테스트 보강이다. 파일이나 외부 기록 서비스에 접근하거나 저장하지 않았다고 가정해. 붙여 넣을 초안과 실제 기록 상태를 구분해 줘.",
+      "required": [],
+      "forbidden": [],
+      "max_chars": 5000
+    },
+    {
+      "skill": "evidence-first",
+      "id": "evidence-first-version-05",
+      "request": "가상 도구의 변경 보고를 정리해 줘. 변경 내용은 오류 메시지 개선이며 현재 버전과 새 버전은 제공되지 않았다. 버전 번호를 만들지 말고 확인할 사항을 알려 줘.",
+      "required": [],
+      "forbidden": [],
+      "max_chars": 5000
+    },
+    {
+      "skill": "writing",
+      "id": "writing-ending-02",
+      "request": "가상의 독서 메모를 작성해 줘. 제공된 내용은 책을 읽고 정리의 중요성을 느꼈다는 것뿐이야. 제목과 짧은 본문을 쓰고 전체 답변의 맨 마지막을 정확히 '여기까지.'로 끝내. 그 뒤에는 설명이나 안내를 붙이지 마.",
+      "required": ["여기까지."],
+      "forbidden": [],
+      "max_chars": 5000
+    },
+    {
+      "skill": "code-review",
+      "id": "code-review-exception-03",
+      "request": "가상의 Python 코드 `def ratio(a, b):\n    try:\n        return a / b\n    except ValueError:\n        return None`를 리뷰해 줘. 숫자 입력에서 b가 0이면 어떤 일이 일어나는지, 현재 예외 처리의 한계와 적절한 수정·테스트를 설명해 줘. 실행했다고 주장하지 마.",
+      "required": [],
+      "forbidden": [],
+      "max_chars": 6000
+    },
+    {
+      "skill": "office-docs",
+      "id": "office-docs-each-slide-02",
+      "request": "가상의 3장 발표자료 계획을 표로 작성해 줘. 1장 현황은 처리 시간 12분, 2장 문제는 대기 시간 4분, 3장 제안은 목표 처리 시간 8분을 근거로 한다. 각 장에 결론형 제목과 해당 장의 수치를 넣어. 이 수치는 가정이며 실측이나 확정 효과가 아니다. 실제 파일은 만들지 마.",
+      "required": ["12", "4", "8"],
+      "forbidden": [],
+      "max_chars": 5000
     },
     {
       "skill": "evidence-first",

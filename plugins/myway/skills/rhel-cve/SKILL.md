@@ -41,7 +41,8 @@ description: Red Hat/RHEL CVE와 RHSB를 조사해 Confluence용 한국어 보�
 ## 4. 절대 규칙 (요약 — 상세는 references)
 
 **데이터**
-- 추측 금지. 원자료에 없는 제품·버전·RHSA·점수는 쓰지 않는다. 모르면 "정보 없음".
+- 추측 금지. 원자료에 없는 제품·버전·RHSA·점수는 쓰지 않는다. 확인 실패와 실제 데이터 없음을 구분한다.
+- CVSS 점수의 버전과 출처는 원자료로 확인한 경우만 붙인다. 버전이 없으면 `버전 미확인`으로 표시하며 점수만 보고 v3로 추정하지 않는다.
 - 제품 판정 1차 소스는 Hydra. CSAF/VEX는 x86_64 NVR 보강용.
 - Hydra JSON과 XML이 다르면 CONFLICT로 표시하고 양쪽 값을 모두 보고한다. 기본 채택은 JSON.
 - `product_name` 정확 일치 항목만 해당 RHEL 버전 판정으로 쓴다. EUS/ELS/AUS, JBCS, RHEL AI 등은 별개 제품.
@@ -69,7 +70,7 @@ description: Red Hat/RHEL CVE와 RHSB를 조사해 Confluence용 한국어 보�
 
 - claude.ai `web_fetch`는 이전 검색·fetch 결과에 나온 URL만 연다. 우회 절차는 `references/data-sourcing.md` 0절.
 - CLI 에이전트는 Hydra JSON/XML과 CSAF를 `curl -sL`로 직접 받는다. 사내망·프록시로 막히면 claude.ai 절차로 전환한다.
-- 폐쇄망이면 수집 불가 항목을 "정보 없음"으로 두고 대화 응답에 밝힌다.
+- 폐쇄망이면 수집 불가 항목을 "미확인"으로 두고 사유를 밝힌다. 실제 조회했으나 값이 없는 경우만 "정보 없음"으로 구분한다.
 
 ## 6. 파일 구성
 

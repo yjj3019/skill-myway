@@ -38,8 +38,8 @@ def load_cases(path):
 
 def validate(cases):
     errors = []
-    if not isinstance(cases, dict) or cases.get("schema_version") != 1:
-        return ["schema_version 1이 필요합니다"]
+    if not isinstance(cases, dict) or cases.get("schema_version") not in (1, 2):
+        return ["schema_version 1 또는 2가 필요합니다"]
     items = cases.get("cases")
     if not isinstance(items, list) or not items:
         return ["cases 배열이 비어 있습니다"]
@@ -85,6 +85,8 @@ def validate(cases):
                     continue
                 errors.append(f"{case_id}: {key} 항목은 문자열 또는 문자열 배열이어야 합니다")
                 break
+        if "ends_with" in item and (cases["schema_version"] != 2 or not isinstance(item["ends_with"], str) or not item["ends_with"]):
+            errors.append(f"{case_id}: ends_with는 schema_version 2의 비어 있지 않은 문자열이어야 합니다")
         if not isinstance(item.get("max_chars", 8000), int) or item.get("max_chars", 8000) <= 0:
             errors.append(f"{case_id}: max_chars가 잘못됐습니다")
     covered = {item.get("skill") for item in items if isinstance(item, dict)}
@@ -107,6 +109,7 @@ def manifest(cases):
             "required": item.get("required", []),
             "forbidden": item.get("forbidden", []),
             "max_chars": item.get("max_chars", 8000),
+            **({"ends_with": item["ends_with"]} if "ends_with" in item else {}),
         })
     return {"schema_version": 1, "cases": items}
 

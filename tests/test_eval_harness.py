@@ -87,6 +87,16 @@ class RunEval(unittest.TestCase):
             self.assertEqual(checks["forbidden_found"], [])
             self.assertTrue(checks["within_limit"])
 
+    def test_optional_ending_check_and_schema(self):
+        self.assertTrue(run_eval.evaluate_output("내용\n끝. \n", {"ends_with": "끝."})["ends_with_ok"])
+        self.assertFalse(run_eval.evaluate_output("끝.\n메모", {"ends_with": "끝."})["ends_with_ok"])
+        doc = sample_cases()
+        doc["cases"][0]["ends_with"] = "끝."
+        self.assertTrue(simulate_eval.validate(doc))
+        doc["schema_version"] = 2
+        self.assertEqual(simulate_eval.validate(doc), [])
+        self.assertEqual(simulate_eval.manifest(doc)["cases"][0]["ends_with"], "끝.")
+
     def test_length_limit(self):
         case = {"required": [], "forbidden": [], "max_chars": 5}
         self.assertFalse(run_eval.evaluate_output("0123456", case)["within_limit"])
@@ -126,6 +136,46 @@ class RunEval(unittest.TestCase):
             self.assertFalse(results[2]["checks"]["nonempty"])
             self.assertTrue(all(not item["passed_auto_checks"] for item in results))
             self.assertEqual(summary["input_manifest"]["cases"][0]["id"], case["id"])
+
+    def test_usage_limit_stops_remaining_cases_without_grading(self):
+        doc = sample_cases()
+        message = "You've hit your 5-hour limit · resets 3:50am (Asia/Seoul)"
+        run = {"exit_code": 1, "output": message, "stderr_tail": "", "seconds": 1}
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "cases.json"
+            source.write_text(json.dumps(doc), encoding="utf-8")
+            out = Path(tmp) / "out"
+            with mock.patch.object(run_eval, "run_case", return_value=run) as call:
+                self.assertEqual(run_eval.main(["--cases", str(source), "--out", str(out), "--repeat", "2"]), 1)
+                self.assertEqual(call.call_count, 1)
+            summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["schema_version"], 3)
+            self.assertEqual(summary["stop_reason"], "claude_usage_limit")
+            self.assertIsNone(summary["cases"][0]["pass_rate"])
+            self.assertIsNone(summary["cases"][0]["runs"][1]["passed_auto_checks"])
+            self.assertEqual(summary["cases"][0]["runs"][0]["status"], "execution_failed")
+            self.assertIsNone(summary["cases"][0]["runs"][0]["checks"])
+            self.assertEqual(sum(c["not_run"] for c in summary["cases"]), len(doc["cases"]) * 2 - 1)
+            self.assertTrue(all(c["attempted"] + c["not_run"] == c["repeats"] for c in summary["cases"]))
+
+    def test_limit_in_diagnostics_detected_before_tail_truncation(self):
+        msg = "You've hit your 5-hour limit · resets 3:50am (Asia/Seoul)"
+        process = mock.Mock(returncode=1, stdout="warning\n" + msg, stderr="x" * 900)
+        with mock.patch.object(run_eval.subprocess, "run", return_value=process):
+            result = run_eval.run_case(sample_cases()["cases"][0], "claude", 5)
+        self.assertTrue(result["usage_limit"])
+        self.assertEqual(result["usage_limit_message"], msg)
+        process.returncode = 0
+        process.stdout = msg
+        with mock.patch.object(run_eval.subprocess, "run", return_value=process):
+            self.assertFalse(run_eval.run_case(sample_cases()["cases"][0], "claude", 5)["usage_limit"])
+
+    def test_usage_limit_requires_exact_error_message(self):
+        msg = "You've hit your 5-hour limit · resets 3:50am (Asia/Seoul)"
+        self.assertTrue(run_eval.claude_usage_limit(msg))
+        self.assertFalse(run_eval.claude_usage_limit("설명: " + msg))
+        self.assertFalse(run_eval.claude_usage_limit(msg + "\n분석 결과입니다."))
+        self.assertFalse(run_eval.claude_usage_limit("A limit should reset later"))
 
     def test_result_paths_and_existing_files(self):
         doc = sample_cases()

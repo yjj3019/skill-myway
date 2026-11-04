@@ -173,3 +173,16 @@ MIT 고지는 원문의 복제물에 붙이는 의무다. 이번 추가는 복�
 
 - Anthropic 공식 저장소(anthropics/skills)의 document skills는 **설치·사용만 안내**했고 코드·문서를 복사하지 않았다. 해당 자료는 Anthropic 이용약관을 따른다.
 - ProposalSkills(작성자 본인 저장소, 라이선스 없음)는 병행 사용 안내만 하고 내용을 복사하지 않았다.
+
+## 시각 검증 참고 출처 (2026-11-04)
+
+- [oil-oil/oil-ui](https://github.com/oil-oil/oil-ui/tree/0d64a00f3a5c45bf7a30d35bded9b7c0fdff2128)는 MIT 라이선스다. 화면 증거·독립 평가의 개념을 기존 스킬과 평가 문서에 맞게 한국어로 재작성했다.
+- 원본 문장·코드·도구·이미지·폰트를 옮기지 않는다. 폰트와 외부 소재는 원본 저장소 라이선스와 별도 조건이 적용될 수 있다. 원본이나 상당 부분을 나중에 복제하면 MIT 저작권·허가 고지 등 해당 조건을 검토한다.
+- 시각 품질에 대한 실제 모델 평가와 플랫폼별 실행은 별도로 확인해야 한다. 문자열 대조는 번역이나 의미적 유사성을 판정하지 못한다.
+
+## 실험·협업 참고 출처 (2026-11-04)
+
+- [karpathy/autoresearch](https://github.com/karpathy/autoresearch/tree/228791fb499afffb54b46200aca536f79142f117): README에 MIT가 표시되나 해당 커밋에 별도 LICENSE 파일이 없었다. 기준선·실험 기록 개념만 참고하며 코드와 프롬프트는 옮기지 않는다.
+- [google-research/harness2](https://github.com/google-research/harness2/tree/6868817518876de8fd170c6a8354daca273b6191): 본체 Apache-2.0, 제3자 자산·벤치마크는 별도 조건이다. 비교·실패 분모·증거 경계의 개념만 참고하며 코드와 데이터는 옮기지 않는다.
+- [deepseek-ai/dsh-superagent-prototype](https://github.com/deepseek-ai/dsh-superagent-prototype/tree/8c32a9dc5d72c033816c6a8110b37f40cf94fba4): MIT. 요청 범위·상태 구분의 개념만 참고하며 런타임과 프롬프트는 옮기지 않는다.
+- 이 저장소의 문서·코드·사례는 위 개념을 현재 요구와 기존 구현에 맞춰 새로 설계한다. 제3자 자산의 사용 권리는 별도 검토 없이 이어받지 않는다. 직접 복제 시 해당 라이선스와 고지 조건을 다시 검토한다.

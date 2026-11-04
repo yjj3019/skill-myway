@@ -89,3 +89,15 @@ MIT 저장소(obra/superpowers, addyosmani/agent-skills, DietrichGebert/ponytail
 - 반영: `evidence-first` 검증 게이트, `code-review` 리뷰 워크플로·보안·최소 변경, `incident-rca` 디버깅 절차, `writing` ADR, `office-docs` PDF·공식 문서 스킬 안내, `docs/QUALITY-BAR.md`·`docs/SKILL-AUTHORING.md`.
 - 경계: anthropics/skills는 라이선스상 복사 불가 → 설치 안내만. 라이선스 없는 저장소(document-specialist, ProposalSkills)는 개념·병행 안내만. superpowers·addyosmani의 전체 스킬 이식은 범위·트리거 충돌로 하지 않는다.
 - 스킬 수는 10개를 유지하고, 기존 스킬의 references와 문서를 보강하는 방식으로 반영했다.
+
+## D-025 시각 증거와 독립 평가 보강 (1.7.1)
+
+- oil-oil/oil-ui의 시각 증거와 독립 평가 개념을 참고해 기존 스킬과 평가 문서에 맞게 재작성한다. 실제 확인한 범위와 구조 검사·렌더링을 구분하고, 평가자의 독립성과 관찰 근거를 밝힌다.
+- 별도 웹 UI 스킬, 원본 코드·자산·업데이트 도구 및 상용 제품 안내는 포함하지 않는다. 모션 강제와 주관적 점수의 일반화도 제외한다.
+- 테스트 사례는 지침을 평가하기 위한 입력이며, 사례가 존재하거나 자동 형식 검사를 통과한 것만으로 모델의 시각 판단 능력이 검증되는 것은 아니다.
+
+## D-026 실험·권한·상태 경계 보강 (1.8.0)
+
+- autoresearch, Harness², dsh-superagent의 조사에서 기준선 비교·실패 보존·근거와 권한 분리의 개념을 기존 평가 및 스킬 지침에 맞게 독립적으로 재설계한다. 이 저장소는 기존의 사람 판정과 승인 경계를 유지한다.
+- 외부 저장소 코드·문서·자산, 벤치마크, 상시 감시·자동 작업·샌드박스 해제 기능을 이식하지 않는다. 평가 결과의 자동 통과는 의미 품질이나 실제 운영 성능의 증거가 아니다.
+- 스킬 10개를 유지하며 사용자 자료, 이전 미커밋 변경과 실험 결과를 보존한다.

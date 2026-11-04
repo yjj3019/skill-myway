@@ -68,6 +68,22 @@
 - skill-myway: validate PASS, 테스트 70건 0실패
 - 삭제 후 원문 대조·출처 재감사는 백업 미러로만 가능
 
+## 시각 증거 지침 보강 (2026-11-04, 1.7.1)
+
+- 시각 품질에 대한 실제 모델 평가, Office 산출물 렌더·독립 리뷰 및 플랫폼별 설치·실행: **NOT VERIFIED**. 가상 평가 사례와 수동 판정표는 실제 품질 통과를 의미하지 않는다.
+- 저장소 구조 검사: **VERIFIED**. `python scripts/validate_repo.py` PASS. 가상 평가 사례 스키마 검사는 12건·10개 스킬 PASS이며 모델 품질 검증이 아니다.
+- 테스트: **VERIFIED**. `python scripts/run_tests.py` 최종 71건, 실패 0, skip 0. 출력 중 skip 1건과 0건은 러너 실패 조건을 시험하는 내부 테스트다.
+- oil-ui 원문 대조: **VERIFIED(문자열 한정)**. 원본 SKILL과 references 18개와 수정 Markdown·신규 수동 판정표를 공백 정규화 후 40자 연속 문자열로 대조해 일치 파일 0개. 번역·의미·구조 유사성은 이 검사로 판정할 수 없다.
+
+## 실험·협업 경계 보강 (2026-11-04, 1.8.0)
+
+- 저장소 구조·버전: **VERIFIED**. `python scripts/validate_repo.py` PASS.
+- 회귀 테스트: **VERIFIED**. `python scripts/run_tests.py` 75건, 실패 0, skip 0. 출력에 표시되는 1건 skip과 0건은 러너의 실패 조건을 확인하는 내부 시험이다.
+- 가상 평가 사례: **VERIFIED(스키마만)**. `python scripts/simulate_eval.py` 14건·10개 스킬 PASS. 모델 호출이나 의미 품질 평가는 아니다.
+- 독립 코드 리뷰에서 긴 사례 ID의 출력 경로 문제와 수동 판정 분모 불일치를 발견해 수정했다. 수정 후 위 검증을 다시 실행했다.
+- 실제 모델을 이용한 변경 전후 paired trial, 수동 사례 판정, 플랫폼별 설치·실행, 사용자 환경의 보안 격리: **NOT VERIFIED**. 자동 검사와 가상 사례만으로 품질 향상을 입증하지 않는다.
+- 새 코드와 문서의 원문 대조: **NOT VERIFIED**. 외부 저장소의 코드·자산을 가져오지 않고 개념을 재설계했으나 기계적 문자열 대조 및 법률 검토는 수행하지 않았다.
+
 ## 방법론 보강 (2026-11-02)
 
 - MIT 원천(superpowers·agent-skills·ponytail)의 절차를 재작성해 반영, 원문 복사 0건

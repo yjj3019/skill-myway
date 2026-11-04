@@ -11,7 +11,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -57,12 +59,13 @@ def requirement_met(requirement, lowered):
 def evaluate_output(output, case):
     lowered = output.lower()
     missing = [item for item in case.get("required", []) if not requirement_met(item, lowered)]
-    forbidden = [item for item in case.get("forbidden", []) if item.lower() in lowered]
+    forbidden = [item for item in case.get("forbidden", []) if requirement_met(item, lowered)]
     max_chars = case.get("max_chars", 8000)
     return {
         "missing_required": missing,
         "forbidden_found": forbidden,
         "chars": len(output),
+        "nonempty": bool(output.strip()),
         "within_limit": len(output) <= max_chars,
     }
 
@@ -106,6 +109,13 @@ def run_case(case, platform, timeout):
             "stderr_tail": result.stderr.strip()[-500:],
             "seconds": round(time.time() - started, 1),
         }
+    except OSError as exc:
+        return {
+            "exit_code": None,
+            "output": "",
+            "stderr_tail": f"실행 실패: {exc}",
+            "seconds": round(time.time() - started, 1),
+        }
     except subprocess.TimeoutExpired:
         return {
             "exit_code": None,
@@ -115,6 +125,15 @@ def run_case(case, platform, timeout):
         }
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
+
+
+def output_stem(case_id):
+    # 짧은 일반 ID는 유지하고 특수·긴 ID는 길이가 일정한 다이제스트로 표현한다.
+    reserved = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)),
+                *(f"LPT{i}" for i in range(1, 10))}
+    if len(case_id) <= 100 and re.fullmatch(r"[A-Za-z0-9_-]+", case_id) and case_id.upper() not in reserved:
+        return case_id
+    return "encoded-" + hashlib.sha256(case_id.encode("utf-8")).hexdigest()
 
 
 def main(argv=None):
@@ -155,19 +174,39 @@ def main(argv=None):
         return 0
 
     out_dir = Path(args.out)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    repeats = max(1, args.repeat)
+    filenames = [f"{output_stem(case['id'])}{f'-r{i + 1}' if repeats > 1 else ''}.md"
+                 for case in cases for i in range(repeats)]
+    if len({name.casefold() for name in filenames}) != len(filenames):
+        print("오류: 케이스 결과 파일명이 충돌합니다", file=sys.stderr)
+        return 1
+    try:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        if any((out_dir / name).exists() or (out_dir / name).is_symlink()
+               for name in [*filenames, "summary.json"]):
+            print("오류: 결과 파일이 이미 있습니다. 빈 출력 디렉터리를 사용하세요", file=sys.stderr)
+            return 1
+        input_manifest = simulate_eval.manifest({"cases": cases})
+    except OSError as exc:
+        print(f"오류: 결과 준비 실패: {exc}", file=sys.stderr)
+        return 1
     summary = []
     failed = 0
-    repeats = max(1, args.repeat)
     for case in cases:
         print(f"실행: {case['id']} ({case['skill']}) x{repeats}")
         runs = []
         for index in range(repeats):
             run = run_case(case, args.platform, args.timeout)
-            checks = evaluate_output(run["output"], case)
-            passed = run["exit_code"] == 0 and not checks["missing_required"] and not checks["forbidden_found"] and checks["within_limit"]
+            checks = evaluate_output(run["output"], case) if run["exit_code"] == 0 else None
+            passed = bool(checks and checks["nonempty"] and not checks["missing_required"]
+                          and not checks["forbidden_found"] and checks["within_limit"])
             suffix = f"-r{index + 1}" if repeats > 1 else ""
-            (out_dir / f"{case['id']}{suffix}.md").write_text(run["output"] + "\n", encoding="utf-8")
+            try:
+                with (out_dir / f"{output_stem(case['id'])}{suffix}.md").open("x", encoding="utf-8") as output_file:
+                    output_file.write(run["output"] + "\n")
+            except OSError as exc:
+                print(f"오류: 결과 저장 실패: {exc}", file=sys.stderr)
+                return 1
             runs.append({
                 "exit_code": run["exit_code"],
                 "seconds": run["seconds"],
@@ -176,7 +215,7 @@ def main(argv=None):
                 "stderr_tail": run["stderr_tail"] if run["exit_code"] != 0 else "",
             })
             print(f"  r{index + 1}: {'PASS' if passed else 'FAIL'} exit={run['exit_code']} "
-                  f"{run['seconds']}s chars={checks['chars']} missing={checks['missing_required']} forbidden={checks['forbidden_found']}")
+                  f"{run['seconds']}s checks={checks}")
         passed_count = sum(1 for run in runs if run["passed_auto_checks"])
         case_passed = passed_count == repeats
         if not case_passed:
@@ -195,10 +234,17 @@ def main(argv=None):
         "schema_version": 2,
         "platform": args.platform,
         "repeat": repeats,
+        "timeout": args.timeout,
+        "input_manifest": input_manifest,
         "cases": summary,
         "note": "자동 검사는 형식·필수 요소만 본다. 문장 품질과 사실 정확성은 사람이 판정해야 한다.",
     }
-    (out_dir / "summary.json").write_text(json.dumps(summary_doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    try:
+        with (out_dir / "summary.json").open("x", encoding="utf-8") as summary_file:
+            summary_file.write(json.dumps(summary_doc, ensure_ascii=False, indent=2) + "\n")
+    except OSError as exc:
+        print(f"오류: 요약 저장 실패: {exc}", file=sys.stderr)
+        return 1
     total = len(cases) * repeats
     passed = sum(item["passed_count"] for item in summary)
     print(f"\n결과: {passed}/{total} 자동 검사 통과, 케이스 {len(cases) - failed}/{len(cases)} 전부 통과. 저장: {out_dir}")

@@ -1,6 +1,8 @@
 # skill-myway
 
-한국어 글쓰기, 업무 문서, 보안 분석, 진학 상담, 개발 이력, 장애 원인 분석, 코드 리뷰, 프롬프트 설계, 자료 조사, 근거 우선 검토를 위한 개인 스킬 모음입니다. 스킬 본문은 한 벌이고, Claude Code·ChatGPT(Codex)·Grok Build가 같은 `SKILL.md`를 읽습니다. Grok Bot에서는 대화에서 스킬로 저장해 씁니다.
+> **English**: [README.en.md](./README.en.md)
+
+한국어 글쓰기, 업무 문서, 보안 분석, 개발 이력, 장애 원인 분석, 코드 리뷰, 프롬프트 설계, 자료 조사, 근거 우선 검토를 위한 개인 스킬 모음입니다. 스킬 본문은 한 벌이고, Claude Code·ChatGPT(Codex)·Grok Build가 같은 `SKILL.md`를 읽습니다. Grok Bot에서는 대화에서 스킬로 저장해 씁니다.
 
 ## 스킬
 
@@ -9,7 +11,6 @@
 | `writing` | 한국어 블로그·기술 기고·게시글·업무 문서 작성과 편집. 개인정보 점검과 실행 환경별 보정 포함 |
 | `office-docs` | PPTX·DOCX·XLSX 작성 규격, 장문 DOCX 빌드, HWP/HWPX 원문 읽기 |
 | `rhel-cve` | Red Hat 자료를 바탕으로 RHEL CVE 영향도 분석과 Confluence용 보고서 작성 |
-| `admission-helper` | 대학 모집요강 확인과 학생부 성적 산출·지원 자격 검토 |
 | `devlog` | Notion에 개발 이력 기록. 연결되지 않으면 `SESSION_LOG.md`에 기록 |
 | `incident-rca` | 장애·오류 원인 분석, 타임라인·가설·근거 분리, 재발 방지 대책 정리 |
 | `code-review` | 코드 변경 리뷰: 심각도·근거·Validation Gap, 테스트 약화 확인 |

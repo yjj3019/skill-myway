@@ -186,3 +186,9 @@ MIT 고지는 원문의 복제물에 붙이는 의무다. 이번 추가는 복�
 - [google-research/harness2](https://github.com/google-research/harness2/tree/6868817518876de8fd170c6a8354daca273b6191): 본체 Apache-2.0, 제3자 자산·벤치마크는 별도 조건이다. 비교·실패 분모·증거 경계의 개념만 참고하며 코드와 데이터는 옮기지 않는다.
 - [deepseek-ai/dsh-superagent-prototype](https://github.com/deepseek-ai/dsh-superagent-prototype/tree/8c32a9dc5d72c033816c6a8110b37f40cf94fba4): MIT. 요청 범위·상태 구분의 개념만 참고하며 런타임과 프롬프트는 옮기지 않는다.
 - 이 저장소의 문서·코드·사례는 위 개념을 현재 요구와 기존 구현에 맞춰 새로 설계한다. 제3자 자산의 사용 권리는 별도 검토 없이 이어받지 않는다. 직접 복제 시 해당 라이선스와 고지 조건을 다시 검토한다.
+
+## AI 말투 패턴 판정 참고 출처 (2026-11-05)
+
+- [blader/humanizer](https://github.com/blader/humanizer/tree/0ef9fe5) (MIT, © 2025 Siqi Chen): AI 글의 구조적 말투 패턴 분류와 "단독 발견은 수정 사유가 아님" 판정 원칙의 개념만 참고했다. `writing/references/editing-checklist.md`의 "AI 말투 단서 판정" 표는 한국어 편집 기준으로 새로 작성했다.
+- 원문 SKILL.md 문장·예시·영어 단어 목록은 옮기지 않았다. 영어 고유 현상(하이픈 붙임, 영문 서수, be동사 대체)은 판정 기준에서 제외했다. 기존의 사실 보존·무발명 규칙과 겹치는 부분은 이미 있던 항목을 유지하고 중복을 새로 붙이지 않았다.
+- 40자 연속 문자열 대조에서 새로 추가한 문단과 원본 간 일치 0건을 확인했다. 이 대조는 문자열 한정이며 번역·의미 유사성과 실제 모델의 편집 품질은 판정하지 않는다.

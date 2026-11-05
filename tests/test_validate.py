@@ -181,21 +181,6 @@ class RhelCveExample(unittest.TestCase):
                 self.assertTrue(errors(changed))
 
 
-class GradeCalc(unittest.TestCase):
-    def setUp(self):
-        sys.path.insert(0, str(ROOT / "plugins/myway/skills/admission-helper/scripts"))
-        import grade_calc
-        self.g = grade_calc
-
-    def test_safe_eval_arithmetic(self):
-        self.assertAlmostEqual(self.g.safe_eval("930+70*x/9.8", 9.8), 1000.0)
-
-    def test_safe_eval_rejects_code(self):
-        for bad in ("__import__('os').getcwd()", "x.__class__", "open('f')", "[1]"):
-            with self.assertRaises(Exception):
-                self.g.safe_eval(bad, 1.0)
-
-
 class RunTests(unittest.TestCase):
     def test_zero_tests_fail(self):
         import run_tests

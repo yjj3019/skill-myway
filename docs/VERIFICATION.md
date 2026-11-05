@@ -97,3 +97,15 @@
 - MIT 원천(superpowers·agent-skills·ponytail)의 절차를 재작성해 반영, 원문 복사 0건
 - Anthropic 공식 document skills는 설치 안내만, 코드·문서 미복사
 - validate PASS, 테스트 70건 0실패, 플랫폼 매니페스트 validate 통과
+
+## AI 말투 단서 판정 보강 (2026-11-05, 1.9.1)
+
+- 저장소 구조·버전: **VERIFIED**. `python scripts/validate_repo.py` PASS. 원본 blader/humanizer(0ef9fe5)와 새 문단의 40자 연속 문자열 대조 0건.
+- 회귀 테스트: **VERIFIED**. `python scripts/run_tests.py` 통과, 실패 0, skip 0.
+- 새 판정 표가 실제 모델의 편집 품질을 개선하는지, 한국어 글에서 단서 겹침 판정이 사람의 기대와 맞는지: **NOT VERIFIED**. 지침 추가만으로 품질 향상을 입증하지 않는다.
+
+## admission-helper 제거 (2026-11-05, 1.10.0)
+
+- 저장소 구조·버전: **VERIFIED**. `python scripts/validate_repo.py` PASS. 배포 스킬 9개, admission 참조 제거 후 매니페스트 버전 일치.
+- 회귀 테스트: **VERIFIED**. `python scripts/run_tests.py` 통과, 실패 0, skip 0.
+- 제거 후 실제 질문에서 스킬과 같은 답변을 제공하는지: **NOT VERIFIED**. 스킬 부재 상태의 실제 답변 품질은 별도 실행 전 미검증이다.

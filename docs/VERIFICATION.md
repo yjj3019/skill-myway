@@ -12,8 +12,8 @@
 | 회귀 테스트 | VERIFIED | `run_tests.py` 77건, 실패 0, skip 0 (2026-11-06) |
 | CI 매트릭스 | VERIFIED | windows·macos·ubuntu × Python 3.11/3.12/3.13 9 job success |
 | 스킬 배포·설치·롤백 | VERIFIED | 9개 스킬 ZIP·3 플랫폼 설치, 이력 표 참조 |
-| 오피스 생성·재열기 | PARTIAL | `check_office.py` 구조 검사만. **렌더링(넘침·겹침·폰트) 검증 미실시** |
-| 스킬 자동 선택·조합 | NOT VERIFIED | 평가기가 스킬명을 명시 지정. 자연어 자동 선택은 별도 설계 필요 |
+| 오피스 생성·재열기 | PARTIAL | `check_office.py` 구조 검사만. **렌더링(넘침·겹침·폰트) 검증 미실시**(LibreOffice 미설치, 렌더 게이트는 추후 실행) |
+| 스킬 자동 선택·조합 | PARTIAL | 자연어 4케이스 headless 4/4 선택 성공(office-docs·rhel-cve·incident-rca·research-brief+writing). 한글 프롬프트 인코딩 깨짐 관찰, 전문 판정은 표본 4·단일 모델 |
 | 실제 모델 평가 | VERIFIED(자동 검사) | Claude Code 2.1.316 headless 20/20 + Codex 3/3 + Grok 2/2 (2026-11-01) |
 | 블라인드 비교 | PARTIAL | writing·code-review·research-brief 3케이스, 단일 평가자 표본 3 |
 | Grok Bot 스킬 저장 / 앱 업로드 | NOT VERIFIED | 계정·앱 한도·실제 저장 미확인 |
@@ -24,6 +24,12 @@
 # 버전별 검증 이력
 
 기준일 2026-11-01, 버전 1.5.0. 확인한 것만 VERIFIED로 적는다. 아래 기록은 커밋 전 작업트리 기준이다.
+
+## 실제 평가 실행 (2026-11-06, 1.11.0)
+
+- **자동 선택(자연어 4케이스, claude 2.1.318 headless)**: PARTIAL. as-01 "RHEL 점검 엑셀"→`office-docs`, as-02 "CVE-2099-00001 고객 보고서"→`rhel-cve`(가상 CVE 404를 지어내지 않고 계획만 제시), as-03 "장애→경영진 보고"→`incident-rca`, as-04 "AI 소식 블로그"→`research-brief`+`writing` 조합. 4/4 스킬 선택 성공. 한글 프롬프트가 CLI 전달 시 인코딩 깨짐(모델이 복원 시도·고지), MITRE 조회 연결 실패 기록. 표본 4·단일 모델이라 전문 판정은 아님.
+- **외부 스킬 스캐너(cisco-ai-skill-scanner 2.3.2)**: VERIFIED(탐지 기록). 9개 스킬 18건 — office-docs CRITICAL 1(고정 인자 `execFileSync("soffice"/"python3", [...])` 호출, 인자 삽입 불가 — **오탐 판정**)·LOW 3(fs 접근), rhel-cve HIGH 1(로컬 `__pycache__` 존재 — 삭제 완료, gitignore 대상)·MEDIUM 2(Hydra/EPSS 의도된 조회)·LOW 1, 전 스킬 INFO 1(`license` frontmatter 미지정, 9건 공통). 스캐너 통과는 안전 보증이 아님.
+- 렌더링 게이트(LibreOffice)는 미설치로 실행하지 않았다. **NOT VERIFIED 유지, 추후 실행하기로 결정**. 설치·실행은 사용자 승인 후.
 
 ## 평가 설계 문서화 (2026-11-06, 1.11.0)
 

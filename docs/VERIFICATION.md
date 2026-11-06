@@ -1,6 +1,35 @@
 # 검증 현황
 
-기준일 2026-11-01, 버전 1.5.0. 확인한 것만 VERIFIED로 적는다. 이 표는 커밋 전 작업트리 기준이다.
+## 현재 상태 (버전 1.11.0)
+
+- **기준**: 커밋 `e95afc2`(2026-11-06, main), VERSION 1.11.0. 각 행의 상세는 아래 "버전별 검증 이력"을 본다.
+- **실행 시각**: 2026-11-06 (Windows 로컬 + GitHub Actions)
+- **포괄**: 저장소 구조·매니페스트·민감 패턴 PASS, 회귀 테스트 77건 실패 0·skip 0, CI 3 OS × Python 3.11/3.12/3.13 success, 스킬 9개, rhel-cve 구조 검사기 `--self-test`·예시 PASS.
+
+| 항목 | 상태 | 근거 |
+|---|---|---|
+| 저장소 구조·버전·민감 패턴 | VERIFIED | `validate_repo.py` PASS (직전 검증 2026-11-06) |
+| 회귀 테스트 | VERIFIED | `run_tests.py` 77건, 실패 0, skip 0 (2026-11-06) |
+| CI 매트릭스 | VERIFIED | windows·macos·ubuntu × Python 3.11/3.12/3.13 9 job success |
+| 스킬 배포·설치·롤백 | VERIFIED | 9개 스킬 ZIP·3 플랫폼 설치, 이력 표 참조 |
+| 오피스 생성·재열기 | PARTIAL | `check_office.py` 구조 검사만. **렌더링(넘침·겹침·폰트) 검증 미실시** |
+| 스킬 자동 선택·조합 | NOT VERIFIED | 평가기가 스킬명을 명시 지정. 자연어 자동 선택은 별도 설계 필요 |
+| 실제 모델 평가 | VERIFIED(자동 검사) | Claude Code 2.1.316 headless 20/20 + Codex 3/3 + Grok 2/2 (2026-11-01) |
+| 블라인드 비교 | PARTIAL | writing·code-review·research-brief 3케이스, 단일 평가자 표본 3 |
+| Grok Bot 스킬 저장 / 앱 업로드 | NOT VERIFIED | 계정·앱 한도·실제 저장 미확인 |
+| 교차 플랫폼 모델 실행 | PARTIAL | Codex·Grok 각 1회, 출력 길이 편차·타임아웃 관찰 |
+
+---
+
+# 버전별 검증 이력
+
+기준일 2026-11-01, 버전 1.5.0. 확인한 것만 VERIFIED로 적는다. 아래 기록은 커밋 전 작업트리 기준이다.
+
+## 평가 설계 문서화 (2026-11-06, 1.11.0)
+
+- 자동 선택 평가 설계(`docs/AUTO-SELECT-EVALUATION.md`)·오피스 렌더링 게이트 설계(`docs/RENDER-GATE.md`)를 추가하고, 검증 현황에 현재 상태 요약 표를 신설했다. 실제 PPTX 생성 평가 케이스(`office-docs-real-file-03`)를 추가했다.
+- 저장소 구조·버전: **VERIFIED**. `python scripts/validate_repo.py` PASS. 회귀 테스트: **VERIFIED**. `python scripts/run_tests.py` 77건, 실패 0, skip 0.
+- 자동 선택 케이스 실행·판정, 렌더링 게이트 실행: **NOT VERIFIED**. 스크립트·모델 실행·렌더러 도입은 설계만 있고 수행하지 않았다.
 
 ## 이번 변경에서 실행한 검증
 

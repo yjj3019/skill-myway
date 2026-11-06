@@ -120,3 +120,7 @@ MIT 저장소(obra/superpowers, addyosmani/agent-skills, DietrichGebert/ponytail
 - 단건 리포트를 Confluence 기록용 고정 템플릿(`### 1`~`### 5`, Setext 제목 3개, 7컬럼 표)으로 고정하고, 패키지 표 행 순서(RHEL 10→6), Fixed Package 표기(`미발행 (fix_state)`, `평가 데이터 없음`), 표 아래 메타정보 금지를 명세로 정했다.
 - Red Hat 데이터 특이사항 판정(수정 빌드 errata가 공개일보다 이름, 수정 버전이 업스트림보다 낮음, 이후 errata에 CVE 미수록)을 신설하고 4장과 표 비고에 기록한다. KEV 등재명이 다른 벤더 제품이면 해당 사실과 Red Hat 코드 동일성 여부를 구분하고, Red Hat 공지에 악용 사례가 없으면 출처를 나눠 쓴다.
 - `check_report.py`의 epoch 검사가 RHSA 번호 형식의 `-YYYY:NNNN` 부분과 `CVSS:3.1/AV:N`을 epoch로 오탐하지 않도록 `RH[SBE]A-\d{4}:\d+`·CVSS 벡터를 마스킹 후 검사하고 `--self-test` 회귀 시험을 추가했다. 업스트림 공지 조회 절을 data-sourcing.md에 추가하고 평가 케이스 3건(rhel-cve-02/03/04)을 반영했다. 실제 CVE 실사례는 rhel-cve references와 평가 케이스에만 두고 docs에는 실제 식별자를 남기지 않는다.
+
+## D-031 평가 공백 구조화 — 자동 선택·렌더링 게이트 설계 (1.11.0)
+- 독립 분석(2026-11-06)에서 지적된 공백 4건을 문서·케이스로 반영했다: ① 검증 현황 최상단에 현재 버전/커밋/실행 시각/플랫폼/범위 요약 표 신설, 예전 기록은 이력 섹션으로 분리 ② 실제 .pptx 생성 평가 케이스(`office-docs-real-file-03`) 추가 — 계획 표가 아닌 파일 생성을 요구하고 렌더링 불가 시 구조 확인+미확인 명시 ③ 스킬 자동 선택 평가 설계(`docs/AUTO-SELECT-EVALUATION.md`) — 스킬명 미지정 10케이스+부정 사례, 정답 가이드는 저장소 밖 보관 ④ 오피스 렌더링 게이트 설계(`docs/RENDER-GATE.md`) — 구조→렌더링 검사 확장 방향, 렌더러 부재 시 NOT VERIFIED 유지.
+- 스크립트 구현·모델 실행·렌더러(LibreOffice) 도입·외부 도구 설치·자동 선택 실행은 수행하지 않았다. 설계만 문서로 두고, 실행은 사용자 승인과 권한·격리 확인 후에만 진행한다. 실제 효과는 전후 비교 전 미검증이다.

@@ -19,7 +19,13 @@ TITLE = re.compile(r"^# CVE-\d{4}-\d{4,}(?:\s*[,/]\s*CVE-\d{4}-\d{4,})*\s+-\s+\S
 PACKAGE_TITLE = re.compile(r"^영향을 받는 패키지 및 발행된 레드햇 보안 공지\s*\(\s*(?:\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{2})\s*기준\s*\)$")
 HTML = re.compile(r"</?[a-zA-Z][a-zA-Z0-9]*(?:\s[^>]*)?/?>")
 EPOCH = re.compile(r"(?<=[A-Za-z0-9_.+])-\d+:\d")
+# EPOCH 오탐 예방: RHSA-2023:4201의 "-2023:4"와 CVSS:3.x/ 벡터는 epoch가 아니다.
+_EPOCH_MASK = re.compile(r"RH[SBE]A-\d{4}:\d+|CVSS:3\.\d/", re.IGNORECASE)
 SEPARATOR = re.compile(r"^:?-{3,}:?$")
+
+
+def _epoch_free(line):
+    return not EPOCH.search(_EPOCH_MASK.sub("", line))
 
 
 def cells(line):
@@ -27,7 +33,11 @@ def cells(line):
 
 
 def check(path):
-    raw = Path(path).read_text(encoding="utf-8-sig").splitlines()
+    text = Path(path).read_text(encoding="utf-8-sig")
+    # references/report-example.md처럼 마커 줄(<!-- REPORT START -->)이 있으면 그 아래만 검사한다.
+    # 마커가 없으면 전체를 검사한다(단위 테스트·실제 리포트 호환).
+    marker = "\n<!-- REPORT START -->\n"
+    raw = text.split(marker, 1)[1].splitlines() if marker in text else text.splitlines()
     lines, fenced = [], False
     for line in raw:
         if line.strip().startswith("```"):
@@ -74,7 +84,7 @@ def check(path):
         if HTML.search(line):
             errors.append("HTML 태그 사용")
             break
-    if any(EPOCH.search(line) for line in lines):
+    if any(not _epoch_free(line) for line in lines):
         errors.append("NVR epoch 잔존")
 
     if package is not None and sources is not None and package < sources:
@@ -103,7 +113,24 @@ def check(path):
     return errors
 
 
+def self_test():
+    """epoch 검사 오탐 회귀 시험. 예상 결과를 assert로 고정한다."""
+    assert not _epoch_free("kernel-0:4.18.0-553.el8"), "epoch 잔존을 걸러야 함"
+    assert _epoch_free("RHSA-2023:4201"), "RHSA 번호를 epoch로 오인하지 않아야 함"
+    assert _epoch_free("CVSS:3.1/AV:N"), "CVSS 벡터를 epoch로 오인하지 않아야 함"
+    assert _epoch_free("webkit2gtk3-2.46.3-1.el8_10.x86_64"), "정상 NVR을 통과해야 함"
+    assert not _epoch_free("firefox-0:140.12.0-1.el9_8"), "firefox epoch 잔존을 걸러야 함"
+
+
 def main(argv):
+    if argv == ["--self-test"]:
+        try:
+            self_test()
+        except AssertionError as e:
+            print(f"FAIL: {e}")
+            return 1
+        print("PASS")
+        return 0
     if len(argv) != 1:
         print("사용법: python check_report.py <리포트.md>", file=sys.stderr)
         return 2

@@ -115,3 +115,8 @@ MIT 저장소(obra/superpowers, addyosmani/agent-skills, DietrichGebert/ponytail
 ## D-029 admission-helper 스킬 제거 (1.10.0)
 - `admission-helper`(대학 모집요강·학생부 성적) 스킬을 배포 목록에서 제거했다. 스킬 디렉터리, 프로필·추출 점검 레퍼런스, `grade_calc.py`와 이를 쓰던 테스트·평가 사례·README·매니페스트 설명을 함께 정리했다. 특정 정보는 저장소에 두지 않는다는 기존 규칙은 유지한다.
 - 관련 내용을 질문으로 받으면 스킬 없이 같은 방식으로 답한다. 요강 원문에 없는 수치·판정은 만들지 않고, 확보된 정보를 질문으로 받아 검증되지 않은 항목은 NOT VERIFIED로 구분한다. 스킬 부재 후의 실제 답변 품질은 별도 비교 전 미검증이다.
+
+## D-030 rhel-cve Confluence 기록용 Markdown 개정 (1.11.0)
+- 단건 리포트를 Confluence 기록용 고정 템플릿(`### 1`~`### 5`, Setext 제목 3개, 7컬럼 표)으로 고정하고, 패키지 표 행 순서(RHEL 10→6), Fixed Package 표기(`미발행 (fix_state)`, `평가 데이터 없음`), 표 아래 메타정보 금지를 명세로 정했다.
+- Red Hat 데이터 특이사항 판정(수정 빌드 errata가 공개일보다 이름, 수정 버전이 업스트림보다 낮음, 이후 errata에 CVE 미수록)을 신설하고 4장과 표 비고에 기록한다. KEV 등재명이 다른 벤더 제품이면 해당 사실과 Red Hat 코드 동일성 여부를 구분하고, Red Hat 공지에 악용 사례가 없으면 출처를 나눠 쓴다.
+- `check_report.py`의 epoch 검사가 RHSA 번호 형식의 `-YYYY:NNNN` 부분과 `CVSS:3.1/AV:N`을 epoch로 오탐하지 않도록 `RH[SBE]A-\d{4}:\d+`·CVSS 벡터를 마스킹 후 검사하고 `--self-test` 회귀 시험을 추가했다. 업스트림 공지 조회 절을 data-sourcing.md에 추가하고 평가 케이스 3건(rhel-cve-02/03/04)을 반영했다. 실제 CVE 실사례는 rhel-cve references와 평가 케이스에만 두고 docs에는 실제 식별자를 남기지 않는다.

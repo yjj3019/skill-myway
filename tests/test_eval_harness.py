@@ -45,7 +45,7 @@ class SimulateEval(unittest.TestCase):
     def test_unsafe_request_rejected(self):
         doc = sample_cases()
         # 검증기 자신의 예시 규칙(실제 형식 CVE/이메일 금지)에 걸리지 않도록 조각으로 조립한다.
-        unsafe = "연락은 test@" + "example.com 으로, " + "CVE-" + "2024" + "-12345 참고"
+        unsafe = "연락은 admin@" + "mycorp.io 으로 " + "문의하세요"
         doc["cases"][0]["request"] = unsafe
         errors = simulate_eval.validate(doc)
         self.assertTrue(any("민감 패턴" in e for e in errors))

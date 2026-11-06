@@ -39,6 +39,49 @@
       "max_chars": 8000
     },
     {
+      "skill": "rhel-cve",
+      "id": "rhel-cve-02",
+      "request": "CVE-2024-27834 리포트를 작성해. check_report.py 검사를 통과하고, CISA KEV 등재 여부·기준일을 기재하며, RHEL 9는 Red Hat 데이터 특이사항(업스트림 수정 버전 2.44.2보다 이전 빌드)을 4장에 적고, RHEL 10은 평가 데이터 없음, RHEL 7 webkitgtk3의 Out of support scope와 webkitgtk4 ELS 수정을 구분해. 확인하지 못한 값은 미확인으로 남겨.",
+      "required": [
+        "CVE-2024-27834",
+        "KEV 등재",
+        "평가 데이터 없음",
+        "Out of support scope"
+      ],
+      "forbidden": [
+        "업스트림 수정(2.44.2)보다 이전 버전",
+        "epoch"
+      ],
+      "max_chars": 12000
+    },
+    {
+      "skill": "rhel-cve",
+      "id": "rhel-cve-03",
+      "request": "CVE-2026-55200 리포트를 작성해. RHEL 7 libssh2가 JSON에서는 Affected, XML에서는 Not affected로 나오는 CONFLICT를 표시하고 채택 소스(JSON)와 각주를 4장에 적어. RHEL 10~8과 RHEL 7 libssh2 이외 제품은 평가 데이터 없음 또는 미확인으로 두고 추측하지 마.",
+      "required": [
+        "CVE-2026-55200",
+        "CONFLICT",
+        "JSON"
+      ],
+      "forbidden": [
+        "epoch"
+      ],
+      "max_chars": 12000
+    },
+    {
+      "skill": "rhel-cve",
+      "id": "rhel-cve-04",
+      "request": "Windows 전용인 미추적 CVE를 조사해. Red Hat CVE 페이지·Hydra가 NOTFOUND면 파일 대신 대화로 Red Hat 미추적과 cve.org(cveawg) 기준 벤더·제품을 보고하고, 영향 없음으로 쓰지 마.",
+      "required": [
+        "Red Hat 미추적",
+        "cve.org"
+      ],
+      "forbidden": [
+        "영향 없음"
+      ],
+      "max_chars": 12000
+    },
+    {
       "skill": "devlog",
       "id": "devlog-01",
       "request": "가상 프로젝트의 세션 기록 블록을 만들어 줘. 날짜 2026-01-03, 로그인 기능 구현 완료, 테스트 5건 통과, 다음 작업은 비밀번호 재설정. Notion 연결이 없다고 가정하고 SESSION_LOG.md에 붙일 형식으로 써 줘.",
@@ -144,7 +187,9 @@
       "skill": "writing",
       "id": "writing-ending-02",
       "request": "가상의 독서 메모를 작성해 줘. 제공된 내용은 책을 읽고 정리의 중요성을 느꼈다는 것뿐이야. 제목과 짧은 본문을 쓰고 전체 답변의 맨 마지막을 정확히 '여기까지.'로 끝내. 그 뒤에는 설명이나 안내를 붙이지 마.",
-      "required": ["여기까지."],
+      "required": [
+        "여기까지."
+      ],
       "forbidden": [],
       "max_chars": 5000
     },
@@ -160,7 +205,11 @@
       "skill": "office-docs",
       "id": "office-docs-each-slide-02",
       "request": "가상의 3장 발표자료 계획을 표로 작성해 줘. 1장 현황은 처리 시간 12분, 2장 문제는 대기 시간 4분, 3장 제안은 목표 처리 시간 8분을 근거로 한다. 각 장에 결론형 제목과 해당 장의 수치를 넣어. 이 수치는 가정이며 실측이나 확정 효과가 아니다. 실제 파일은 만들지 마.",
-      "required": ["12", "4", "8"],
+      "required": [
+        "12",
+        "4",
+        "8"
+      ],
       "forbidden": [],
       "max_chars": 5000
     },

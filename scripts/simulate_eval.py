@@ -64,6 +64,9 @@ def validate(cases):
             errors.append(f"{case_id}: request가 너무 짧습니다")
             continue
         for kind, pattern in validate_repo.SENSITIVE:
+            # rhel-cve 평가 케이스의 request는 실제 CVE ID를 조사 입력으로 쓴다(가상 값이 아니다).
+            if kind == "real-advisory-id":
+                continue
             for match in pattern.finditer(request):
                 value = match.group(0)
                 if kind == "ipv4":

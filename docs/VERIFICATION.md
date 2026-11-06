@@ -109,3 +109,10 @@
 - 저장소 구조·버전: **VERIFIED**. `python scripts/validate_repo.py` PASS. 배포 스킬 9개, admission 참조 제거 후 매니페스트 버전 일치.
 - 회귀 테스트: **VERIFIED**. `python scripts/run_tests.py` 통과, 실패 0, skip 0.
 - 제거 후 실제 질문에서 스킬과 같은 답변을 제공하는지: **NOT VERIFIED**. 스킬 부재 상태의 실제 답변 품질은 별도 실행 전 미검증이다.
+
+## rhel-cve Confluence 기록용 Markdown 개정 (2026-11-06, 1.11.0)
+
+- 저장소 구조·버전: **VERIFIED**. `python scripts/validate_repo.py` PASS. 매니페스트 5종 버전 1.11.0 일치.
+- 회귀 테스트: **VERIFIED**. `python scripts/run_tests.py` 통과, 실패 0, skip 0.
+- `check_report.py --self-test`: **VERIFIED**. `kernel-0:4.18.0-553.el8` FAIL, RHSA 번호 형식·`CVSS:3.1/AV:N`·`webkit2gtk3-2.46.3-1.el8_10.x86_64` PASS. `references/report-example.md`의 `<!-- REPORT START -->` 아래 예시가 검사 PASS.
+- 평가 케이스 3건(rhel-cve-02/03/04)의 실제 모델 수행 결과: **NOT VERIFIED**. 조회 시점마다 KEV·EPSS 값이 바뀌므로 assertion은 수치가 아닌 등재 여부·기준일 기재 기준이다. 실제 모델 실행은 별도 평가 전 미검증이다.

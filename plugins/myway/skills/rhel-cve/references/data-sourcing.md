@@ -1,6 +1,16 @@
 # 데이터 수집 절차
 
-모든 모드 공통. 순서대로 시도하고, 실패한 단계는 실패 사실을 기록한다.
+모든 모드 공통. 순서대로 시도하고, 실패한 단계는 실패 사실을 기록한다. 세션 시작 시 Hydra 직접 조회를 한 번 시도한 뒤 실패하면 아래 우회 경로로 전환한다. 같은 요청을 다른 명령으로 반복 시도하지 않는다.
+
+환경 제약 요약:
+
+| 대상 | 셸 curl | 웹 조회 도구 |
+|---|---|---|
+| access.redhat.com, security.access.redhat.com | 환경에 따라 프록시 차단 | 사용 (일부 환경은 이전 검색·조회 결과에 나온 URL만 열림) |
+| api.first.org | 자주 차단 | 대부분 거부 |
+| raw.githubusercontent.com | 사용 | — |
+
+URL 선노출 제약이 있는 환경에서는 `"{CVE} Red Hat"`, `"{RHSA} {패키지}"`로 먼저 검색해 URL을 노출시킨 뒤 조회한다.
 
 RHSB가 입력이면 RHSB 본문을 먼저 확인해 포함된 CVE와 RHSA를 식별한다. CVE가 입력이면 RHSB 존재 여부를 확인한다. 접근하지 못한 RHSB의 범위는 추측하지 않는다.
 
@@ -130,6 +140,10 @@ python3 scripts/epss_kev.py CVE-YYYY-NNNNN
 스크립트는 `raw.githubusercontent.com/cisagov/kev-data/main/known_exploited_vulnerabilities.json`을 한 번 받아 전체 CVE와 대조한다. 카탈로그 `dateReleased`를 조회 기준일 참고값으로 쓴다. 등재 시 `dateAdded`, `dueDate`, `vulnerabilityName`, `knownRansomwareCampaignUse`를 기록한다.
 
 KEV 등재는 위험도의 하한선이다. 미등재라도 PoC 공개, CISA SSVC `Exploitation: poc/active` 등은 함께 서술한다.
+
+## 7. 업스트림 공지
+
+업스트림(프로젝트)이 밝힌 영향 버전과 수정 버전을 확인한다. 예: WebKitGTK WSA, OpenSSL Advisory. 이를 judgment-rules.md 8절의 이상 데이터 판정(수정 버전 비교)에 쓴다. 업스트림 공지에 접근하지 못하면 추측하지 않고 4장에 미확인으로 남긴다. 이후 절 번호는 그대로 둔다(6장 기준 인용).
 
 ## 7. Red Hat 미추적(NOTFOUND) 처리
 

@@ -60,7 +60,26 @@ CSAF justification 번역: `vulnerable_code_not_present` → 취약한 코드 �
 | EXISTS, 모든 package_state가 Not affected | 영향 없음(Not affected) |
 | EXISTS, package_state·affected_release 모두 비어 있음 | 평가 데이터 없음 |
 
-## 7. 검증 질문 모드
+## 8. 이상 데이터 판정 (1.10.x 신규)
+
+Red Hat이 지정한 **수정 빌드**가 아래 중 하나에 해당하면 리포트 4장에 **"Red Hat 데이터 특이사항"**으로 기록하고, 패키지 표 비고에도 표시한다. 이 경우에도 Red Hat 값을 표에 그대로 둔다.
+
+| 특이사항 | 판정 조건 |
+|---|---|
+| 수정 빌드의 errata 발행일이 CVE 공개일보다 이르다 | 발행일 < public_date |
+| 수정 빌드의 업스트림 버전이 업스트림 수정 버전보다 낮다 | Red Hat NVR 버전 < 업스트림 수정 버전 |
+| 같은 패키지의 이후 errata에 해당 CVE가 수록되지 않는다 | 이후 RHSA의 CVE 목록에 부재 |
+
+- 비고 표기: "업스트림 수정(x.y.z)보다 이전 버전"처럼 구체적으로 쓴다.
+- 실무 권고(스트림 최신 빌드 적용 등)를 덧붙일 때는 "버전 비교에 근거한 판단이며 Red Hat 공지 문구 아님"을 함께 적는다.
+- 실사례: CVE-2024-27834 — RHEL 9 `webkit2gtk3-2.38.5-1.el9_2.3`(RHSA 2023-07 발행)은 업스트림 수정 버전 2.44.2보다 이전 버전이다.
+
+## 9. KEV 등재와 출처 구분
+
+- CISA KEV의 `vulnerabilityName`이 다른 벤더 제품(예: Apple)을 가리키면, 그 사실과 Red Hat 패키지가 같은 코드를 쓰는지 여부를 구분해 적는다. KEV 등재만으로 Red Hat 제품의 악용을 단정하지 않는다.
+- Red Hat 공지에 악용 사례가 없으면 "Red Hat 공지에는 악용 사례가 명시되어 있지 않습니다. 악용 근거는 CISA KEV 등재입니다."처럼 출처를 나눠 쓴다.
+
+## 10. 검증 질문 모드
 
 - **영향 여부**: 해당 product_name 항목의 fix_state와 affected_release를 근거로 "해당/비해당 + 근거"를 답한다.
 - **설명문 대조**: Red Hat 원문과 구 단위로 비교해 누락·추가된 한정어를 지적한다. 일치하는 부분도 밝혀 과장하지 않는다.

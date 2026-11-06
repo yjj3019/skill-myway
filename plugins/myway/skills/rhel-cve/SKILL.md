@@ -1,6 +1,6 @@
 ---
 name: rhel-cve
-description: Red Hat/RHEL CVE와 RHSB를 조사해 Confluence용 한국어 보안 리포트를 작성한다. CVE 한 건·여러 건 또는 RHSB의 영향 제품, fix_state, 수정 버전, RHSA와 근거를 확인한다. RHEL 취약점 점검, CVE 리포트, 영향도 판정, EPSS, KEV 요청에도 사용한다.
+description: Red Hat RHEL CVE를 Hydra·errata·EPSS·KEV로 조사해 Confluence 기록용 한국어 Markdown 리포트(CVE-ID_리포트.md)를 만든다. CVE ID만 입력해도 사용한다. RHSB 통합 리포트, 다건 요약, 영향도 판정 검증은 기존 모드를 유지한다.
 ---
 
 # Red Hat CVE 조사 및 리포트
@@ -49,6 +49,7 @@ description: Red Hat/RHEL CVE와 RHSB를 조사해 Confluence용 한국어 보�
 - Statement 산문만으로 제품 상태를 추정하지 않는다.
 - NVR epoch(`0:`, `1:`)는 모든 산출물에서 제거한다.
 - "Red Hat 미추적"과 "영향 없음(Not affected)"을 구분한다.
+- 이상 데이터(수정 빌드 errata가 공개일보다 이름, 수정 버전이 업스트림보다 낮음, 이후 errata에 CVE 미수록)는 Red Hat 값을 유지하고 4장 "Red Hat 데이터 특이사항"과 표 비고에 기록한다.
 - EPSS는 api.first.org 먼저 시도, 실패·CVE 불일치 시 GitHub 미러로 폴백.
 - 출처에는 실제로 조회한 URL을 적는다. 조회하지 않은 URL을 관례적으로 적지 않는다.
 - 2차 소스(OpenCVE, OSV 등)로 대체한 값은 대화 응답에 소스와 수집 시점을 밝힌다.

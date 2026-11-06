@@ -176,7 +176,7 @@ class RhelCveExample(unittest.TestCase):
                 body.replace("Fixed Package | RHSA", "Package | RHSA"),
                 body.replace(checker.NOTICE, "주의 문구 없음"),
                 body.replace("2099-08-10 기준 )", "YYYY-MM-DD 기준 )"),
-                body.replace("| RHEL 9 | 미확인 | examplepkg | 미확인 | 미확인 | 미확인 | 가상 데이터 |", "| RHEL 9 | 미확인 |"),
+                body.replace("| RHEL 9 | 기본 | parserx | parserx-3.1.2-1.el9.x86_64 | [RHSA-2099:4201](https://access.redhat.com/errata/RHSA-2099:4201) | 2023-07-20 | 가상 데이터, 업스트림 수정 3.2.0보다 이전 |", "| RHEL 9 | 기본 |"),
             ):
                 self.assertTrue(errors(changed))
 

@@ -260,6 +260,9 @@ def check_sensitive(root, extra_terms, errors):
             if t in low:
                 errors.append(f"{rel}: 금지어 포함")
         for kind, rx in SENSITIVE:
+            # 실제 CVE/RHSA 값이 허용되는 자리: 평가 케이스 입력과 rhel-cve 스킬의 실사례·검사기 픽스처.
+            if kind == "real-advisory-id" and ("eval_cases" in rel.parts or "rhel-cve" in rel.parts):
+                continue
             for m in rx.finditer(text):
                 val = m.group(0)
                 if kind == "ipv4" and (SAFE_IP.match(val) or any(int(x) > 255 for x in val.split("."))):

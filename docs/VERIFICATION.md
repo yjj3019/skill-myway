@@ -25,6 +25,12 @@
 
 기준일 2026-11-01, 버전 1.5.0. 확인한 것만 VERIFIED로 적는다. 아래 기록은 커밋 전 작업트리 기준이다.
 
+## 결과 신뢰성 보강 (2026-11-06, 1.12.0)
+
+- xlsx.md 4상태 판정·epoch 보존 규정·RENDER-GATE 표 정정·AUTO-SELECT 호출 추적 절차를 반영(D-032). 문서·지침 수정이며 스크립트 동작은 바뀌지 않았다.
+- 저장소 구조·버전: **VERIFIED**. `python scripts/validate_repo.py` PASS. 회귀 테스트: **VERIFIED**. `python scripts/run_tests.py` 예정 전부 통과.
+- 재계산 4상태·호출 추적·렌더링 게이트: **NOT VERIFIED**. 새 규정의 실제 적용(soffice 재계산 실행, 플랫폼 스킬 로드 이벤트 수집)은 아직 수행하지 않았다.
+
 ## 실제 평가 실행 (2026-11-06, 1.11.0)
 
 - **자동 선택(자연어 4케이스, claude 2.1.318 headless)**: PARTIAL. as-01 "RHEL 점검 엑셀"→`office-docs`, as-02 "CVE-2099-00001 고객 보고서"→`rhel-cve`(가상 CVE 404를 지어내지 않고 계획만 제시), as-03 "장애→경영진 보고"→`incident-rca`, as-04 "AI 소식 블로그"→`research-brief`+`writing` 조합. 4/4 스킬 선택 성공. 한글 프롬프트가 CLI 전달 시 인코딩 깨짐(모델이 복원 시도·고지), MITRE 조회 연결 실패 기록. 표본 4·단일 모델이라 전문 판정은 아님.

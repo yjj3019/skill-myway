@@ -47,7 +47,7 @@ description: Red Hat RHEL CVE를 Hydra·errata·EPSS·KEV로 조사해 Confluenc
 - Hydra JSON과 XML이 다르면 CONFLICT로 표시하고 양쪽 값을 모두 보고한다. 기본 채택은 JSON.
 - `product_name` 정확 일치 항목만 해당 RHEL 버전 판정으로 쓴다. EUS/ELS/AUS, JBCS, RHEL AI 등은 별개 제품.
 - Statement 산문만으로 제품 상태를 추정하지 않는다.
-- NVR epoch(`0:`, `1:`)는 모든 산출물에서 제거한다.
+- NVR epoch(`0:`, `1:`)는 **수집·버전 비교 시 보존**한다. RPM 버전 비교는 Epoch-Version-Release(EVR) 규칙으로 하고, epoch가 버전 숫자보다 우선한다(예: `1:1.0-1`과 `0:2.0-1`은 숫자만 비교하지 않는다). **산출물 표시 시에만** epoch를 제거한다. epoch를 제거해 판정했다면 원본 EVR과 비교 근거를 별도 기록에 남긴다.
 - "Red Hat 미추적"과 "영향 없음(Not affected)"을 구분한다.
 - 이상 데이터(수정 빌드 errata가 공개일보다 이름, 수정 버전이 업스트림보다 낮음, 이후 errata에 CVE 미수록)는 Red Hat 값을 유지하고 4장 "Red Hat 데이터 특이사항"과 표 비고에 기록한다.
 - EPSS는 api.first.org 먼저 시도, 실패·CVE 불일치 시 GitHub 미러로 폴백.

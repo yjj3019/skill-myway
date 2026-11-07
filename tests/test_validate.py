@@ -1,3 +1,5 @@
+import importlib.util
+import importlib.util
 import json
 import shutil
 import sys
@@ -145,40 +147,74 @@ class ValidateRepo(unittest.TestCase):
 
 
 class RhelCveExample(unittest.TestCase):
+    def setUp(self):
+        self.skill_dir = ROOT / "plugins/myway/skills/rhel-cve"
+        self.checker_spec = importlib.util.spec_from_file_location(
+            "cve_report_check", self.skill_dir / "scripts/check_report.py")
+        self.checker = importlib.util.module_from_spec(self.checker_spec)
+        self.checker_spec.loader.exec_module(self.checker)
+        example = (self.skill_dir / "references/report-example.md").read_text(encoding="utf-8-sig")
+        self.body = example.split("\n<!-- REPORT START -->\n", 1)[1]
+
     def test_example_passes_checker(self):
         import subprocess
-        d = ROOT / "plugins/myway/skills/rhel-cve"
-        text = (d / "references/report-example.md").read_text(encoding="utf-8")
-        body = text.split("\n<!-- REPORT START -->\n", 1)[1]
+        d = self.skill_dir
         with tempfile.TemporaryDirectory() as td:
-            f = Path(td) / "r.md"
-            f.write_text(body, encoding="utf-8")
+            f = Path(td) / "CVE-2099-00001_리포트.md"
+            f.write_text(self.body, encoding="utf-8")
             r = subprocess.run([sys.executable, str(d / "scripts/check_report.py"), str(f)], capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout)
 
     def test_report_checker_rejects_structural_errors(self):
         import importlib.util
-        d = ROOT / "plugins/myway/skills/rhel-cve"
-        spec = importlib.util.spec_from_file_location("cve_report_check", d / "scripts/check_report.py")
-        checker = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(checker)
-        example = (d / "references/report-example.md").read_text(encoding="utf-8-sig")
-        body = example.split("\n<!-- REPORT START -->\n", 1)[1]
+        checker = self.checker
+        body = self.body
         with tempfile.TemporaryDirectory() as td:
-            report = Path(td) / "report.md"
-            def errors(text):
-                report.write_text(text, encoding="utf-8")
-                return checker.check(report)
-            self.assertEqual(errors(body.replace("CVE-2099-00001 -", "CVE-2099-00001, CVE-2099-00002 -", 1)), [])
-            self.assertEqual(errors(body.replace("2099-08-10 기준 )", "99/08/10 기준 )").replace(checker.NOTICE, checker.LEGACY_NOTICE)), [])
+            report = Path(td) / "CVE-2099-00001_리포트.md"
+            def errors(text, name=None):
+                target = Path(td) / (name or report.name)
+                target.write_text(text, encoding="utf-8")
+                return checker.check(target)
+            self.assertEqual(errors(body), [])
+            self.assertTrue(errors(body, "wrong-name.md"))
             for changed in (
+                body.replace("# CVE-2099-00001 -", "# 추가 제목\\n\\n# CVE-2099-00001 -", 1),
                 body.replace("### 3. 완화 방법(Mitigation)", "### 3. 기타"),
+                body.replace("### 5. 결론", "##### 5. 결론"),
                 body.replace("Fixed Package | RHSA", "Package | RHSA"),
                 body.replace(checker.NOTICE, "주의 문구 없음"),
                 body.replace("2099-08-10 기준 )", "YYYY-MM-DD 기준 )"),
-                body.replace("| RHEL 9 | 기본 | parserx | parserx-3.1.2-1.el9.x86_64 | [RHSA-2099:4201](https://access.redhat.com/errata/RHSA-2099:4201) | 2023-07-20 | 가상 데이터, 업스트림 수정 3.2.0보다 이전 |", "| RHEL 9 | 기본 |"),
+                body.replace("| RHEL 9 | 기본 | parserx | parserx-3.1.2-1.el9.x86_64 |", "| RHEL 9 | 기본 | parserx | parserx-0:3.1.2-1.el9.x86_64 |"),
             ):
                 self.assertTrue(errors(changed))
+            self.assertTrue(errors(body.replace("# CVE-2099-00001 -", "# CVE-2099-00001, CVE-2099-00002 -", 1),
+                                   "CVE-2099-00001_리포트.md"))
+
+    def test_integrated_checker_requires_each_cve_linked_in_eight_column_table(self):
+        lines = [
+            "# RHEL CVE 통합 리포트 - 접수 3건 → 고유 2건", "",
+            "환경 범위: 가상 시험 자료.", "", "Environment", "-----------", "* Red Hat Enterprise Linux 9", "",
+            "### CVE-2099-00001", "### 1. 취약점 개요", "보안등급", "Impact : Moderate", "CVSS v3 Base Score : 미확인", "기준일 : 2099-08-10 (가상 자료)",
+            "### 2. 영향", "### 3. 완화 방법(Mitigation)", "### 4. 추가 정보", "### 5. 결론", "",
+            "### CVE-2099-00002", "### 1. 취약점 개요", "보안등급", "Impact : Moderate", "CVSS v3 Base Score : 미확인", "기준일 : 2099-08-10 (가상 자료)",
+            "### 2. 영향", "### 3. 완화 방법(Mitigation)", "### 4. 추가 정보", "### 5. 결론", "",
+            "영향을 받는 패키지 및 발행된 레드햇 보안 공지 ( 2099-08-10 기준 )", "------------------------------------------", "",
+            "| CVE ID | RHEL | Lifecycle | Components | Fixed Package | RHSA | Release Date | 비고 |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- |",
+            "| CVE-2099-00001 | RHEL 9 | 기본 | pkg-a | 미발행 (Affected) | - | - | 가상 |",
+            "| CVE-2099-00002 | RHEL 9 | 기본 | pkg-b | 미발행 (Affected) | - | - | 가상 |",
+            "", self.checker.NOTICE, "", "참고문서", "----", "* 가상 자료로 외부 조회 없음"
+        ]
+        valid = "\n".join(lines)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "RHEL_CVE_리포트_20990810.md"
+            path.write_text(valid, encoding="utf-8")
+            self.assertEqual(self.checker.check(path), [])
+            path.write_text(valid.replace("| CVE-2099-00002 |", "| CVE-2099-00003 |"), encoding="utf-8")
+            self.assertTrue(self.checker.check(path))
+            path.write_text(valid.replace("| CVE ID | RHEL | Lifecycle | Components | Fixed Package | RHSA | Release Date | 비고 |",
+                                          "| RHEL | Lifecycle | Components | Fixed Package | RHSA | Release Date | 비고 |"), encoding="utf-8")
+            self.assertTrue(self.checker.check(path))
 
 
 class RunTests(unittest.TestCase):

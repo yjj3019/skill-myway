@@ -27,7 +27,7 @@
 - component: {소스 패키지명}
 - severity: {threat_severity}
 - cvss_redhat: {점수} {벡터}
-- rhel: {버전}={상태}[/{RHSA}/{epoch 제거 NVR}]; …   (없으면 "항목 없음")
+- rhel: {버전}={상태}[/{RHSA}/{표시용 NVR}]; …   (없으면 "항목 없음"). 비교는 원본 EVR로 완료한다.
 - other_products: {RHEL 항목이 없을 때 product_name 목록}
 - json_vs_xml: 일치 | CONFLICT({버전} JSON={값} XML={값}) | 미확인
 - source_note: {대체 소스 사용 시 소스명·수집 시점}
@@ -70,7 +70,7 @@ CVE 1건에 판정 1개. 대상 RHEL 버전 항목들 중 우선순위가 가장
 ## 6. 출처
 ```
 
-공통: HTML 금지, 표 정렬 지정 금지, 표 안 굵게·이모지·백틱 금지, epoch 제거. 문장은 짧은 단정형, 명사형 종결.
+공통: HTML 금지, 표 정렬 지정 금지, 표 안 굵게·이모지·백틱 금지. epoch는 비교가 끝난 뒤 필요한 표시 형식에서만 생략한다. 문장은 짧은 단정형, 명사형 종결.
 
 ### 1. 집계
 

@@ -128,3 +128,18 @@ MIT 저장소(obra/superpowers, addyosmani/agent-skills, DietrichGebert/ponytail
 ## D-032 결과 신뢰성 보강 — XLSX 재계산 상태·epoch 보존·검사 범위 정정·호출 추적 (1.12.0)
 - 추가 분석(2026-11-06) 지적 4건을 반영: ① xlsx.md에 수식 계산 결과 판정 4상태(PASS/FAIL/NOT VERIFIED/PARTIAL) 신설 — "오류 문자열 0개"와 "계산 완료"를 분리하고, 재계산 파일의 기대값 대조·부분 확인 기록을 규정 ② rhel-cve SKILL.md에서 NVR epoch는 수집·비교 시 보존(EVR 규칙, epoch가 버전 숫자보다 우선)하고 산출물 표시 시에만 제거하도록 수정 ③ RENDER-GATE.md 표 정정 — check_office.py는 존재·재열기 검사만 하고 결론형 제목·주장-근거 연결·편집 가능성은 수동 검증, bbox 겹침은 후보 제시만 하고 시각 리뷰로 판정 ④ AUTO-SELECT-EVALUATION.md에 호출 사실 판정 순서 신설 — 플랫폼 이벤트·도구 추적 우선, 추적 불가 시 `선택 여부 미확인` 기록, 자기 보고와 실호출 분리. 지난 4케이스 기록도 자기 보고 기준임을 명시.
 - brand-profile 대체 글꼴(`fallback`)은 기존에 이미 존재해 추가하지 않았다.
+
+## D-033 자동 선택 평가 입력·권한과 검증 현황 기준 정정 (1.12.0 이력)
+- 점검(2026-11-06)에서 `AUTO-SELECT-EVALUATION.md`의 정답 가이드 위치 충돌을 확인했다. 공개 요청에는 기대 스킬을 넣지 않고 별도 로컬 가이드와 분리했다.
+- `VERIFICATION.md` 현재 상태 표를 1.12.0 기준으로 정리했다. 1.12.0 검증 명령은 미실행으로 남기고, 이전 버전 검증은 현재 상태와 분리했다.
+- 오피스 평가 케이스(`office-docs-real-file-03`, `office-docs-each-slide-02`)와 자동 선택 10케이스의 미실행 상태를 명시했다.
+- 자동 선택 공개 요청 사례 10건은 `tests/eval_cases/auto_select_cases.json`에 기대 스킬 없이 보관한다. `run_eval.py --auto-select`는 Codex `workspace-write`를 요청하고 호출·시간 예산을 요구하며, 파일 산출물과 확장자를 검사한다. 모든 실제 평가에 예산 상한이 필수다. Codex 로드 흔적은 수집하지 않아 호출 여부는 미확인이다.
+
+## D-034 수식 계산·EVR 비교·검사 범위 증거 구분 (1.13.0)
+- 2026-11-07 점검에서 XLSX 4상태 지침은 있으나 `check_office.py`는 수식 문자열만 확인함을 확인했다. 샘플 수식에 한해 LibreOffice/soffice 재계산, 수식 보존, 캐시, 명확한 기대값을 별도 확인하고, 엔진 부재·오류 시 NOT VERIFIED를 JSON에 보고하도록 변경했다. 구조 루틴 반환코드와 계산 상태를 분리한다. 반복·가상 수식 시뮬레이션과 단위 테스트로 확인한다.
+- 자동 선택 평가가 Office 산출물을 생성해도 실제 파일 재열기·매크로·외부 관계 검사를 하지 않는 공백을 확인했다. Codex/Grok의 격리 작업 폴더에서만 `--inspect-artifacts`를 제공해 Office 구조, 압축 경로·크기, 매크로·외부 관계를 검사한다. XLSX 캐시 누락은 계산 `NOT VERIFIED`, 캐시된 계산 오류는 `FAIL`로 구조 상태와 분리한다. 검사를 통과한 구조도 렌더링·실제 Office 호환성을 입증하지 않는다.
+- RHEL 문서의 epoch 제거 문구를 원본 EVR 보존, RPM 비교 완료 후 표시 변환으로 정정했다. formatter의 epoch 검사는 표시 형식 검사이며 EVR 비교를 증명하지 않는다.
+- `RENDER-GATE.md`와 과거 Office 기록에서 구조·계산 검사와 실제 산출물 검증·렌더·시각 리뷰의 범위를 분리했다.
+- 외부 자료의 주장별 근거표는 `research-brief`에 이미 있어 새 추적 체계는 추가하지 않았다. 오피스 접근성·입력 셀의 수식 주입과 외부 링크 점검 기준은 `office-work.md`·`pptx.md`에 보강했으며 자동 검사는 미구현이다.
+- RHEL 스킬 명세를 Confluence Markdown 출력, 단건/통합 모드, HTTP 상태코드 처리, 통합 8컬럼, 보고서 제목·파일명 검사에 맞춰 개정했다. 신규 평가 사례는 가상 식별자를 사용한다. 기존 실사례 참조 하나는 가상 EVR 예시로 교체했고, 관련 평가 케이스도 예약 CVE 식별자로 바꿨다. 실제 외부 자료와 대조하는 평가는 승인된 별도 미노출 데이터가 필요하다.
+- `VERSION` 및 5개 매니페스트를 SKILL description 길이 최적화를 포함해 1.14.1로 올렸다. 이후 Codex JSONL 메시지 분리·도구 이벤트 기반 로드 근거 판정을 추가해 1.14.2로 올렸다. validator PASS·회귀 테스트 107건 통과를 `VERIFICATION.md`에 기록했다. 예약 CVE read-only endpoint smoke 결과와 단일 자동 선택 probe의 한계를 같은 문서에 남겼다.

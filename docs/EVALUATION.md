@@ -91,13 +91,13 @@ python3 scripts/blind_review.py --cases cases.json \
 1. **가상 테스트** — `python3 scripts/simulate_eval.py`
    - `tests/eval_cases/cases.json`의 케이스 스키마·id 중복·스킬 커버리지·민감 패턴을 검사한다.
    - 케이스별 요청 해시와 스킬 본문 해시로 manifest를 만든다. 모델은 호출하지 않는다.
-2. **실제 테스트** — `python3 scripts/run_eval.py --platform claude`
+2. **실제 테스트** — `python3 scripts/run_eval.py --platform claude [--max-calls N|--max-seconds N]`
    - 각 케이스에 스킬 지침을 적용해 모델을 실행하고 출력을 저장한다.
-   - 필수 요소·금지 패턴·최대 길이를 자동 검사한다. `eval-results/summary.json`에 기록한다.
+   - 필수 요소·금지 패턴·최대 길이를 자동 검사한다. `eval-results/summary.json`에 기록한다. Codex/Grok에서 Office 산출물 검사도 요청하면 `--inspect-artifacts`를 사용한다. 파일 구조·압축 경로·매크로 흔적·외부 관계를 확인하고 XLSX 계산 캐시 상태는 별도 표시한다. Claude 플러그인은 평가 작업 폴더 밖에서 로드되므로 이 옵션과 함께 사용할 수 없다.
    - 빈 출력은 자동 검사에서 실패하며, 실행 오류·시간 초과는 검사를 수행하지 않고 `checks: null`로 남긴다. 자동 검사는 형식과 필수 요소만 본다. 문장 품질·사실 정확성은 사람이 판정한다. 회귀 사례별 수동 기준은 `tests/eval_cases/visual-review-rubric.md`를 참고한다.
    - 기존 결과 파일을 덮어쓰지 않으므로 실행마다 별도 출력 디렉터리를 지정한다. 저장 도중 오류가 나면 일부 파일이 남을 수 있다. 특수하거나 긴 사례 ID는 해시 파일명으로 저장한다. 요약의 요청·스킬 본문 해시는 전체 references·모델 버전·환경의 재현을 보장하지 않는다.
    - 사례 스키마 2는 선택적 `ends_with`로 공백을 제외한 응답 끝을 검사한다. 표의 행별 수치·의미·사실성은 자동 검사하지 않으므로 수동 판정한다. 구 실행기는 스키마 2를 거부한다.
    - Claude가 오류 종료하며 확인된 영문 한도 메시지를 출력하면 남은 호출을 중단하고 `stop_reason`, `attempted`, `completed`, `execution_failed`, `not_run`을 기록한다. 미실행이 있으면 케이스 `passed`와 `pass_rate`는 `null`이다. 이 감지는 관찰된 문구에 한정되며 다른 형식·공급자나 종료 코드 0의 한도는 인식하지 못할 수 있다. 별도 병렬 실행 프로세스를 중단하지 않는다.
    - 요약의 `schema_version`은 3이다. 실패 실행의 `checks`와 미실행의 `passed_auto_checks`는 `null`일 수 있으며 기존 소비자는 새로운 버전·추가 필드와 상태를 처리해야 한다.
-   - 현재 실행기는 기준선·후보의 자동 대응, 블라인드 판정, 미채점 분모나 예산 관리를 제공하지 않는다. 위 실험 기록은 별도로 작성한다. Codex 실행은 `danger-full-access`를 사용하므로 빈 임시 디렉터리는 보안 격리가 아니다. 실행 전 호스트 권한과 환경을 확인한다.
+   - 현재 실행기는 기준선·후보의 자동 대응과 블라인드 판정을 제공하지 않는다. 모든 실제 평가에는 `--max-calls` 또는 `--max-seconds` 예산이 필요하며, 상한에 도달하면 남은 케이스는 미실행으로 기록한다. Codex 실행은 `workspace-write`로 임시 작업 디렉터리에 쓰기를 제한하지만, OS·VM 격리나 네트워크 차단의 증거는 아니다. 기존 자동 선택 4케이스는 Claude에서 실행됐으므로 이번 제한이 과거 환경에 소급되지 않는다.
    - 결과는 `docs/EVALUATION-RESULTS-2026-11-01.md`에 기록했다.

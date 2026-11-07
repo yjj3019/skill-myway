@@ -2,6 +2,7 @@ import json
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest import mock
 
@@ -9,6 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 import run_eval  # noqa: E402
 import simulate_eval  # noqa: E402
+import check_office  # noqa: E402
 
 
 def sample_cases():
@@ -17,7 +19,8 @@ def sample_cases():
         "schema_version": 1,
         "cases": [
             {"skill": name, "id": f"{name}-x", "request": f"{name} 가상 요청입니다. 충분히 긴 요청.",
-             "required": ["결과"], "forbidden": [], "max_chars": 4000}
+             "required": ["결과"], "forbidden": [], "max_chars": 4000,
+             **({"artifact_policy": "conditional"} if name == "office-docs" else {})}
             for name in skills
         ],
     }
@@ -62,6 +65,325 @@ class SimulateEval(unittest.TestCase):
 
 
 class RunEval(unittest.TestCase):
+    def test_auto_cases_reject_expected_answers(self):
+        clean = {"schema_version": 1, "cases": [{"id": "as-01", "request": "충분히 구체적인 자동 선택 요청입니다.", "artifact_policy": "forbidden"}]}
+        self.assertEqual(run_eval.validate_auto_cases(clean), [])
+        contaminated = {"schema_version": 1, "cases": [{"id": "as-01", "request": "충분히 구체적인 자동 선택 요청입니다.", "artifact_policy": "forbidden", "skill": "writing"}]}
+        self.assertTrue(run_eval.validate_auto_cases(contaminated))
+        missing_flag = {"schema_version": 1, "cases": [{"id": "as-02", "request": "충분히 구체적인 자동 선택 요청입니다."}]}
+        self.assertTrue(run_eval.validate_auto_cases(missing_flag))
+        invalid_policy = {"schema_version": 1, "cases": [{"id": "as-04", "request": "충분히 구체적인 자동 선택 요청입니다.", "artifact_policy": "yes"}]}
+        self.assertTrue(run_eval.validate_auto_cases(invalid_policy))
+        missing_extension = {"schema_version": 1, "cases": [{"id": "as-05", "request": "구체적인 파일 산출 요청 예시입니다.", "artifact_policy": "required"}]}
+        self.assertTrue(run_eval.validate_auto_cases(missing_extension))
+        artifact_as_answer = {"schema_version": 1, "cases": [{"id": "as-03", "request": "충분히 구체적인 자동 선택 요청입니다.", "artifact_policy": "forbidden", "expected_skill": "writing"}]}
+        self.assertTrue(run_eval.validate_auto_cases(artifact_as_answer))
+
+    def test_auto_cases_reject_sensitive_values(self):
+        request = "개인 정보 확인 요청 " + "test@" + "invalid.test에서 받은 내용을 검사해"
+        unsafe = {"schema_version": 1, "cases": [{"id": "as-01", "request": request, "artifact_policy": "forbidden"}]}
+        self.assertTrue(run_eval.validate_auto_cases(unsafe))
+        safe_demo = {"schema_version": 1, "cases": [{"id": "as-demo", "request": "가상의 RHEL 9 결과 문서 작성 요청입니다.", "artifact_policy": "forbidden"}]}
+        self.assertEqual(run_eval.validate_auto_cases(safe_demo), [])
+    def test_auto_prompt_does_not_name_a_skill(self):
+        prompt = run_eval.build_prompt({"request": "일반적인 자동 선택 요청입니다."}, auto_select=True)
+        self.assertNotIn("'writing'", prompt)
+        self.assertNotIn("writing", prompt)
+        self.assertIn("일반적인 자동 선택 요청입니다", prompt)
+
+    def test_auto_select_is_codex_only(self):
+        with self.assertRaises(SystemExit):
+            run_eval.main(["--auto-select", "--platform", "claude", "--dry-run", "--max-calls", "1"])
+
+    def test_auto_select_rejects_unknown_case_id(self):
+        self.assertEqual(run_eval.main(["--auto-select", "--platform", "codex", "--dry-run", "--only", "unknown-id"]), 1)
+
+    def test_live_eval_requires_budget(self):
+        with self.assertRaises(SystemExit):
+            run_eval.main(["--platform", "claude"])
+
+    def test_call_and_time_budgets_are_mutually_exclusive(self):
+        with self.assertRaises(SystemExit):
+            run_eval.main(["--platform", "claude", "--max-calls", "2", "--max-seconds", "60"])
+
+    def test_auto_select_dry_run_does_not_require_budget(self):
+        self.assertEqual(run_eval.main(["--auto-select", "--platform", "codex", "--dry-run"]), 0)
+
+    def test_auto_select_live_run_requires_budget(self):
+        with self.assertRaises(SystemExit):
+            run_eval.main(["--auto-select", "--platform", "codex"])
+
+    def test_auto_select_stops_at_call_budget_and_records_unrun(self):
+        import shutil
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "out"
+            run = {"exit_code": 0, "output": "응답", "stderr_tail": "", "seconds": 0,
+                   "usage_limit": False, "artifacts": [], "artifact_error": None}
+            with mock.patch.object(run_eval, "run_case", return_value=run) as call:
+                result = run_eval.main(["--auto-select", "--platform", "codex", "--out", str(output),
+                                        "--max-calls", "1"])
+            self.assertEqual(result, 1)
+            self.assertEqual(call.call_count, 1)
+            self.assertEqual(call.call_args.kwargs.get("auto_select"), True)
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["budget"]["attempted_calls"], 1)
+            self.assertEqual(sum(item["not_run"] for item in summary["cases"]), 9)
+            self.assertTrue(all(run["selection_status"] == "unverified"
+                                for item in summary["cases"] for run in item["runs"]))
+            self.assertEqual(summary["input_manifest"]["runtime"]["selection_trace"], "not_available")
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_inspect_artifacts_requires_targeted_workspace_platform(self):
+        with self.assertRaises(SystemExit):
+            run_eval.main(["--cases", str(simulate_eval.DEFAULT_CASES), "--inspect-artifacts",
+                           "--platform", "claude", "--dry-run"])
+
+    def test_office_inspector_checks_generated_xlsx_and_cache_scope(self):
+        from openpyxl import Workbook
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            path = Path(tmp) / "sample.xlsx"
+            wb = Workbook()
+            wb.active["A1"] = "=SUM(1,2)"
+            wb.save(path)
+            report = check_office.inspect_office_file(path)
+        self.assertEqual(report["status"], "PASS")
+        self.assertIn("Sheet!A1", report["formula_cells"])
+        self.assertIn("Sheet!A1", report["missing_formula_caches"])
+        self.assertEqual(report["calculation_status"], "NOT VERIFIED")
+
+    def test_office_inspector_accepts_xlsx_after_recalculation(self):
+        from openpyxl import Workbook, load_workbook
+        import shutil
+        renderer = shutil.which("soffice") or shutil.which("libreoffice")
+        if not renderer:
+            result = check_office.recalculate_xlsx(Path("missing.xlsx"), "=SUM(1,2)", 3)
+            self.assertEqual(result["status"], "NOT VERIFIED")
+            self.assertIn("unavailable", result["reason"])
+            return
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            path = Path(tmp) / "calculated.xlsx"
+            wb = Workbook()
+            wb.active["A1"] = "=SUM(1,2)"
+            wb.save(path)
+            profile = Path(tmp) / "profile"
+            profile.mkdir()
+            recalc_dir = Path(tmp) / "recalc"
+            recalc_dir.mkdir()
+            result = run_eval.subprocess.run(
+                [renderer, "-env:UserInstallation=" + profile.resolve().as_uri(), "--headless",
+                 "--convert-to", "xlsx", "--outdir", str(recalc_dir), str(path)],
+                capture_output=True, text=True, timeout=60,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            recalculated = recalc_dir / path.name
+            self.assertTrue(recalculated.is_file())
+            preserved = Path(tmp) / "preserved.xlsx"
+            shutil.copy2(recalculated, preserved)
+            report = check_office.inspect_office_file(preserved)
+            wb.close()
+        self.assertEqual(report["status"], "PASS")
+        self.assertEqual(report["calculation_status"], "PASS")
+        self.assertEqual(report["formula_cells"], ["Sheet!A1"])
+        self.assertEqual(report["missing_formula_caches"], [])
+        cached = load_workbook(preserved, data_only=True, read_only=True)
+        self.assertEqual(cached.active["A1"].value, 3)
+        cached.close()
+
+    def test_office_inspector_flags_external_relationships(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            path = Path(tmp) / "external.xlsx"
+            relationship = b'''<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.invalid/" TargetMode="External"/>
+</Relationships>'''
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr("xl/externalLinks/externalLink1.xml", "<externalLink />")
+                archive.writestr("xl/_rels/workbook.xml.rels", relationship)
+            report = check_office.inspect_office_file(path)
+        self.assertEqual(report["status"], "FAIL")
+        self.assertEqual(report["reason"], "external workbook link part detected")
+        self.assertTrue(report["external_workbook_links"])
+        self.assertNotIn("external_relationships", report)
+
+    def test_office_inspector_detects_cached_formula_error(self):
+        from openpyxl import Workbook
+        import shutil
+        renderer = shutil.which("soffice") or shutil.which("libreoffice")
+        if not renderer:
+            result = check_office.recalculate_xlsx(Path("missing.xlsx"), "=SUM(1,2)", 3)
+            self.assertEqual(result["status"], "NOT VERIFIED")
+            self.assertIn("unavailable", result["reason"])
+            return
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            path = Path(tmp) / "zero.xlsx"
+            wb = Workbook()
+            ws = wb.active
+            ws["A1"], ws["A2"], ws["A3"] = "numerator", 1, 0
+            ws["B1"], ws["B2"], ws["B3"] = "denominator", 1, "=A2/A3"
+            wb.save(path)
+            profile = Path(tmp) / "profile"
+            profile.mkdir()
+            recalc_dir = Path(tmp) / "recalc"
+            recalc_dir.mkdir()
+            result = run_eval.subprocess.run(
+                [renderer, "-env:UserInstallation=" + profile.resolve().as_uri(), "--headless",
+                 "--convert-to", "xlsx", "--outdir", str(recalc_dir), str(path)],
+                capture_output=True, text=True, timeout=60,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report = check_office.inspect_office_file(recalc_dir / path.name)
+        self.assertEqual(report["status"], "PASS")
+        self.assertEqual(report["calculation_status"], "FAIL")
+        self.assertEqual(report["cached_formula_errors"][0]["error"], "#DIV/0!")
+
+    def test_office_inspector_reports_untitled_slide(self):
+        from pptx import Presentation
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            path = Path(tmp) / "untitled.pptx"
+            prs = Presentation()
+            prs.slides.add_slide(prs.slide_layouts[6])
+            prs.save(path)
+            report = check_office.inspect_office_file(path)
+            prs = None
+        self.assertEqual(report["status"], "PASS")
+        self.assertEqual(report["untitled_slides"], [1])
+
+    def test_office_inspector_flags_macro_project(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "macro.docx"
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr("word/vbaProject.bin", b"macro")
+            report = check_office.inspect_office_file(path)
+        self.assertEqual(report["status"], "FAIL")
+        self.assertTrue(report["macro_project"])
+
+    def test_office_inspector_flags_external_workbook_link_part(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "linked.xlsx"
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr("xl/externalLinks/externalLink1.xml", "<externalLink />")
+            report = check_office.inspect_office_file(path)
+        self.assertEqual(report["status"], "FAIL")
+        self.assertTrue(report["external_workbook_links"])
+
+    def test_office_inspector_rejects_path_traversal_archive(self):
+        for entry_name in ("../outside.xml", r"..\\outside.xml"):
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "traversal.docx"
+                with zipfile.ZipFile(path, "w") as archive:
+                    archive.writestr(entry_name, "<x />")
+                report = check_office.inspect_office_file(path)
+            self.assertEqual(report["status"], "FAIL")
+            self.assertIn("unsafe archive", report["reason"])
+
+    def test_main_records_office_inspection_for_targeted_artifacts(self):
+        doc = sample_cases()
+        case = doc["cases"][0]
+        case["artifact_policy"] = "conditional"
+        artifact = {"path": "sample.xlsx", "bytes": 10, "sha256": "a" * 64}
+        office_report = {"file": "sample.xlsx", "status": "PASS", "calculation_status": "NOT VERIFIED",
+                         "missing_formula_caches": ["Sheet!A1"]}
+        run = {"exit_code": 0, "output": "결과", "stderr_tail": "", "seconds": 0,
+               "usage_limit": False, "artifacts": [artifact], "artifact_error": None,
+               "office_inspection": [office_report]}
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "cases.json"
+            source.write_text(json.dumps(doc), encoding="utf-8")
+            output = Path(tmp) / "out"
+            with mock.patch.object(run_eval, "run_case", return_value=run) as call:
+                code = run_eval.main(["--cases", str(source), "--only", case["skill"],
+                                      "--platform", "codex", "--out", str(output),
+                                      "--max-calls", "1", "--inspect-artifacts"])
+            self.assertEqual(code, 0)
+            self.assertTrue(call.call_args.kwargs["artifact_dir"] is not None)
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            inspected_run = summary["cases"][0]["runs"][0]
+            self.assertEqual(inspected_run["office_inspection"], [office_report])
+            self.assertEqual(inspected_run["office_inspection_status"], "NOT VERIFIED")
+            self.assertEqual(inspected_run["office_inspection_requested"], True)
+            self.assertEqual(inspected_run["office_calculation_unverified"], [office_report])
+            self.assertEqual(inspected_run["office_calculation_status"], "NOT VERIFIED")
+            self.assertEqual(inspected_run["status"], "completed")
+            self.assertTrue(inspected_run["passed_auto_checks"])
+
+    def test_inspected_office_artifact_structure_error_fails_run(self):
+        doc = sample_cases()
+        case = doc["cases"][0]
+        case["artifact_policy"] = "conditional"
+        artifact = {"path": "bad.xlsx", "bytes": 8, "sha256": "b" * 64}
+        office_report = {"file": "bad.xlsx", "status": "FAIL", "reason": "macro project detected"}
+        run = {"exit_code": 0, "output": "결과", "stderr_tail": "", "seconds": 0,
+               "usage_limit": False, "artifacts": [artifact], "artifact_error": None,
+               "office_inspection": [office_report]}
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "cases.json"
+            source.write_text(json.dumps(doc), encoding="utf-8")
+            output = Path(tmp) / "out"
+            with mock.patch.object(run_eval, "run_case", return_value=run):
+                code = run_eval.main(["--cases", str(source), "--only", case["skill"],
+                                      "--platform", "codex", "--out", str(output),
+                                      "--max-calls", "1", "--inspect-artifacts"])
+            self.assertEqual(code, 1)
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            failed_run = summary["cases"][0]["runs"][0]
+            self.assertEqual(failed_run["status"], "execution_failed")
+            self.assertEqual(failed_run["office_inspection_status"], "FAIL")
+
+    def test_capture_artifacts_excludes_skill_copy_and_hashes_outputs(self):
+        import shutil
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workdir = root / "work"
+            (workdir / ".agents/skills/hidden").mkdir(parents=True)
+            (workdir / ".agents/skills/hidden/SKILL.md").write_text("skill", encoding="utf-8")
+            (workdir / "report.txt").write_text("report", encoding="utf-8")
+            artifact_dir = root / "out/artifacts/as-01"
+            try:
+                artifacts = run_eval.capture_artifacts(workdir, artifact_dir)
+                self.assertEqual([item["path"] for item in artifacts], ["report.txt"])
+                self.assertEqual((artifact_dir / "report.txt").read_text(encoding="utf-8"), "report")
+                inspection = check_office.inspect_office_artifacts(workdir, artifacts)
+                self.assertEqual(inspection, [])
+                self.assertTrue(all(len(item["sha256"]) == 64 for item in artifacts))
+                with self.assertRaises(OSError):
+                    run_eval.capture_artifacts(workdir, artifact_dir)
+            finally:
+                shutil.rmtree(root, ignore_errors=True)
+
+    def test_codex_jsonl_message_is_separated_from_load_trace(self):
+        message = "확인할 CVE 식별자를 알려주세요."
+        message_event = json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": message}}, ensure_ascii=False)
+        parsed = run_eval.codex_jsonl_observation(message_event)
+        self.assertEqual(parsed["final_text"], message)
+        self.assertEqual(parsed["trace"]["status"], "unverified")
+        self.assertEqual(parsed["trace"]["event_types"], ["item.completed"])
+        case_run = {"selection_trace": parsed["trace"]}
+        self.assertEqual(case_run["selection_trace"]["status"], "unverified")
+        # A real read event would still not establish correctness without private expected answers.
+        read_event = json.dumps({"type": "item.completed", "item": {"type": "tool_call",
+                            "arguments": {"path": "C:/work/.agents/skills/rhel-cve/SKILL.md"},
+                            "output": "name: rhel-cve"}}, ensure_ascii=False)
+        read_trace = run_eval.skill_load_any_evidence(read_event)
+        self.assertEqual(read_trace["status"], "loaded")
+        self.assertNotIn("selection_status", read_trace)
+
+    def test_codex_tool_read_event_is_load_evidence_only_with_content(self):
+        event = json.dumps({"type": "item.completed", "item": {"type": "tool_call",
+                           "arguments": {"path": "C:/work/.agents/skills/rhel-cve/SKILL.md"},
+                           "output": "name: rhel-cve"}}, ensure_ascii=False)
+        result = run_eval.skill_load_any_evidence(event)
+        self.assertEqual(result["status"], "loaded")
+        self.assertIn("rhel-cve", result["skills"])
+
+    def test_codex_failed_tool_or_self_report_is_not_load_evidence(self):
+        failed = json.dumps({"type": "item.failed", "item": {"type": "tool_call", "arguments": {
+                            "path": "rhel-cve/SKILL.md"}, "error": "permission denied"}}, ensure_ascii=False)
+        claim = json.dumps({"type": "item.completed", "item": {"type": "agent_message",
+                           "text": "rhel-cve/SKILL.md를 읽었습니다"}}, ensure_ascii=False)
+        self.assertEqual(run_eval.skill_load_any_evidence(failed)["status"], "unverified")
+        self.assertEqual(run_eval.skill_load_any_evidence(claim)["status"], "unverified")
+        self.assertEqual(run_eval.skill_load_any_evidence("")["status"], "unverified")
+
     def test_evaluate_output_checks(self):
         case = {"required": ["결론", "근거"], "forbidden": ["혁신"], "max_chars": 100}
         ok = run_eval.evaluate_output("결론과 근거를 적었습니다.", case)
@@ -128,7 +450,7 @@ class RunEval(unittest.TestCase):
             out = Path(tmp) / "out"
             with mock.patch.object(run_eval, "run_case", side_effect=runs):
                 self.assertEqual(run_eval.main(["--cases", str(source), "--out", str(out),
-                                                "--only", case["skill"], "--repeat", "3"]), 1)
+                                                "--only", case["skill"], "--repeat", "3", "--max-calls", "3"]), 1)
             summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
             results = summary["cases"][0]["runs"]
             self.assertIsNone(results[0]["checks"])
@@ -146,7 +468,7 @@ class RunEval(unittest.TestCase):
             source.write_text(json.dumps(doc), encoding="utf-8")
             out = Path(tmp) / "out"
             with mock.patch.object(run_eval, "run_case", return_value=run) as call:
-                self.assertEqual(run_eval.main(["--cases", str(source), "--out", str(out), "--repeat", "2"]), 1)
+                self.assertEqual(run_eval.main(["--cases", str(source), "--out", str(out), "--repeat", "2", "--max-calls", "2"]), 1)
                 self.assertEqual(call.call_count, 1)
             summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
             self.assertEqual(summary["schema_version"], 3)
@@ -187,7 +509,7 @@ class RunEval(unittest.TestCase):
             out = Path(tmp) / "out"
             run = {"exit_code": 0, "output": "결과", "stderr_tail": "", "seconds": 0}
             with mock.patch.object(run_eval, "run_case", return_value=run) as call:
-                args = ["--cases", str(source), "--out", str(out), "--only", case["skill"]]
+                args = ["--cases", str(source), "--out", str(out), "--only", case["skill"], "--max-calls", "1"]
                 self.assertEqual(run_eval.main(args), 0)
                 self.assertTrue((out / (run_eval.output_stem(case["id"]) + ".md")).is_file())
                 self.assertFalse((Path(tmp) / "escape.md").exists())
@@ -210,7 +532,10 @@ class RunEval(unittest.TestCase):
     def test_platform_commands(self):
         claude = run_eval.platform_command("claude", "hi")
         self.assertEqual(claude[:2], ["claude", "--plugin-dir"])
-        self.assertEqual(run_eval.platform_command("codex", "hi")[:2], ["codex", "exec"])
+        codex = run_eval.platform_command("codex", "hi")
+        self.assertEqual(codex[:2], ["codex", "exec"])
+        self.assertEqual(codex[codex.index("--sandbox") + 1], "workspace-write")
+        self.assertNotIn("danger-full-access", codex)
         self.assertEqual(run_eval.platform_command("grok", "hi")[:2], ["grok", "-p"])
         with self.assertRaises(ValueError):
             run_eval.platform_command("nope", "hi")

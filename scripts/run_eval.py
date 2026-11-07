@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """가상 케이스로 실제 모델 CLI를 실행하고 자동 검사를 기록한다.
 
-사용: python3 scripts/run_eval.py [--platform claude|codex|grok] [--only SKILL ...]
-        [--cases FILE] [--out DIR] [--timeout SEC] [--dry-run]
+사용: python3 scripts/run_eval.py [--platform claude|codex|grok] [--only ITEM ...]
+        [--auto-select | --cases FILE] [--out DIR] [--timeout SEC] [--dry-run]
+        실제 실행은 --max-calls N 또는 --max-seconds N 필수
 
 - 기본은 Claude Code를 `--plugin-dir`로 띄워 스킬 지침을 로드한다.
 - 각 케이스의 출력에서 필수 문자열·금지 패턴·최대 길이를 검사한다.
@@ -13,6 +14,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
+import platform
 import re
 import shutil
 import subprocess
@@ -24,25 +27,116 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 import simulate_eval  # noqa: E402
+import check_office  # noqa: E402
 
 DEFAULT_CASES = simulate_eval.DEFAULT_CASES
+DEFAULT_AUTO_CASES = ROOT / "tests" / "eval_cases" / "auto_select_cases.json"
 DEFAULT_OUT = ROOT / "eval-results"
 
 
-def build_prompt(case):
+def build_prompt(case, auto_select=False):
+    if auto_select:
+        return (
+            "다음은 사용자의 요청이다. 사용 가능한 지침 중 필요한 것을 스스로 판단해 적용하고 작업을 수행해. "
+            "특정 스킬 이름을 지정하지 않는다. 요청이 파일 산출물을 요구하면 현재 작업 디렉터리 안에만 저장하고, 저장소나 그 밖의 경로는 수정하지 마.\n\n"
+            f"{case['request']}"
+        )
     return (
         f"다음 작업에 '{case['skill']}' 스킬 지침을 적용해 수행해.\n"
         "파일을 만들거나 저장소를 수정하지 말고, 요청한 결과만 출력해.\n\n"
         f"{case['request']}"
     )
 
+def skill_load_evidence(jsonl_text, skill):
+    """Return load evidence only from tool/file events that name the skill's SKILL.md path.
+
+    The model's own statement is never accepted as evidence.
+    """
+    if not jsonl_text.strip():
+        return {"status": "unverified", "reason": "no event output"}
+    needle = f"{skill}/SKILL.md"
+    matches = []
+    for line in jsonl_text.splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        kind = str(event.get("type", "")).lower()
+        if kind in {"agent_message", "message", "assistant_message"}:
+            continue
+        if needle in json.dumps(event, ensure_ascii=False):
+            matches.append(kind or "unknown")
+    if matches:
+        return {"status": "loaded", "event_types": sorted(set(matches))}
+    return {"status": "unverified", "reason": "no tool/file event referenced the skill file"}
+
+
+def codex_jsonl_observation(jsonl_text):
+    """Parse documented Codex JSONL items into final assistant text and load evidence."""
+    messages = []
+    event_types = []
+    for line in jsonl_text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("{"):
+            continue
+        try:
+            event = json.loads(stripped)
+        except json.JSONDecodeError:
+            continue
+        kind = str(event.get("type", "")).lower()
+        event_types.append(kind or "unknown")
+        item = event.get("item")
+        if isinstance(item, dict) and str(item.get("type", "")).lower() == "agent_message":
+            text = item.get("text")
+            if isinstance(text, str):
+                messages.append(text)
+        elif kind in {"agent_message", "message", "assistant_message"} and isinstance(event.get("text"), str):
+            messages.append(event["text"])
+    final_text = messages[-1] if messages else ""
+    trace = skill_load_any_evidence(jsonl_text)
+    trace["event_types"] = event_types
+    return {"final_text": final_text, "trace": trace}
+
+
+def skill_load_any_evidence(jsonl_text):
+    """Find successful file-read tool events that return a skill file body."""
+    if not jsonl_text.strip():
+        return {"status": "unverified", "reason": "no event output"}
+    skills = {p.name for p in simulate_eval.SKILLS.iterdir() if (p / "SKILL.md").is_file()}
+    loaded = set()
+    for line in jsonl_text.splitlines():
+        if not line.strip().startswith("{"):
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("type") != "item.completed":
+            continue
+        item = event.get("item")
+        if not isinstance(item, dict) or item.get("type") not in {"tool_call", "command_execution"}:
+            continue
+        payload = json.dumps(item, ensure_ascii=False).replace("\\\\", "/").replace("\\", "/")
+        output = " ".join(str(item.get(key, "")) for key in ("text", "output", "stdout", "content"))
+        combined = payload + " " + output
+        for skill in skills:
+            needle = f"{skill}/SKILL.md"
+            if needle in combined and output.strip():
+                loaded.add(skill)
+    if loaded:
+        return {"status": "loaded", "skills": sorted(loaded), "evidence": "completed tool read with returned content"}
+    return {"status": "unverified", "reason": "Codex JSONL had no completed read-like tool event with skill path and content"}
+
 
 def platform_command(platform, prompt):
     if platform == "claude":
         return ["claude", "--plugin-dir", str(ROOT / "plugins" / "myway"), "-p", prompt]
     if platform == "codex":
-        # 평가용 임시 디렉터리의 스킬 파일을 읽을 수 있도록 샌드박스를 열어 실행한다.
-        return ["codex", "exec", "--sandbox", "danger-full-access", "--skip-git-repo-check", prompt]
+        # 임시 작업 디렉터리의 스킬 사본만 읽고 쓸 수 있게 제한한다.
+        return ["codex", "exec", "--json", "--sandbox", "workspace-write", "--skip-git-repo-check", prompt]
     if platform == "grok":
         return ["grok", "-p", prompt]
     raise ValueError(f"지원하지 않는 플랫폼: {platform}")
@@ -87,13 +181,175 @@ def prepare_workdir(platform):
     return workdir
 
 
+def capture_artifacts(workdir, artifact_dir):
+    """Copy regular model-created files from the isolated run, excluding installed skill trees."""
+    ignored_roots = {".agents", ".grok"}
+    files = []
+    total_bytes = 0
+    artifact_dir.parent.mkdir(parents=True, exist_ok=True)
+    if artifact_dir.exists() or artifact_dir.is_symlink():
+        raise OSError(f"artifact directory already exists: {artifact_dir}")
+    stage = Path(tempfile.mkdtemp(prefix=".artifact-", dir=artifact_dir.parent))
+    try:
+        for current, dirnames, filenames in os.walk(workdir, followlinks=False):
+            dirnames.sort()
+            filenames.sort()
+            current_path = Path(current)
+            rel_dir = current_path.relative_to(workdir)
+            dirnames[:] = [name for name in dirnames
+                           if not (rel_dir == Path(".") and name in ignored_roots)
+                           and name != "__pycache__"
+                           and not (current_path / name).is_symlink()]
+            for name in filenames:
+                source = current_path / name
+                if source.is_symlink() or not source.is_file():
+                    continue
+                resolved = source.resolve()
+                if not resolved.is_relative_to(workdir.resolve()):
+                    raise OSError(f"artifact path escaped work directory: {source}")
+                size = source.stat().st_size
+                if len(files) >= 50 or total_bytes + size > 100 * 1024 * 1024:
+                    raise OSError("artifact capture limit exceeded (50 files or 100 MiB)")
+                relative = source.relative_to(workdir)
+                destination = stage / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                with source.open("rb") as input_file, destination.open("xb") as output_file:
+                    shutil.copyfileobj(input_file, output_file)
+                digest = hashlib.sha256(destination.read_bytes()).hexdigest()
+                files.append({"path": relative.as_posix(), "bytes": size, "sha256": digest})
+                total_bytes += size
+        if files:
+            stage.rename(artifact_dir)
+        elif artifact_dir.parent.exists() and not any(artifact_dir.parent.iterdir()):
+            stage.rmdir()
+            try:
+                artifact_dir.parent.rmdir()
+            except OSError:
+                pass
+        else:
+            stage.rmdir()
+        return files
+    except Exception:
+        shutil.rmtree(stage, ignore_errors=True)
+        if artifact_dir.parent.exists() and not any(artifact_dir.parent.iterdir()):
+            try:
+                artifact_dir.parent.rmdir()
+            except OSError:
+                pass
+        raise
+
+
+def validate_auto_cases(document):
+    """공개 자동 선택 케이스를 정답 스킬 필드 없이 검증한다."""
+    if not isinstance(document, dict) or set(document) != {"schema_version", "cases"} or document.get("schema_version") != 1:
+        return ["schema_version 1과 cases만 포함된 문서가 필요합니다"]
+    cases = document.get("cases")
+    if not isinstance(cases, list) or not cases:
+        return ["cases 배열이 비어 있습니다"]
+    errors = []
+    seen = set()
+    for case in cases:
+        if not isinstance(case, dict):
+            errors.append("케이스 항목이 객체가 아닙니다")
+            continue
+        case_id = case.get("id")
+        request = case.get("request")
+        if not isinstance(case_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", case_id):
+            errors.append("id는 영문·숫자·하이픈·밑줄 1~100자여야 합니다")
+        elif case_id in seen:
+            errors.append(f"{case_id}: id가 중복됩니다")
+        else:
+            seen.add(case_id)
+        if set(case) not in ({"id", "request", "artifact_policy"},
+                             {"id", "request", "artifact_policy", "expected_extensions"}):
+            errors.append(f"{case_id}: 공개 케이스에 허용되지 않은 필드가 있습니다")
+        if case.get("artifact_policy") not in {"required", "forbidden", "conditional"}:
+            errors.append(f"{case_id}: artifact_policy가 잘못됐습니다")
+        extensions = case.get("expected_extensions")
+        if extensions is not None and (not isinstance(extensions, list) or not extensions
+                                       or any(not isinstance(ext, str) or not re.fullmatch(r"\.[a-z0-9]{1,8}", ext)
+                                              for ext in extensions)):
+            errors.append(f"{case_id}: expected_extensions가 잘못됐습니다")
+        if case.get("artifact_policy") == "required" and not extensions:
+            errors.append(f"{case_id}: required 케이스에는 expected_extensions가 필요합니다")
+        if not isinstance(request, str) or len(request.strip()) < 10:
+            errors.append(f"{case_id}: request가 너무 짧습니다")
+            continue
+        for kind, pattern in simulate_eval.validate_repo.SENSITIVE:
+            for match in pattern.finditer(request):
+                value = match.group(0)
+                if kind == "ipv4" and (simulate_eval.validate_repo.SAFE_IP.match(value)
+                                        or any(int(part) > 255 for part in value.split("."))):
+                    continue
+                if kind == "email" and simulate_eval.validate_repo.SAFE_EMAIL.search(value):
+                    continue
+                errors.append(f"{case_id}: 민감 패턴({kind}) 의심")
+                break
+    return errors
+
+
+def cli_identity(platform):
+    command = {"claude": "claude", "codex": "codex", "grok": "grok"}[platform]
+    executable = shutil.which(command)
+    if not executable:
+        return {"name": command, "available": False, "version": None, "sha256": None}
+    try:
+        result = subprocess.run([executable, "--version"], capture_output=True, text=True,
+                                encoding="utf-8", errors="replace", timeout=10)
+        identity = {"name": command, "available": True, "path": str(Path(executable).resolve()),
+                    "version": (result.stdout.strip() or result.stderr.strip())[:500],
+                    "version_exit_code": result.returncode,
+                    "sha256_status": "pending"}
+        if Path(executable).is_file() and Path(executable).stat().st_size <= 100 * 1024 * 1024:
+            try:
+                identity["sha256"] = hashlib.sha256(Path(executable).read_bytes()).hexdigest()
+                identity["sha256_status"] = "computed"
+            except OSError as exc:
+                identity["sha256"] = None
+                identity["sha256_status"] = f"unavailable: {exc}"
+        else:
+            identity["sha256"] = None
+            identity["sha256_status"] = "missing_or_over_100mib"
+        return identity
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {"name": command, "available": True, "path": str(executable),
+                "version": None, "sha256": None, "identity_error": str(exc)}
+
+
+def auto_manifest(cases):
+    return {
+        "schema_version": 1,
+        "mode": "auto_select",
+        "environment": {"python": sys.version.split()[0], "os": platform.platform()},
+        "runtime": {"cli": cli_identity("codex"),
+                    "selection_trace": "not_available",
+                    "selection_status": "unverified"},
+        "sandbox": {"platform": "codex", "mode": "workspace-write", "network_isolation": "unverified"},
+        "skill_files": {
+            path.relative_to(simulate_eval.SKILLS).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in sorted(simulate_eval.SKILLS.rglob("*"))
+            if path.is_file() and not path.is_symlink() and "__pycache__" not in path.parts
+        },
+        "runner_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        "case_file_sha256": hashlib.sha256(DEFAULT_AUTO_CASES.read_bytes()).hexdigest(),
+        "cases": [{
+            "id": case["id"],
+            "request_sha256": hashlib.sha256(case["request"].encode("utf-8")).hexdigest(),
+            "artifact_policy": case["artifact_policy"],
+            "expected_extensions": case.get("expected_extensions", []),
+            "max_chars": 8000,
+            "expected_result": "file" if case["artifact_policy"] == "required" else "no_file" if case["artifact_policy"] == "forbidden" else "review",
+        } for case in cases],
+    }
+
+
 def claude_usage_limit(text):
     """관찰된 Claude CLI 한도 메시지 한 줄만 인식한다. 일반 답변의 인용은 제외한다."""
     return bool(re.fullmatch(r"You've hit your (?:\d+-hour )?limit\s*[·-]\s*resets [^\r\n]+", text.strip(), re.IGNORECASE))
 
 
-def run_case(case, platform, timeout):
-    prompt = build_prompt(case)
+def run_case(case, platform, timeout, auto_select=False, artifact_dir=None):
+    prompt = build_prompt(case, auto_select=auto_select)
     command = platform_command(platform, prompt)
     started = time.time()
     workdir = prepare_workdir(platform)
@@ -108,30 +364,66 @@ def run_case(case, platform, timeout):
             errors="replace",
             timeout=timeout,
         )
+        raw_events = result.stdout if platform == "codex" else ""
+        event_types = []
+        trace = {"status": "unverified", "reason": "trace unavailable"}
         output = result.stdout.strip()
+        if platform == "codex" and result.stdout.lstrip().startswith("{"):
+            observed = codex_jsonl_observation(result.stdout)
+            output = observed["final_text"].strip()
+            trace = observed["trace"]
+            event_types = trace.get("event_types", [])
         # 오류 종료의 진단에만 적용한다. 정상 응답은 동일 문구를 인용할 수 있다.
         limit_line = next((line.strip() for line in (result.stdout + "\n" + result.stderr).splitlines()
                            if claude_usage_limit(line)), None) if platform == "claude" and result.returncode != 0 else None
+        artifacts = []
+        artifact_error = None
+        office_inspection = []
+        if artifact_dir:
+            try:
+                artifacts = capture_artifacts(workdir, artifact_dir)
+                office_inspection = check_office.inspect_office_artifacts(workdir, artifacts)
+            except (OSError, ValueError, zipfile.BadZipFile) as exc:
+                artifact_error = str(exc)
+        exit_code = result.returncode if not artifact_error else (result.returncode or 1)
         return {
-            "exit_code": result.returncode,
+            "exit_code": exit_code,
             "output": output,
-            "stderr_tail": result.stderr.strip()[-500:],
+            "raw_events": raw_events,
+            "selection_trace": trace,
+            "event_types": event_types,
+            "stderr_tail": (result.stderr.strip() + (f"\n산출물 보존 실패: {artifact_error}" if artifact_error else ""))[-500:],
             "usage_limit": bool(limit_line),
             "usage_limit_message": limit_line,
+            "artifacts": artifacts,
+            "office_inspection": office_inspection,
+            "artifact_error": artifact_error,
             "seconds": round(time.time() - started, 1),
         }
     except OSError as exc:
         return {
             "exit_code": None,
             "output": "",
+            "raw_events": "",
+            "selection_trace": {"status": "unverified", "reason": f"process could not start: {exc}"},
+            "event_types": [],
             "stderr_tail": f"실행 실패: {exc}",
+            "artifact_error": None,
+            "artifacts": [],
+            "office_inspection": [],
             "seconds": round(time.time() - started, 1),
         }
     except subprocess.TimeoutExpired:
         return {
             "exit_code": None,
             "output": "",
+            "raw_events": "",
+            "selection_trace": {"status": "unverified", "reason": "process timed out before trace completion"},
+            "event_types": [],
             "stderr_tail": f"timeout after {timeout}s",
+            "artifact_error": None,
+            "artifacts": [],
+            "office_inspection": [],
             "seconds": round(time.time() - started, 1),
         }
     finally:
@@ -151,28 +443,67 @@ def main(argv=None):
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="가상 케이스로 실제 모델을 실행하고 검사한다")
-    parser.add_argument("--cases", default=str(DEFAULT_CASES))
+    parser.add_argument("--cases", help="일반 평가 케이스 파일")
+    parser.add_argument("--auto-select", action="store_true", help="스킬명을 지정하지 않는 공개 자동 선택 사례 실행")
     parser.add_argument("--platform", choices=["claude", "codex", "grok"], default="claude")
-    parser.add_argument("--only", nargs="*", help="이 스킬만 실행")
+    parser.add_argument("--only", nargs="+", help="일반 모드에서는 스킬, 자동 선택 모드에서는 케이스 ID")
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     parser.add_argument("--timeout", type=int, default=300)
     parser.add_argument("--repeat", type=int, default=1, help="케이스별 반복 실행 횟수")
+    parser.add_argument("--max-calls", type=int, help="전체 모델 호출 상한(이 값 또는 --max-seconds 필요)")
+    parser.add_argument("--max-seconds", type=int, help="전체 경과 시간 상한(이 값 또는 --max-calls 필요)")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--inspect-artifacts", action="store_true",
+                         help="일반 타깃 평가에서 저장소 밖에 보존한 파일을 Office 구조·보안 검사")
     args = parser.parse_args(argv)
+    if args.max_calls is not None and args.max_seconds is not None:
+        parser.error("--max-calls와 --max-seconds를 동시에 지정할 수 없습니다")
+    if args.timeout <= 0 or args.repeat <= 0:
+        parser.error("--timeout과 --repeat는 양수여야 합니다")
+    if args.max_calls is not None and args.max_calls <= 0:
+        parser.error("--max-calls는 양수여야 합니다")
+    if args.max_seconds is not None and args.max_seconds <= 0:
+        parser.error("--max-seconds는 양수여야 합니다")
+    if not args.dry_run and args.max_calls is None and args.max_seconds is None:
+        parser.error("실제 평가 실행에는 --max-calls 또는 --max-seconds 예산이 필요합니다")
 
+    if args.auto_select and args.inspect_artifacts:
+        parser.error("--inspect-artifacts는 일반 --cases 모드에서만 사용할 수 있습니다")
+    if args.inspect_artifacts and args.platform == "claude":
+        parser.error("Claude 플러그인 디렉터리는 작업 폴더 밖이므로 artifact 검사 모드를 지원하지 않습니다")
+    if args.inspect_artifacts and not args.cases:
+        parser.error("--inspect-artifacts는 명시적 --cases 입력이 필요합니다")
+    if args.auto_select and args.cases:
+        parser.error("--auto-select는 --cases와 함께 사용할 수 없습니다")
+    if args.auto_select and args.platform != "codex":
+        parser.error("--auto-select는 현재 Codex 전용 작업공간과 workspace-write가 필요합니다")
+    auto_select = args.auto_select
+    cases_path = DEFAULT_AUTO_CASES if auto_select else (args.cases or DEFAULT_CASES)
     try:
-        document = simulate_eval.load_cases(args.cases)
+        document = simulate_eval.load_cases(cases_path)
     except ValueError as exc:
         print(f"오류: {exc}", file=sys.stderr)
         return 1
-    errors = simulate_eval.validate(document)
+    if auto_select:
+        errors = validate_auto_cases(document)
+    else:
+        errors = simulate_eval.validate(document)
     if errors:
         print(f"케이스 검증 실패 {len(errors)}건")
         for error in errors:
             print(" -", error)
         return 1
     cases = document["cases"]
-    if args.only:
+    if args.auto_select and args.only:
+        if not args.only:
+            parser.error("--only에는 자동 선택 케이스 ID가 하나 이상 필요합니다")
+        valid_ids = {case["id"] for case in cases}
+        unknown_ids = set(args.only) - valid_ids
+        if unknown_ids:
+            print("오류: 알 수 없는 자동 선택 케이스 ID: " + ", ".join(sorted(unknown_ids)), file=sys.stderr)
+            return 1
+        cases = [case for case in cases if case["id"] in args.only]
+    elif args.only:
         cases = [c for c in cases if c["skill"] in args.only]
         if not cases:
             print("실행할 케이스가 없습니다")
@@ -180,7 +511,8 @@ def main(argv=None):
 
     if args.dry_run:
         for case in cases:
-            print(f"[dry-run] {case['id']} <- {platform_command(args.platform, build_prompt(case))[:2]}")
+            command = platform_command(args.platform, build_prompt(case, auto_select=auto_select))
+            print(f"[dry-run] {case['id']} <- {command[:2]}")
         print(f"케이스 {len(cases)}건 (모델 호출 없음)")
         return 0
 
@@ -188,31 +520,57 @@ def main(argv=None):
     repeats = max(1, args.repeat)
     filenames = [f"{output_stem(case['id'])}{f'-r{i + 1}' if repeats > 1 else ''}.md"
                  for case in cases for i in range(repeats)]
+    if auto_select:
+        artifact_paths = [out_dir / "artifacts" / f"{output_stem(case['id'])}-r{index + 1}"
+                          for case in cases for index in range(repeats)]
+        if len({str(path).casefold() for path in artifact_paths}) != len(artifact_paths):
+            print("오류: 산출물 경로가 충돌합니다", file=sys.stderr)
+            return 1
+    else:
+        artifact_paths = []
     if len({name.casefold() for name in filenames}) != len(filenames):
         print("오류: 케이스 결과 파일명이 충돌합니다", file=sys.stderr)
         return 1
     try:
         out_dir.mkdir(parents=True, exist_ok=True)
         if any((out_dir / name).exists() or (out_dir / name).is_symlink()
-               for name in [*filenames, "summary.json"]):
+               for name in [*filenames, "summary.json"]) or any(
+                   path.exists() or path.is_symlink() for path in artifact_paths):
             print("오류: 결과 파일이 이미 있습니다. 빈 출력 디렉터리를 사용하세요", file=sys.stderr)
             return 1
-        input_manifest = simulate_eval.manifest({"cases": cases})
+        input_manifest = auto_manifest(cases) if auto_select else simulate_eval.manifest({"cases": cases})
     except OSError as exc:
         print(f"오류: 결과 준비 실패: {exc}", file=sys.stderr)
         return 1
     summary = []
     failed = 0
     stop_reason = None
+    started = time.monotonic()
+    attempted_calls = 0
     for case in cases:
-        print(f"실행: {case['id']} ({case['skill']}) x{repeats}")
+        label = case.get("skill", "auto-select")
+        print(f"실행: {case['id']} ({label}) x{repeats}")
         runs = []
         for index in range(repeats):
+            if not stop_reason and args.max_calls is not None and attempted_calls >= args.max_calls:
+                stop_reason = "max_calls"
+            if not stop_reason and args.max_seconds is not None and time.monotonic() - started >= args.max_seconds:
+                stop_reason = "max_seconds"
             if stop_reason:
                 runs.append({"status": "not_run", "exit_code": None, "seconds": None,
-                             "checks": None, "passed_auto_checks": None, "stderr_tail": ""})
+                             "checks": None, "passed_auto_checks": None, "stderr_tail": "",
+                             "selection_status": "unverified" if auto_select else None,
+                             "artifacts": [], "artifact_error": None})
                 continue
-            run = run_case(case, args.platform, args.timeout)
+            artifact_dir = (out_dir / "artifacts" / f"{output_stem(case['id'])}-r{index + 1}"
+                            if auto_select or args.inspect_artifacts else None)
+            artifacts_preexisting = bool(artifact_dir and (artifact_dir.exists() or artifact_dir.is_symlink()))
+            remaining = args.timeout
+            if args.max_seconds is not None:
+                remaining = min(remaining, max(0.001, args.max_seconds - (time.monotonic() - started)))
+            attempted_calls += 1
+            run = run_case(case, args.platform, remaining, auto_select=auto_select,
+                           artifact_dir=artifact_dir)
             limited = bool(run.get("usage_limit", False)) or (args.platform == "claude" and run["exit_code"] != 0 and any(
                 claude_usage_limit(line) for line in (run["output"] + "\n" + run["stderr_tail"]).splitlines()))
             if limited:
@@ -220,6 +578,52 @@ def main(argv=None):
             checks = evaluate_output(run["output"], case) if run["exit_code"] == 0 and not limited else None
             passed = bool(checks and checks["nonempty"] and not checks["missing_required"]
                           and not checks["forbidden_found"] and checks["within_limit"] and checks["ends_with_ok"])
+            artifact_expectation = None
+            office_inspection = []
+            if auto_select or args.inspect_artifacts:
+                if artifacts_preexisting:
+                    run["artifact_error"] = "artifact destination existed before this run"
+                    run["exit_code"] = run.get("exit_code") or 1
+                office_inspection = run.get("office_inspection", [])
+                expected_office_files = [artifact for artifact in run.get("artifacts", [])
+                                         if Path(artifact["path"]).suffix.lower() in {".pptx", ".docx", ".xlsx"}]
+                if expected_office_files and len(office_inspection) != len(expected_office_files):
+                    run["artifact_error"] = "Office artifact inspection count mismatch"
+                    run["exit_code"] = run.get("exit_code") or 1
+                bad_office_files = [item for item in office_inspection if item.get("status") != "PASS"]
+                unverified_calculations = [item for item in office_inspection
+                                           if item.get("calculation_status") == "NOT VERIFIED"
+                                           or item.get("missing_formula_caches")]
+                failed_calculations = [item for item in office_inspection
+                                       if item.get("calculation_status") == "FAIL"
+                                       or item.get("cached_formula_errors")]
+                run["office_calculation_unverified"] = unverified_calculations
+                run["office_calculation_failures"] = failed_calculations
+                run["office_calculation_passes"] = [item for item in office_inspection
+                                                    if item.get("calculation_status") == "PASS"]
+                if bad_office_files:
+                    run["artifact_error"] = "Office artifact structure/security inspection failed"
+                    run["office_inspection_error"] = bad_office_files
+                    run["exit_code"] = run.get("exit_code") or 1
+                if failed_calculations:
+                    run["artifact_error"] = "Office formula cached error detected"
+                    run["office_calculation_failures"] = failed_calculations
+                    run["exit_code"] = run.get("exit_code") or 1
+                if auto_select:
+                    has_artifact = bool(run.get("artifacts"))
+                    policy = case["artifact_policy"]
+                    extensions = [Path(item["path"]).suffix.lower() for item in run.get("artifacts", [])]
+                    expected_extensions = [ext.lower() for ext in case.get("expected_extensions", [])]
+                    artifact_expectation = (
+                        policy == "conditional" or
+                        (policy == "required" and has_artifact
+                         and all(any(ext == expected for ext in extensions) for expected in expected_extensions)) or
+                        (policy == "forbidden" and not has_artifact)
+                    )
+                    if not artifact_expectation or run.get("artifact_error"):
+                        passed = False
+                elif run.get("artifact_error"):
+                    passed = False
             suffix = f"-r{index + 1}" if repeats > 1 else ""
             try:
                 with (out_dir / f"{output_stem(case['id'])}{suffix}.md").open("x", encoding="utf-8") as output_file:
@@ -227,14 +631,47 @@ def main(argv=None):
             except OSError as exc:
                 print(f"오류: 결과 저장 실패: {exc}", file=sys.stderr)
                 return 1
+            artifact_error = run.get("artifact_error")
             runs.append({
-                "status": "execution_failed" if run["exit_code"] != 0 or limited else "completed",
+                "status": "execution_failed" if run["exit_code"] != 0 or limited or artifact_error else "completed",
+                "selection_status": "unverified" if auto_select else None,
+                "load_trace_status": (run.get("selection_trace", {}).get("status", "unverified")
+                                      if auto_select else None),
+                "load_trace_reason": (run.get("selection_trace", {}).get("reason")
+                                      if auto_select else None),
+                "event_types": (run.get("event_types", []) if auto_select else []),
+                "trace_status": (run.get("selection_trace", {}).get("status") if auto_select else None),
+                "artifact_expectation_met": artifact_expectation if auto_select else None,
+                "artifact_count": len(run.get("artifacts", [])),
+                "office_inspection": office_inspection if (auto_select or args.inspect_artifacts) else [],
+                "office_inspection_error": run.get("office_inspection_error"),
+                "office_inspection_requested": bool(auto_select or args.inspect_artifacts),
+                "office_calculation_unverified": run.get("office_calculation_unverified", []),
+                "office_calculation_failures": run.get("office_calculation_failures", []),
+                "office_calculation_passes": run.get("office_calculation_passes", []),
+                "office_calculation_status": (
+                    "FAIL" if run.get("office_calculation_failures") else
+                    "NOT VERIFIED" if run.get("office_calculation_unverified") else
+                    "PASS" if run.get("office_calculation_passes") else
+                    "NOT APPLICABLE" if auto_select or args.inspect_artifacts else None
+                ),
+                "office_inspection_status": (
+                    "FAIL" if (any(item.get("status") == "FAIL" for item in office_inspection)
+                                or bool(run.get("office_calculation_failures")))
+                    else "NOT VERIFIED" if (any(item.get("status") == "NOT VERIFIED" for item in office_inspection)
+                                             or bool(run.get("office_calculation_unverified")))
+                    else "PASS" if office_inspection and all(item.get("status") == "PASS" for item in office_inspection)
+                    else "NOT APPLICABLE" if not (auto_select or args.inspect_artifacts) else None
+                ),
                 "usage_limit_message": run.get("usage_limit_message"),
+                "artifacts": run.get("artifacts", []),
+                "actual_artifacts": run.get("artifacts", []),
+                "artifact_error": run.get("artifact_error"),
                 "exit_code": run["exit_code"],
                 "seconds": run["seconds"],
                 "checks": checks,
                 "passed_auto_checks": passed,
-                "stderr_tail": run["stderr_tail"] if run["exit_code"] != 0 else "",
+                "stderr_tail": run["stderr_tail"] if run["exit_code"] != 0 or artifact_error else "",
             })
             print(f"  r{index + 1}: {'PASS' if passed else 'FAIL'} exit={run['exit_code']} "
                   f"{run['seconds']}s checks={checks}")
@@ -245,7 +682,8 @@ def main(argv=None):
             failed += 1
         summary.append({
             "id": case["id"],
-            "skill": case["skill"],
+            "skill": case.get("skill"),
+            "mode": "auto_select" if auto_select else "targeted",
             "repeats": repeats,
             "attempted": sum(run["status"] != "not_run" for run in runs),
             "completed": sum(run["status"] == "completed" for run in runs),
@@ -259,10 +697,16 @@ def main(argv=None):
 
     summary_doc = {
         "schema_version": 3,
+        "mode": "auto_select" if auto_select else "targeted",
+        "inspect_artifacts": args.inspect_artifacts,
         "platform": args.platform,
         "repeat": repeats,
         "timeout": args.timeout,
+        "started_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "stop_reason": stop_reason,
+        "budget": {"max_calls": args.max_calls, "max_seconds": args.max_seconds,
+                   "attempted_calls": attempted_calls,
+                   "elapsed_seconds": round(time.monotonic() - started, 1)},
         "input_manifest": input_manifest,
         "cases": summary,
         "note": "자동 검사는 형식·필수 요소만 본다. 문장 품질과 사실 정확성은 사람이 판정해야 한다.",

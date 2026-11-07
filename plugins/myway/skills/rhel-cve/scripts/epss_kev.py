@@ -25,6 +25,9 @@ TIMEOUT = 30
 def fetch(url, timeout=TIMEOUT):
     req = urllib.request.Request(url, headers={"User-Agent": "myway-rhel-cve"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
+        status = getattr(resp, "status", 200)
+        if status != 200:
+            raise urllib.error.HTTPError(url, status, f"unexpected HTTP {status}", resp.headers, None)
         return resp.read().decode("utf-8")
 
 
@@ -88,7 +91,7 @@ def epss(cve):
 def load_kev():
     try:
         data = json.loads(fetch(KEV_URL))
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as e:
         return None, f"KEV 조회 실패: {e}"
     return data, None
 
@@ -113,7 +116,8 @@ def main(argv):
     kev, kev_error = load_kev()
     kev_index = {}
     if kev:
-        kev_index = {v["cveID"].upper(): v for v in kev.get("vulnerabilities", [])}
+        kev_index = {str(v.get("cveID", "")).upper(): v
+                     for v in kev.get("vulnerabilities", []) if isinstance(v, dict)}
 
     out = {
         "kev_source_url": KEV_URL,
@@ -123,7 +127,9 @@ def main(argv):
         "results": [],
     }
     for cve in cves:
-        entry = {"cve": cve, "epss": first.get(cve) or epss(cve)}
+        first_result = first.get(cve)
+        epss_result = first_result if first_result is not None else epss(cve)
+        entry = {"cve": cve, "epss": epss_result}
         if kev_error:
             entry["kev"] = {"listed": None}
         else:

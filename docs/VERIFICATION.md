@@ -1,19 +1,22 @@
 # 검증 현황
 
-## 현재 상태 (버전 1.11.0)
+## 현재 상태 (버전 1.14.2)
 
-- **기준**: 커밋 `e95afc2`(2026-11-06, main), VERSION 1.11.0. 각 행의 상세는 아래 "버전별 검증 이력"을 본다.
-- **실행 시각**: 2026-11-06 (Windows 로컬 + GitHub Actions)
-- **포괄**: 저장소 구조·매니페스트·민감 패턴 PASS, 회귀 테스트 77건 실패 0·skip 0, CI 3 OS × Python 3.11/3.12/3.13 success, 스킬 9개, rhel-cve 구조 검사기 `--self-test`·예시 PASS.
+- **기준**: VERSION 1.14.2 및 로컬 작업트리(커밋 미확인).
+- **실행 시각**: 2026-11-08. DSH 번들 Python `scripts/validate_repo.py` PASS, 전체 회귀 suite 107건·실패 0·skip 0. Codex JSONL 최종 메시지 분리와 도구 이벤트 기반 로드 판정을 추가했다.
+- **범위**: RHEL 단건/통합 checker fixture와 `check_report.py --self-test`를 포함한다. EPSS/KEV smoke는 예약 ID의 endpoint 동작만 확인했으며 실제 CVE 조사·취약점 판정은 하지 않았다.
 
 | 항목 | 상태 | 근거 |
 |---|---|---|
-| 저장소 구조·버전·민감 패턴 | VERIFIED | `validate_repo.py` PASS (직전 검증 2026-11-06) |
-| 회귀 테스트 | VERIFIED | `run_tests.py` 77건, 실패 0, skip 0 (2026-11-06) |
-| CI 매트릭스 | VERIFIED | windows·macos·ubuntu × Python 3.11/3.12/3.13 9 job success |
+| 저장소 구조·버전·민감 패턴 (1.14.2) | VERIFIED | DSH 번들 Python `scripts/validate_repo.py` PASS (2026-11-08) |
+| 회귀 테스트 (1.14.2) | VERIFIED | DSH 번들 `scripts/run_tests.py` 107건·실패 0·skip 0 (2026-11-08) |
+| 스킬 버전 매니페스트 동기화 | VERIFIED | validator가 VERSION·5개 매니페스트 일치 확인 (1.14.2) |
+| 평가 권한·예산 제한 | NOT VERIFIED | Codex에 `workspace-write`를 요청하고 모든 실제 평가에 호출 또는 시간 상한을 요구하도록 변경. 단위 테스트는 통과했으나 OS·네트워크 격리는 미확인. 원인: `codex exec`는 쓰기 범위 요청만 받으며 호스트 격리 증거를 출력하지 않음 |
+| 자동 선택 평가기 | NOT VERIFIED | Codex `--json` 이벤트를 수집하고 최종 메시지와 trace를 분리한다. `as-10` 합성 질문 1회 자동 형식 검사 PASS. 실제 JSONL은 `thread.started`, `turn.started`, `item.completed(agent_message)`, `turn.completed`만 기록했고 스킬 파일 읽기 이벤트가 없어 선택 여부는 미확인. 단일 질문은 전체 스킬 선택 품질을 입증하지 않음 |
+| CI 매트릭스 | VERIFIED (이전 커밋) | windows·macos·ubuntu × Python 3.11/3.12/3.13 9 job success 기록은 1.11.0 기준. 1.14.0 CI는 미실행 |
 | 스킬 배포·설치·롤백 | VERIFIED | 9개 스킬 ZIP·3 플랫폼 설치, 이력 표 참조 |
-| 오피스 생성·재열기 | PARTIAL | `check_office.py` 구조 검사만. **렌더링(넘침·겹침·폰트) 검증 미실시**(LibreOffice 미설치, 렌더 게이트는 추후 실행) |
-| 스킬 자동 선택·조합 | PARTIAL | 자연어 4케이스 headless 4/4 선택 성공(office-docs·rhel-cve·incident-rca·research-brief+writing). 한글 프롬프트 인코딩 깨짐 관찰, 전문 판정은 표본 4·단일 모델 |
+| Office 샘플 생성·재열기 | PARTIAL | 번들 Python으로 PPTX 3장·DOCX 1표·XLSX 생성·구조 확인. LibreOffice `soffice.COM`: 기본 SUM 10/10 반복 PASS(캐시 30); 별도 수식 10개 시뮬레이션 PASS(정상 9개 기대값 일치, 0 나눗셈 `#DIV/0!` 검출). Office sidecar는 실제 PPTX 3장을 렌더했고 3장 모두 이미지 생성·missingFonts 0을 반환. 현재 모델에 이미지 입력이 없어 시각 내용은 수동 판정하지 못함. 실제 업무 파일 검증과 PowerPoint 호환성은 NOT VERIFIED |
+| 스킬 자동 선택·조합 | PARTIAL | 기존 4케이스는 모델 자기보고만 있어 실제 호출은 미확인. 공개 10케이스는 파일과 요청형 실행기만 준비했으며 신규 모델 실행 없음. 한글 CLI 인코딩·실호출 추적·전문 판정은 미검증 |
 | 실제 모델 평가 | VERIFIED(자동 검사) | Claude Code 2.1.316 headless 20/20 + Codex 3/3 + Grok 2/2 (2026-11-01) |
 | 블라인드 비교 | PARTIAL | writing·code-review·research-brief 3케이스, 단일 평가자 표본 3 |
 | Grok Bot 스킬 저장 / 앱 업로드 | NOT VERIFIED | 계정·앱 한도·실제 저장 미확인 |
@@ -25,25 +28,46 @@
 
 기준일 2026-11-01, 버전 1.5.0. 확인한 것만 VERIFIED로 적는다. 아래 기록은 커밋 전 작업트리 기준이다.
 
-## 결과 신뢰성 보강 (2026-11-06, 1.12.0)
+## RHEL CVE 명세 개정 (2026-11-07, 1.14.1)
 
-- xlsx.md 4상태 판정·epoch 보존 규정·RENDER-GATE 표 정정·AUTO-SELECT 호출 추적 절차를 반영(D-032). 문서·지침 수정이며 스크립트 동작은 바뀌지 않았다.
-- 저장소 구조·버전: **VERIFIED**. `python scripts/validate_repo.py` PASS. 회귀 테스트: **VERIFIED**. `python scripts/run_tests.py` 예정 전부 통과.
-- 재계산 4상태·호출 추적·렌더링 게이트: **NOT VERIFIED**. 새 규정의 실제 적용(soffice 재계산 실행, 플랫폼 스킬 로드 이벤트 수집)은 아직 수행하지 않았다.
+- RHEL 스킬을 Confluence용 Markdown 단건/통합 형식, HTTP 상태코드 취급, 가상 평가자료, 단건·통합 checker 동작에 맞춰 개정했다.
+- `check_report.py`는 단건 파일명·고정 5장·7컬럼과 통합 접수/고유 건수·CVE별 5장·8컬럼 행 연결을 검사한다. 이 검사는 출처·사실의 진위를 확인하지 않는다.
+- 외부 Red Hat·EPSS·KEV API를 예약된 `CVE-2099-00001`로 read-only probe했다. Red Hat CVE page·Hydra JSON·XML 각각 HTTP 404; EPSS First API HTTP 200이나 CVE 결과 없음; 미러 HTTP 404; KEV catalog released `2026-11-06`, 예약 CVE unlisted였다. 이 probe는 예약 identifier의 endpoint 동작만 확인하며 실제 CVE 데이터 정확도·최신 API 스키마·외부 실데이터 정합성은 NOT VERIFIED다.
+- RHEL 전용 checker fixture 3건 통과. 마지막 전체 validator/suite 상태는 현재 상단 상태표에 기록한다.
 
-## 실제 평가 실행 (2026-11-06, 1.11.0)
+## 결과 신뢰성·산출물 검증 보완 (2026-11-07, 1.13.0 작업트리)
 
-- **자동 선택(자연어 4케이스, claude 2.1.318 headless)**: PARTIAL. as-01 "RHEL 점검 엑셀"→`office-docs`, as-02 "CVE-2099-00001 고객 보고서"→`rhel-cve`(가상 CVE 404를 지어내지 않고 계획만 제시), as-03 "장애→경영진 보고"→`incident-rca`, as-04 "AI 소식 블로그"→`research-brief`+`writing` 조합. 4/4 스킬 선택 성공. 한글 프롬프트가 CLI 전달 시 인코딩 깨짐(모델이 복원 시도·고지), MITRE 조회 연결 실패 기록. 표본 4·단일 모델이라 전문 판정은 아님.
+- 자동 선택 공개 10케이스와 `run_eval.py --auto-select`는 앞선 작업에서 추가했다. 이번 확인에서도 모델을 호출하지 않았다. 실제 스킬 선택 여부는 미확인이다.
+- Codex `workspace-write`와 평가 호출·시간 예산은 CLI 설정으로 요청한다. OS·네트워크 격리 및 실제 스킬 로드 추적은 미확인이다.
+- LibreOffice `soffice.COM`으로 샘플 XLSX 재계산을 기본 smoke 10회와 추가 가상 수식 10사례로 실행해 기대 결과 일치를 관찰했다. 이는 가상 입력·단일 LibreOffice 환경의 결과다.
+- Office sidecar CLI로 가상 PPTX 3장 렌더를 완료하고 page count 3, 이미지 3개, missingFonts 0을 관찰했다. 현재 모델은 이미지 입력을 지원하지 않아 시각 내용 리뷰는 미완료다.
+- Codex/Grok 일반 타깃 평가용 `--inspect-artifacts`를 구현해 생성 Office 파일을 재열어 일부 구조, ZIP 경로·크기·압축률, 매크로·외부 관계를 검사한다. XLSX 계산 캐시 누락·오류·정상 상태는 Office 구조 검사 상태와 분리 기록한다. 일반 파일의 수식 캐시 존재만으로 재계산 완료·기대값 일치를 주장하지 않는다.
+- Office artifact 검사 구현의 회귀 테스트 추가 후 전체 suite에서 assertion 기대 불일치, 임시 XLSX 핸들 미닫힘, 테스트 케이스 필수 policy 누락을 찾아 수정했다. 이 세부 수정을 반영한 최종 전체 suite 실행 결과를 아래 최종 검증 행에 기록한다.
+- RPM 비교 규칙은 원본 EVR 보존·RPM 규칙 비교·판정 후 표시 변환으로 정정했다. 접근성·입력/외부링크 기준 문서는 보강했으며 자동 검사는 없다.
+- OS/네트워크 격리, 실제 호출 추적, 자동 선택 모델 평가, 이미지 육안 리뷰, 실제 업무 파일의 계산·출처 검증은 NOT VERIFIED다.
+
+## 결과 신뢰성 보강 (2026-11-06, 1.12.0 이력)
+
+- xlsx.md 4상태 판정·epoch 보존 규정·RENDER-GATE 표 정정·AUTO-SELECT 호출 추적 절차를 반영(D-032). 문서·지침 변경이다.
+- 저장소 구조·버전·회귀 테스트 및 새 계산·호출 추적·렌더링 절차는 당시 검증 기록이 없어 **NOT VERIFIED**로 유지한다.
+
+## 실제 평가 실행 (2026-11-06, 1.11.0 이력)
+
+- **자연어 4케이스의 모델 자기보고 결과 (claude 2.1.318 headless, 1.11.0 이력)**: PARTIAL. 네 요청에서 모델이 예상된 스킬명을 응답에 언급했다. 이 결과는 자기보고이며, 플랫폼 스킬 로드 이벤트·파일 접근 추적이 없어 **실제 스킬 호출 또는 선택 성공으로 확인된 것은 아니다**. as-02는 가상 CVE 404를 지어내지 않고 계획만 제시했다. 한글 프롬프트 인코딩 깨짐과 MITRE 조회 연결 실패가 기록됐다. 표본 4·단일 모델.
 - **외부 스킬 스캐너(cisco-ai-skill-scanner 2.3.2)**: VERIFIED(탐지 기록). 9개 스킬 18건 — office-docs CRITICAL 1(고정 인자 `execFileSync("soffice"/"python3", [...])` 호출, 인자 삽입 불가 — **오탐 판정**)·LOW 3(fs 접근), rhel-cve HIGH 1(로컬 `__pycache__` 존재 — 삭제 완료, gitignore 대상)·MEDIUM 2(Hydra/EPSS 의도된 조회)·LOW 1, 전 스킬 INFO 1(`license` frontmatter 미지정, 9건 공통). 스캐너 통과는 안전 보증이 아님.
 - 렌더링 게이트(LibreOffice)는 미설치로 실행하지 않았다. **NOT VERIFIED 유지, 추후 실행하기로 결정**. 설치·실행은 사용자 승인 후.
 
-## 평가 설계 문서화 (2026-11-06, 1.11.0)
+## 평가 설계 문서화 (2026-11-06, 1.11.0 이력)
 
 - 자동 선택 평가 설계(`docs/AUTO-SELECT-EVALUATION.md`)·오피스 렌더링 게이트 설계(`docs/RENDER-GATE.md`)를 추가하고, 검증 현황에 현재 상태 요약 표를 신설했다. 실제 PPTX 생성 평가 케이스(`office-docs-real-file-03`)를 추가했다.
 - 저장소 구조·버전: **VERIFIED**. `python scripts/validate_repo.py` PASS. 회귀 테스트: **VERIFIED**. `python scripts/run_tests.py` 77건, 실패 0, skip 0.
 - 자동 선택 케이스 실행·판정, 렌더링 게이트 실행: **NOT VERIFIED**. 스크립트·모델 실행·렌더러 도입은 설계만 있고 수행하지 않았다.
 
-## 이번 변경에서 실행한 검증
+## 기준 검증 기록 (2026-11-01, 이전 버전 이력)
+
+아래 결과는 1.5.0 작업 당시 기록이며 현재 1.14.0의 검증을 뜻하지 않는다.
+
+## 이전 버전에서 실행한 검증
 
 | 항목 | 상태 | 근거 |
 |---|---|---|

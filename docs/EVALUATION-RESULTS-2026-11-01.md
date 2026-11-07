@@ -82,19 +82,20 @@ python3 scripts/run_eval.py --platform claude
 
 | 플랫폼 | 조건 | 결과 | 한계 |
 |---|---|---|---|
-| Codex | `codex exec --sandbox danger-full-access`, 3케이스 | **3/3 자동 통과** | 샌드박스 전체 접근이 필요했다. 1회 실행 |
+| Codex | `codex exec --sandbox danger-full-access`, 3케이스 | **3/3 자동 통과** | 당시 결과. 현재 `run_eval.py`는 `workspace-write`를 요청하며 이 제한은 과거 실행에 소급되지 않는다. 1회 실행 |
 | Grok | `grok -p`, 2케이스 | **2/2 자동 통과** | 203자·3,268자로 출력 편차가 크고 1케이스는 262초 소요. 1차 실행에서는 240초 타임아웃 1건 |
 
 Codex는 샌드박스를 열기 전에는 스킬 파일 접근이 거부되어 스킬 준수 여부를 알 수 없었다. 전체 접근으로 다시 실행한 뒤에는 RCA·리뷰 형식이 유지됐다.
 
-### 오피스 산출물 생성·재열기
+### 오피스 샘플 생성·구조 재열기 (계산 캐시 미검증)
 
-- 번들 Python(python-pptx 1.0.2, python-docx 1.2.0, openpyxl 3.1.5)으로 생성 후 재열기 확인.
+- 번들 Python(python-pptx 1.0.2, python-docx 1.2.0, openpyxl 3.1.5)으로 샘플을 생성하고 구조를 재열기 확인.
   - PPTX 3장, 제목 3개, 표 1개
   - DOCX 제목 1개, 문단 2개, 표 1개
-  - XLSX 4행, 수식 `=SUM(B2:B3)` 유지
+  - XLSX 4행, 수식 `=SUM(B2:B3)` 문자열 유지. 당시 결과 캐시·계산 완료 여부는 확인하지 않았음. 이 결과는 계산 결과 PASS를 의미하지 않는다.
 - 검사 스크립트: `scripts/check_office.py`
 - **렌더러(LibreOffice)가 없어 넘침·겹침·글꼴 시각 검증은 미실시.**
+- 기록된 샘플 생성·재열기 결과는 `office-docs-real-file-03`·`office-docs-each-slide-02`의 실제 모델 평가 결과가 아니다. 해당 모델 케이스는 별도 실행 기록이 없어 NOT VERIFIED다.
 
 ### 스킬 유무 블라인드 비교
 

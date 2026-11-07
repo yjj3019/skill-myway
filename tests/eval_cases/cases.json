@@ -41,15 +41,14 @@
     {
       "skill": "rhel-cve",
       "id": "rhel-cve-02",
-      "request": "CVE-2024-27834 리포트를 작성해. check_report.py 검사를 통과하고, CISA KEV 등재 여부·기준일을 기재하며, RHEL 9는 Red Hat 데이터 특이사항(업스트림 수정 버전 2.44.2보다 이전 빌드)을 4장에 적고, RHEL 10은 평가 데이터 없음, RHEL 7 webkitgtk3의 Out of support scope와 webkitgtk4 ELS 수정을 구분해. 확인하지 못한 값은 미확인으로 남겨.",
+      "request": "가상 CVE-2099-00002의 단건 리포트를 작성해. 제공된 가상 자료에서 KEV 등재 여부·기준일, RHEL 9의 업스트림 수정 버전보다 이전인 빌드, RHEL 10 평가 데이터 없음, RHEL 7 Out of support scope를 각각 구분해. 검사기로 검증하고 모르는 값은 미확인으로 남겨.",
       "required": [
-        "CVE-2024-27834",
+        "CVE-2099-00002",
         "KEV 등재",
         "평가 데이터 없음",
         "Out of support scope"
       ],
       "forbidden": [
-        "업스트림 수정(2.44.2)보다 이전 버전",
         "epoch"
       ],
       "max_chars": 12000
@@ -57,9 +56,9 @@
     {
       "skill": "rhel-cve",
       "id": "rhel-cve-03",
-      "request": "CVE-2026-55200 리포트를 작성해. RHEL 7 libssh2가 JSON에서는 Affected, XML에서는 Not affected로 나오는 CONFLICT를 표시하고 채택 소스(JSON)와 각주를 4장에 적어. RHEL 10~8과 RHEL 7 libssh2 이외 제품은 평가 데이터 없음 또는 미확인으로 두고 추측하지 마.",
+      "request": "가상 CVE-2099-00003 리포트를 작성해. 제공 자료에서 RHEL 7 샘플 패키지가 JSON은 Affected, XML은 Not affected로 다르므로 CONFLICT로 표시하고 채택 소스(JSON)를 밝혀. RHEL 10~8의 빈 자료는 평가 데이터 없음 또는 미확인으로 두고 추측하지 마.",
       "required": [
-        "CVE-2026-55200",
+        "CVE-2099-00003",
         "CONFLICT",
         "JSON"
       ],
@@ -71,10 +70,10 @@
     {
       "skill": "rhel-cve",
       "id": "rhel-cve-04",
-      "request": "Windows 전용인 미추적 CVE를 조사해. Red Hat CVE 페이지·Hydra가 NOTFOUND면 파일 대신 대화로 Red Hat 미추적과 cve.org(cveawg) 기준 벤더·제품을 보고하고, 영향 없음으로 쓰지 마.",
+      "request": "가상 Windows 전용 CVE-2099-00004를 조사해. Red Hat CVE 페이지·Hydra가 NOTFOUND라고 제공된 경우 파일 대신 대화로 Red Hat 미추적과 가상 cve.org(cveawg) 기준 벤더·제품을 보고하고, 영향 없음으로 단정하지 마.",
       "required": [
         "Red Hat 미추적",
-        "cve.org"
+        "CVE-2099-00004"
       ],
       "forbidden": [
         "영향 없음"

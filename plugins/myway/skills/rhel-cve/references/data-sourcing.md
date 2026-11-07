@@ -1,6 +1,6 @@
 # 데이터 수집 절차
 
-모든 모드 공통. 순서대로 시도하고, 실패한 단계는 실패 사실을 기록한다. 세션 시작 시 Hydra 직접 조회를 한 번 시도한 뒤 실패하면 아래 우회 경로로 전환한다. 같은 요청을 다른 명령으로 반복 시도하지 않는다.
+모든 모드 공통. 보고서의 실제 자료 수집 순서는 1절 Red Hat CVE 페이지 → 2절 Hydra JSON/XML → 패치가 있을 때 4절 errata 순이다. 세션 시작 시 접근 가능 여부만 확인하는 Hydra bootstrap probe를 최대 한 번 먼저 할 수 있다. 이 probe는 자료 수집 순서를 바꾸지 않는다. probe 실패 뒤 동일 URL·요청을 다른 CLI 명령으로 재시도하지 말고, 아래 환경별 검색/fetch 대체 흐름으로 전환한다. 실패한 단계와 영향은 기록한다.
 
 환경 제약 요약:
 
@@ -18,14 +18,19 @@ RHSB가 입력이면 RHSB 본문을 먼저 확인해 포함된 CVE와 RHSA를 �
 
 ### CLI 에이전트 (Claude Code, Codex, Grok 등)
 
-access.redhat.com, security.access.redhat.com, cveawg.mitre.org, api.first.org를 `curl -sL`로 직접 조회한다. 원시 JSON/XML을 받으므로 verbatim 프롬프트(2-2절) 없이 `python3 -c`나 `jq`로 필드를 추출한다.
+CLI 도구로 access.redhat.com, security.access.redhat.com, cveawg.mitre.org, api.first.org를 직접 조회할 수 있다. Hydra JSON/XML은 아래 HTTP 상태코드 확인 예시를 사용한다. 원시 JSON/XML 응답에서 필드를 추출하고 verbatim 프롬프트(2-2절)는 적용하지 않는다.
+
+HTTP 상태코드와 본문을 함께 저장해 구분한다. `curl -sS -L`만으로는 HTTP 오류 응답과 성공 응답을 구별할 수 없으므로 `-w`로 상태코드를 받고 성공코드인지 확인한 뒤 JSON/XML 파싱을 시도한다. 같은 endpoint를 다른 CLI 명령으로 재시도하지 않는다.
 
 ```bash
-curl -sL "https://access.redhat.com/hydra/rest/securitydata/cve/CVE-YYYY-NNNNN.json" -o hydra.json
-curl -sL "https://access.redhat.com/hydra/rest/securitydata/cve/CVE-YYYY-NNNNN.xml"  -o hydra.xml
+status=$(curl -sS -L -o hydra.json -w '%{http_code}' "https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2099-00001.json") || status=000
+printf 'HTTP %s\\n' "$status"
+# 200이면 JSON 파싱. 404는 NOTFOUND, 403·000은 접근 실패/네트워크 제약으로 기록한다.
+status=$(curl -sS -L -o hydra.xml -w '%{http_code}' "https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2099-00001.xml") || status=000
+printf 'HTTP %s\\n' "$status"
 ```
 
-HTTP 404는 NOTFOUND, 403·연결 실패는 네트워크 제약으로 보고 아래 claude.ai 절차 또는 대체 소스로 전환한다.
+실제 호출 인자는 사용자가 제공한 CVE ID로 치환한다. 200 이외의 응답 본문은 Hydra 데이터로 파싱하지 않는다. HTTP 404는 NOTFOUND, 403·000은 네트워크 제약으로 보고 아래 claude.ai 절차 또는 허용된 대체 소스로 전환한다.
 
 ### claude.ai
 
@@ -145,7 +150,7 @@ KEV 등재는 위험도의 하한선이다. 미등재라도 PoC 공개, CISA SSV
 
 업스트림(프로젝트)이 밝힌 영향 버전과 수정 버전을 확인한다. 예: WebKitGTK WSA, OpenSSL Advisory. 이를 judgment-rules.md 8절의 이상 데이터 판정(수정 버전 비교)에 쓴다. 업스트림 공지에 접근하지 못하면 추측하지 않고 4장에 미확인으로 남긴다. 이후 절 번호는 그대로 둔다(6장 기준 인용).
 
-## 7. Red Hat 미추적(NOTFOUND) 처리
+## 8. Red Hat 미추적(NOTFOUND) 처리
 
 1. JS 셸 오판이 아닌지 확인(1절 보류 규칙).
 2. `cveawg.mitre.org/api/cve/{CVE-ID}`(또는 대체 소스)로 벤더·제품·버전 확인.

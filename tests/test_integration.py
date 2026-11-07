@@ -1,9 +1,11 @@
+import io
 import json
 import re
 import sys
 import tempfile
 import unittest
 import zipfile
+from unittest import mock
 from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -11,6 +13,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import install_skills  # noqa: E402
 import package_skill  # noqa: E402
 import validate_repo  # noqa: E402
+import check_office  # noqa: E402
 
 VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 SKILLS_DIR = ROOT / "plugins/myway/skills"
@@ -162,6 +165,52 @@ class Manifests(unittest.TestCase):
         for entry in grok["plugins"]:
             self.assertEqual(entry["source"]["type"], "local")
             self.assertTrue((ROOT / entry["source"]["path"][2:]).is_dir())
+
+
+class OfficeCalculationStatus(unittest.TestCase):
+    def test_calculation_values_have_four_state_semantics(self):
+        self.assertEqual(check_office.classify_calculation_value(30, 30)["status"], "PASS")
+        self.assertEqual(check_office.classify_calculation_value(31, 30)["status"], "FAIL")
+        self.assertEqual(check_office.classify_calculation_value("#REF!", 30)["status"], "FAIL")
+        self.assertEqual(check_office.classify_calculation_value(None, 30)["status"], "NOT VERIFIED")
+
+    def test_xlsx_recalculation_without_engine_is_not_verified(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "sample.xlsx"
+            source.write_bytes(b"fixture")
+            with mock.patch.object(check_office.shutil, "which", return_value=None):
+                result = check_office.recalculate_xlsx(source, "=SUM(B2:B3)", 30)
+        self.assertEqual(result["status"], "NOT VERIFIED")
+        self.assertIn("unavailable", result["reason"])
+
+    def test_office_check_exit_does_not_claim_calculation_pass(self):
+        args = mock.Mock(out=None)
+        with mock.patch("check_office.argparse.ArgumentParser.parse_args", return_value=args), \
+             mock.patch.object(check_office, "check", return_value={
+                 "pptx": {}, "docx": {}, "xlsx": {"calculation": {"status": "NOT VERIFIED"}},
+                 "files": [],
+             }), mock.patch("check_office.sys.stdout", new_callable=io.StringIO):
+            self.assertEqual(check_office.main([]), 2)
+
+        with mock.patch("check_office.argparse.ArgumentParser.parse_args", return_value=args), \
+             mock.patch.object(check_office, "check", return_value={
+                 "pptx": {}, "docx": {}, "xlsx": {"calculation": {"status": "PASS"}},
+                 "files": [],
+             }), mock.patch("check_office.sys.stdout", new_callable=io.StringIO):
+            self.assertEqual(check_office.main([]), 0)
+
+        with mock.patch("check_office.argparse.ArgumentParser.parse_args", return_value=args), \
+             mock.patch.object(check_office, "check", return_value={
+                 "pptx": {}, "docx": {}, "xlsx": {"calculation": {"status": "FAIL"}},
+                 "files": [],
+             }), mock.patch("check_office.sys.stdout", new_callable=io.StringIO):
+            self.assertEqual(check_office.main([]), 1)
+
+    def test_office_check_returns_not_verified_when_calc_engine_unavailable(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(check_office.shutil, "which", return_value=None):
+            result = check_office.main(["--out", tmp])
+        self.assertEqual(result, 2)
 
 
 class SkillAssets(unittest.TestCase):

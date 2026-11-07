@@ -10,7 +10,7 @@
 | --- | --- |
 | `writing` | 한국어 블로그·기술 기고·게시글·업무 문서 작성과 편집. 개인정보 점검과 실행 환경별 보정 포함 |
 | `office-docs` | PPTX·DOCX·XLSX 작성 규격, 장문 DOCX 빌드, HWP/HWPX 원문 읽기 |
-| `rhel-cve` | Red Hat 자료를 바탕으로 RHEL CVE 영향도 분석과 Confluence용 보고서 작성 |
+| `rhel-cve` | Red Hat 자료를 바탕으로 Confluence용 한국어 Markdown CVE 리포트 작성: 단건 `CVE-ID_리포트.md`, 다건/RHSB 통합, 명시적 다건 요약, 파일 없는 영향도 검증 답변 지원 |
 | `devlog` | Notion에 개발 이력 기록. 연결되지 않으면 `SESSION_LOG.md`에 기록 |
 | `incident-rca` | 장애·오류 원인 분석, 타임라인·가설·근거 분리, 재발 방지 대책 정리 |
 | `code-review` | 코드 변경 리뷰: 심각도·근거·Validation Gap, 테스트 약화 확인 |
@@ -90,6 +90,18 @@ python3 scripts/install_skills.py --dest <경로>         # 원하는 위치
 
 자세한 요구사항과 확인하지 못한 항목은 [플랫폼 지원 현황](docs/PLATFORMS.md)에 있습니다.
 
+## RHEL CVE 리포트
+
+`rhel-cve`는 CVE ID 하나 또는 Red Hat CVE URL로 단건 Markdown 리포트를 만들고, 여러 CVE/RHSB는 한 파일로 통합합니다. 사용자가 요약 목록을 명시하면 다건 요약 모드를, 단순 영향 질문이면 파일 없는 대화 답변 모드를 유지합니다. 단건·통합 리포트는 `scripts/check_report.py`로 제목·파일명·고정 섹션·패키지 표 구조를 검사합니다. 검사는 Red Hat 사실이나 출처의 진위를 확인하지 않습니다.
+
+예시와 테스트 입력은 예약된 가상 식별자를 사용합니다. 외부 Red Hat·EPSS·CISA KEV 조회 결과의 최신성은 실제 요청 때 별도로 확인해야 합니다. HTTP 접근 실패·대체 소스·범위 축소·미확인은 리포트에 밝혀야 합니다.
+
+## 평가와 산출물 검사
+
+`python3 scripts/run_eval.py --help`는 평가 모드를 안내합니다. 실제 모델 평가는 호출 또는 시간 예산이 필요합니다. Codex `workspace-write` 설정은 OS/VM 격리나 네트워크 차단 증거가 아닙니다. 평가 summary에 스킬 로드 이벤트가 없으면 스킬 선택은 미확인으로 남습니다.
+
+Codex/Grok 평가에서 생성 Office 파일 검사도 요청하려면 `--inspect-artifacts`를 사용합니다. 격리 작업 폴더에서 캡처한 PPTX/DOCX/XLSX의 기본 구조, 압축 경로, 매크로 흔적과 외부 관계를 검사합니다. XLSX 계산 캐시·오류는 구조 검사와 분리합니다. 파일 구조 검사는 수식 기대값, 렌더링, 접근성, Excel/PowerPoint 호환성을 보증하지 않습니다.
+
 ## 브랜드 프로필
 
 `office-docs`는 요청에서 제공된 값, 작업 디렉터리의 `brand-profile.md`, `~/.claude/myway/brand-profile.md`, 중립 기본값 순서로 브랜드 설정을 찾습니다. 프로필 양식은 [brand-profile.md](plugins/myway/skills/office-docs/references/brand-profile.md)에 있습니다. 조직 고유 값은 저장소에 두지 않습니다.
@@ -108,7 +120,7 @@ python3 scripts/package_skill.py --skill all            # 업로드용 ZIP 생�
 
 검증기는 매니페스트, 버전 일치, 스킬 지침과 참조 파일, 스크립트 문법, 민감 패턴을 확인합니다. 저장소에 둘 수 없는 검사 용어는 `--terms 파일` 또는 `MYWAY_BANNED_TERMS_FILE` 환경변수로 전달하고 커밋하지 않습니다.
 
-품질 기준은 [품질 기준](docs/QUALITY-BAR.md)에, 스킬 추가·수정 절차는 [스킬 작성 안내](docs/SKILL-AUTHORING.md)에 있습니다. 리뷰 심각도와 증거 기준은 [리뷰 계약](docs/REVIEW-CONTRACT.md)에, 스킬 변경의 품질 비교는 [스킬 평가](docs/EVALUATION.md)에 있습니다. 블라인드 비교 패킷은 `python3 scripts/blind_review.py --help`로, 가상·실제 평가는 `python3 scripts/simulate_eval.py`와 `python3 scripts/run_eval.py --help`로 실행합니다. 실행 평가 결과는 [평가 결과](docs/EVALUATION-RESULTS-2026-11-01.md)에 있습니다.
+품질 기준은 [품질 기준](docs/QUALITY-BAR.md)에, 스킬 추가·수정 절차는 [스킬 작성 안내](docs/SKILL-AUTHORING.md)에 있습니다. 리뷰 심각도와 증거 기준은 [리뷰 계약](docs/REVIEW-CONTRACT.md)에, 스킬 변경의 품질 비교는 [스킬 평가](docs/EVALUATION.md)에 있습니다. 블라인드 비교 패킷은 `python3 scripts/blind_review.py --help`로, 가상·실제 평가는 `python3 scripts/simulate_eval.py`와 `python3 scripts/run_eval.py --help`로 실행합니다. 검증된 현재 범위와 남은 미검증 항목은 [검증 현황](docs/VERIFICATION.md)을 확인하세요. 과거 실행 결과는 [평가 결과](docs/EVALUATION-RESULTS-2026-11-01.md)에 있습니다.
 
 스킬을 수정할 때는 `VERSION`과 각 플랫폼 매니페스트의 버전을 함께 올립니다. 확인된 항목과 미검증 항목은 [검증 현황](docs/VERIFICATION.md)에 기록합니다.
 

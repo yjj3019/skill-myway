@@ -10,7 +10,7 @@ A personal collection of skills for Korean writing, office documents, security a
 | --- | --- |
 | `writing` | Writing and editing Korean blogs, technical posts, articles, and work documents. Includes personal-information checks and per-runtime adjustments |
 | `office-docs` | PPTX/DOCX/XLSX authoring specs, long DOCX builds, reading HWP/HWPX sources |
-| `rhel-cve` | RHEL CVE impact analysis and Confluence-ready reports based on Red Hat sources |
+| `rhel-cve` | Red Hat-based RHEL CVE analysis and Confluence-ready Korean Markdown reports: single-CVE, multi-CVE/RHSB integration, explicit batch summary, and file-free validation answers |
 | `devlog` | Logs development history to Notion. Falls back to `SESSION_LOG.md` when not connected |
 | `incident-rca` | Incident and error RCA: separates timeline, hypotheses, and evidence, then regression-prevention actions |
 | `code-review` | Code change review: severity, evidence, Validation Gap, weakening tests |
@@ -90,6 +90,18 @@ python3 scripts/install_skills.py --dest <path>         # any location
 
 Full requirements and unverified items are in [platform support status](docs/PLATFORMS.md).
 
+## RHEL CVE Reports
+
+`rhel-cve` accepts one CVE ID or Red Hat CVE URL for a single Markdown report, and integrates multiple CVEs or an RHSB into one report. It preserves explicit batch-summary requests and answers simple impact questions without creating a file. `scripts/check_report.py` checks report title, filename, fixed sections, and package-table structure. It does not verify the truth of Red Hat data or citations.
+
+Examples and test inputs use reserved fictional identifiers. Current Red Hat, EPSS, and CISA KEV values must be checked against live sources for each real request. Report blocked sources, fallback data, reduced scope, and unknown fields explicitly.
+
+## Evaluation and Artifact Checks
+
+`python3 scripts/run_eval.py --help` shows evaluation options. Every live model evaluation requires a call or time budget. Codex `workspace-write` requests a workspace write boundary; it does not prove OS/VM isolation or network blocking. If the summary has no skill-load event, skill selection remains unverified.
+
+Use `--inspect-artifacts` with Codex or Grok targeted evaluations to inspect generated Office files in the isolated work folder. The checker examines basic PPTX/DOCX/XLSX structure, archive paths, macro markers, and external relationships. XLSX formula-cache and error state are reported separately. Structural checks do not prove expected calculation values, rendering quality, accessibility, or Excel/PowerPoint compatibility.
+
 ## Brand Profile
 
 `office-docs` looks for brand settings in this order: values given in the request, `brand-profile.md` in the working directory, `~/.claude/myway/brand-profile.md`, and neutral defaults. The profile template is [brand-profile.md](plugins/myway/skills/office-docs/references/brand-profile.md). Organization-specific values are never stored in the repository.
@@ -108,7 +120,7 @@ python3 scripts/package_skill.py --skill all            # upload ZIPs
 
 The validator checks manifests, version consistency, skill guidance and reference files, script syntax, and sensitive patterns. Terms that cannot live in the repository are passed with `--terms <file>` or the `MYWAY_BANNED_TERMS_FILE` environment variable and are never committed.
 
-Quality criteria are in [quality bar](docs/QUALITY-BAR.md) and the skill authoring process in [skill authoring guide](docs/SKILL-AUTHORING.md). Review severity and evidence criteria are in [review contract](docs/REVIEW-CONTRACT.md), and quality comparisons for skill changes in [skill evaluation](docs/EVALUATION.md). Run blind comparison packets with `python3 scripts/blind_review.py --help`; simulated and real evaluations with `python3 scripts/simulate_eval.py` and `python3 scripts/run_eval.py --help`. Real evaluation results are in [evaluation results](docs/EVALUATION-RESULTS-2026-11-01.md).
+Quality criteria are in [quality bar](docs/QUALITY-BAR.md) and the skill authoring process in [skill authoring guide](docs/SKILL-AUTHORING.md). Review severity and evidence criteria are in [review contract](docs/REVIEW-CONTRACT.md), and quality comparisons for skill changes in [skill evaluation](docs/EVALUATION.md). Run blind comparison packets with `python3 scripts/blind_review.py --help`; simulated and real evaluations with `python3 scripts/simulate_eval.py` and `python3 scripts/run_eval.py --help`. See [verification status](docs/VERIFICATION.md) for verified scope and remaining unverified items. Historical execution results are in [evaluation results](docs/EVALUATION-RESULTS-2026-11-01.md).
 
 When changing a skill, bump `VERSION` and the version in every platform manifest. Verified and unverified items are recorded in [verification status](docs/VERIFICATION.md).
 

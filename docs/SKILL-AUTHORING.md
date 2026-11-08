@@ -35,7 +35,12 @@
 - `docs/DECISIONS.md`에 설계 선택을, 재발 방지 교훈은 `docs/compound-log.md`에 적는다.
 - 출처·라이선스가 있으면 `docs/LICENSES.md`에 기록한다. 원문 복사는 금지하고 개념만 재작성한다.
 
-## 6. 검증
+## 6. 산출물 단계
+
+- 큰 Office 파일이나 다단계 문서 빌드는 기본적으로 핵심 구조와 대표 내용만 짧게 미리 보여주고, 명시적 확인을 받은 뒤 생성한다. 전체 본문을 별도 HTML로 복제하지 않는다.
+- 사용자가 완성 파일의 즉시 생성을 분명히 요청한 경우, 읽기·검토만 하는 경우, 사소한 편집에는 추가 확인을 요구하지 않는다. 유형별 상세는 `office-docs/references/preview-first.md`를 따른다.
+
+## 7. 검증
 
 ```sh
 python3 scripts/validate_repo.py

@@ -15,16 +15,17 @@ HWP/HWPX 원문 읽기 요청은 `references/hwp-read.md`를 따른다. 읽기�
 
 ## 1. 작동 순서
 
-1. **브랜드 프로필 확인.** 아래 순서로 `brand-profile.md`를 찾는다.
+1. **결과물 단계 결정.** 새 문서·발표자료·통합문서와 장문 매뉴얼 빌드는 `references/preview-first.md`의 간결한 HTML 요약을 먼저 제시하고 명시적 확인 뒤 최종 파일을 만든다. 사용자가 완성 파일의 즉시 생성을 분명히 요청하면 생략한다. 기존 파일의 소규모 수정, 이미 승인한 구성의 후속 작업, 읽기만 하는 요청에는 확인 단계를 반복하지 않는다.
+2. **브랜드 프로필 확인.** 아래 순서로 `brand-profile.md`를 찾는다.
    1. 사용자가 이번 요청에서 준 값 또는 파일
    2. 작업 디렉터리의 `brand-profile.md`
    3. `~/.claude/myway/brand-profile.md`
    4. 없으면 `references/brand-profile.default.md`(중립 기본값)
    프로필 양식은 `references/brand-profile.md`에 있다. 값이 부족하면 질문 한 번으로 받는다.
-2. **포맷 판별.** 아래 표에서 해당 reference를 읽는다.
-3. **메커니즘 로드.** 같은 포맷의 내장 스킬이 있으면 함께 쓴다. 없는 환경(Codex 등)에서는 해당 라이브러리를 직접 쓴다. 생성은 pptx→pptxgenjs, docx→docx-js, xlsx→openpyxl. 편집은 unpack → XML 수정 → repack.
-4. **토큰 주입.** 프로필의 값을 코드 상수로 선언해 쓴다. 임의 색·폰트를 쓰지 않는다.
-5. **검증.** 산출 후 PDF로 변환하고 렌더 이미지를 확인해 잘림과 플레이스홀더(lorem, xxxx, 샘플)를 고친다. 시각 확인의 범위와 미검증 보고는 `references/office-work.md`를 따른다.
+3. **포맷 판별.** 아래 표에서 해당 reference를 읽는다.
+4. **메커니즘 로드.** 같은 포맷의 내장 스킬이 있으면 함께 쓴다. 없는 환경(Codex 등)에서는 해당 라이브러리를 직접 쓴다. 생성은 pptx→pptxgenjs, docx→docx-js, xlsx→openpyxl. 편집은 unpack → XML 수정 → repack.
+5. **토큰 주입.** 프로필의 값을 코드 상수로 선언해 쓴다. 임의 색·폰트를 쓰지 않는다.
+6. **검증.** 산출 후 PDF로 변환하고 렌더 이미지를 확인해 잘림과 플레이스홀더(lorem, xxxx, 샘플)를 고친다. 시각 확인의 범위와 미검증 보고는 `references/office-work.md`를 따른다.
 
 분량·구성 등 수치 요구는 작성 전에 대상별 요구 목록으로 옮긴다. 예를 들어 각 장에 20%를 지정했다면 어느 한 장에만 적용하지 말고 모든 해당 장에 각각 적용한다. 비율의 기준(전체 분량, 쪽수·단어 수 등)이나 대상이 불명확하거나 다른 제약과 양립하지 않으면 추측하지 말고 질문한다. 초안과 최종 산출물에서 같은 기준으로 각 대상의 실제 값을 대조하고, 측정하지 못했거나 충족하지 못한 항목은 완료로 주장하지 않고 이유와 함께 알린다.
 
@@ -85,6 +86,7 @@ HWP/HWPX 원문 읽기 요청은 `references/hwp-read.md`를 따른다. 읽기�
 
 - 산출물 공통 규칙(원본 보존, 수치 검산, 접근성, 파일과 정보)은 `references/office-work.md`를 따른다.
 - 발표자료의 근거·시각 검증 절차는 `references/deck-evidence.md`를 따른다.
+- 새 문서·발표자료·대형 통합문서는 `references/preview-first.md` 절차를 따른다. 기존 파일의 작은 수정이나 이미 승인한 동일 구성 후속 작업은 재확인을 생략한다.
 - PDF 작업은 `references/pdf.md`를 따른다. 공식 document skills(PDF·DOCX·PPTX·XLSX)는 필요하면 마켓플레이스에서 설치해 쓰고, 그 구현을 복사하지 않는다.
 - 리뷰 심각도와 증거 요건은 `docs/REVIEW-CONTRACT.md`를 따른다. 실행하지 않은 검증을 완료로 쓰지 않는다.
 

@@ -2,15 +2,15 @@
 
 ## 현재 상태 (버전 1.14.7)
 
-- **기준**: DOCX/PPTX/XLSX·장문 글·보고서용 preview-first 정책 반영 로컬 작업트리, 아직 미커밋.
-- **실행 시각**: 2026-11-08. DSH 번들 `scripts/validate_repo.py` PASS, `scripts/run_tests.py` 124건·실패 0·skip 0.
-- **범위**: 장문 산출 전 핵심 구조만 짧은 HTML로 확인하며, 본문 전체나 HTML 파일을 만들지 않는다. 직접 최종본 요청, 짧은 답변·수정, 읽기·검토, 승인한 같은 구성의 후속 작업은 제외한다.
+- **기준**: 원격 `main`의 HEAD `b00875c` 및 VERSION 1.14.7. 이번 추가 분석 문서는 이 저장소 상태를 점검한 기록이며, 외부 모델·오피스 실행이나 새 성능 평가를 수행하지 않았다.
+- **실행 시각**: 2026-11-08. DSH bundle `scripts/validate_repo.py` PASS, `scripts/run_tests.py` 124건·실패 0·skip 0.
+- **범위**: preview-first 정책은 대형 파일 생성 전에 핵심 구성만 확인한다. 1.11.0 시점 사용자가 제공한 분석에서 현재화가 필요한 주장을 고치고, 역사적 발견과 현재 상태를 구분한다. 외부 후보 도구의 최신 라이선스·데이터 전송은 새로 확인하지 않았다.
 
 | 항목 | 상태 | 근거 |
 |---|---|---|
-| 저장소 구조·버전·민감 패턴 (1.14.7 로컬) | VERIFIED | DSH 번들 `scripts/validate_repo.py` PASS (2026-11-08) |
-| 회귀 테스트 (1.14.7 로컬) | VERIFIED | `scripts/run_tests.py` 124건·실패 0·skip 0 (2026-11-08) |
-| 스킬 버전 매니페스트 동기화 | VERIFIED (로컬) | VERSION 및 5개 매니페스트 1.14.7 일치 확인 |
+| 저장소 구조·버전·민감 패턴 (1.14.7) | VERIFIED | DSH bundle `scripts/validate_repo.py` PASS (2026-11-08) |
+| 회귀 테스트 (1.14.7) | VERIFIED | `scripts/run_tests.py` 124건·실패 0·skip 0 (2026-11-08) |
+| 스킬 버전 매니페스트 동기화 | VERIFIED | VERSION 및 5개 매니페스트 1.14.7 일치 |
 | Git 반영 | VERIFIED | `e3210e8` forward correction은 `main`에 기록. Push 전에는 `origin/main`이 `ab5fcf2`; 이 이력은 보존되며 과거 clone의 자료도 회수하지 않음 |
 | 평가 권한·예산 제한 | NOT VERIFIED | Codex에 `workspace-write`를 요청하고 모든 실제 평가에 호출 또는 시간 상한을 요구하도록 변경. 단위 테스트는 통과했으나 OS·네트워크 격리는 미확인. 원인: `codex exec`는 쓰기 범위 요청만 받으며 호스트 격리 증거를 출력하지 않음 |
 | 자동 선택 평가기 | NOT VERIFIED | Codex `--json` 이벤트를 수집하고 최종 메시지와 trace를 분리한다. `as-10` 합성 질문 1회 자동 형식 검사 PASS. 실제 JSONL은 `thread.started`, `turn.started`, `item.completed(agent_message)`, `turn.completed`만 기록했고 스킬 파일 읽기 이벤트가 없어 선택 여부는 미확인. 단일 질문은 전체 스킬 선택 품질을 입증하지 않음 |

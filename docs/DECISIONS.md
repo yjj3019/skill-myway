@@ -142,4 +142,4 @@ MIT 저장소(obra/superpowers, addyosmani/agent-skills, DietrichGebert/ponytail
 - `RENDER-GATE.md`와 과거 Office 기록에서 구조·계산 검사와 실제 산출물 검증·렌더·시각 리뷰의 범위를 분리했다.
 - 외부 자료의 주장별 근거표는 `research-brief`에 이미 있어 새 추적 체계는 추가하지 않았다. 오피스 접근성·입력 셀의 수식 주입과 외부 링크 점검 기준은 `office-work.md`·`pptx.md`에 보강했으며 자동 검사는 미구현이다.
 - RHEL 스킬 명세를 Confluence Markdown 출력, 단건/통합 모드, HTTP 상태코드 처리, 통합 8컬럼, 보고서 제목·파일명 검사에 맞춰 개정했다. 신규 평가 사례는 가상 식별자를 사용한다. 기존 실사례 참조 하나는 가상 EVR 예시로 교체했고, 관련 평가 케이스도 예약 CVE 식별자로 바꿨다. 실제 외부 자료와 대조하는 평가는 승인된 별도 미노출 데이터가 필요하다.
-- `VERSION` 및 5개 매니페스트를 SKILL description 길이 최적화를 포함해 1.14.1로 올렸다. 이후 Codex JSONL 메시지 분리·도구 이벤트 기반 로드 근거 판정을 추가해 1.14.2로 올렸다. validator PASS·회귀 테스트 107건 통과를 `VERIFICATION.md`에 기록했다. 예약 CVE read-only endpoint smoke 결과와 단일 자동 선택 probe의 한계를 같은 문서에 남겼다.
+- 1.14.2의 무라이선스 RHEL mirror 대조에서 긴 동일 블록을 확인했다. 기능을 삭제하지 않고 조사 설명·요약·판정 규칙·EPSS/KEV 처리·checker의 위험 문구를 요구사항 중심 새 구성으로 바꿨다. API/CSV 폴백과 실패 분류 fixture를 추가했다. 1.14.4는 원격 `ab5fcf2` 위 forward correction을 위한 로컬 검증 후보이며 force-push하지 않는다. 그 커밋 이력은 원격에 남으므로 과거 노출은 소급 제거되지 않는다. 사용자가 요청한 커밋/푸시 과정에서 이 한계를 숨기지 않는다.

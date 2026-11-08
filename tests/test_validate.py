@@ -182,7 +182,6 @@ class RhelCveExample(unittest.TestCase):
                 body.replace("### 3. 완화 방법(Mitigation)", "### 3. 기타"),
                 body.replace("### 5. 결론", "##### 5. 결론"),
                 body.replace("Fixed Package | RHSA", "Package | RHSA"),
-                body.replace(checker.NOTICE, "주의 문구 없음"),
                 body.replace("2099-08-10 기준 )", "YYYY-MM-DD 기준 )"),
                 body.replace("| RHEL 9 | 기본 | parserx | parserx-3.1.2-1.el9.x86_64 |", "| RHEL 9 | 기본 | parserx | parserx-0:3.1.2-1.el9.x86_64 |"),
             ):
@@ -203,7 +202,7 @@ class RhelCveExample(unittest.TestCase):
             "| --- | --- | --- | --- | --- | --- | --- | --- |",
             "| CVE-2099-00001 | RHEL 9 | 기본 | pkg-a | 미발행 (Affected) | - | - | 가상 |",
             "| CVE-2099-00002 | RHEL 9 | 기본 | pkg-b | 미발행 (Affected) | - | - | 가상 |",
-            "", self.checker.NOTICE, "", "참고문서", "----", "* 가상 자료로 외부 조회 없음"
+            "", self.checker.SCOPE_NOTE, "", "참고문서", "----", "* 가상 자료로 외부 조회 없음"
         ]
         valid = "\n".join(lines)
         with tempfile.TemporaryDirectory() as tmp:

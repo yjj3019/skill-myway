@@ -1,16 +1,16 @@
 # 검증 현황
 
-## 현재 상태 (버전 1.14.2)
+## 현재 상태 (버전 1.14.4, `ab5fcf2` 위 정정안)
 
-- **기준**: VERSION 1.14.2 및 로컬 작업트리(커밋 미확인).
-- **실행 시각**: 2026-11-08. DSH 번들 Python `scripts/validate_repo.py` PASS, 전체 회귀 suite 107건·실패 0·skip 0. Codex JSONL 최종 메시지 분리와 도구 이벤트 기반 로드 판정을 추가했다.
-- **범위**: RHEL 단건/통합 checker fixture와 `check_report.py --self-test`를 포함한다. EPSS/KEV smoke는 예약 ID의 endpoint 동작만 확인했으며 실제 CVE 조사·취약점 판정은 하지 않았다.
+- **기준**: `ab5fcf2` 이후 forward correction. 기존 공개 이력은 보존한다. 1.14.4 수정은 로컬 검증 완료, 커밋 후보.
+- **실행 시각**: 2026-11-08. DSH bundle `scripts/validate_repo.py` PASS, `scripts/run_tests.py` 124건·실패 0·skip 0. 감사 기록 갱신 후 최종 재실행 통과.
+- **범위**: 미라이선스 로컬 `redhat-cve-analysis` mirror와 비교해 기능을 제거하지 않고 위험한 계보 파일을 독립 재구성했다. 이력상 `ab5fcf2`는 원격에 남으므로 저장소 전체의 과거 노출을 제거하는 조치는 아니다. 의미 유사성과 법적 권리 판단은 NOT VERIFIED.
 
 | 항목 | 상태 | 근거 |
 |---|---|---|
-| 저장소 구조·버전·민감 패턴 (1.14.2) | VERIFIED | DSH 번들 Python `scripts/validate_repo.py` PASS (2026-11-08) |
-| 회귀 테스트 (1.14.2) | VERIFIED | DSH 번들 `scripts/run_tests.py` 107건·실패 0·skip 0 (2026-11-08) |
-| 스킬 버전 매니페스트 동기화 | VERIFIED | validator가 VERSION·5개 매니페스트 일치 확인 (1.14.2) |
+| 저장소 구조·버전·민감 패턴 (1.14.4 로컬) | VERIFIED | DSH 번들 `scripts/validate_repo.py` PASS (2026-11-08) |
+| 회귀 테스트 (1.14.4 로컬) | VERIFIED | `scripts/run_tests.py` 124건·실패 0·skip 0 (2026-11-08) |
+| 스킬 버전 매니페스트 동기화 | VERIFIED (로컬) | VERSION·5개 매니페스트 1.14.4 일치 확인. 아직 커밋 전 |
 | 평가 권한·예산 제한 | NOT VERIFIED | Codex에 `workspace-write`를 요청하고 모든 실제 평가에 호출 또는 시간 상한을 요구하도록 변경. 단위 테스트는 통과했으나 OS·네트워크 격리는 미확인. 원인: `codex exec`는 쓰기 범위 요청만 받으며 호스트 격리 증거를 출력하지 않음 |
 | 자동 선택 평가기 | NOT VERIFIED | Codex `--json` 이벤트를 수집하고 최종 메시지와 trace를 분리한다. `as-10` 합성 질문 1회 자동 형식 검사 PASS. 실제 JSONL은 `thread.started`, `turn.started`, `item.completed(agent_message)`, `turn.completed`만 기록했고 스킬 파일 읽기 이벤트가 없어 선택 여부는 미확인. 단일 질문은 전체 스킬 선택 품질을 입증하지 않음 |
 | CI 매트릭스 | VERIFIED (이전 커밋) | windows·macos·ubuntu × Python 3.11/3.12/3.13 9 job success 기록은 1.11.0 기준. 1.14.0 CI는 미실행 |
@@ -36,6 +36,8 @@
 - RHEL 전용 checker fixture 3건 통과. 마지막 전체 validator/suite 상태는 현재 상단 상태표에 기록한다.
 
 ## 결과 신뢰성·산출물 검증 보완 (2026-11-07, 1.13.0 작업트리)
+
+> 과거 기록. 1.14.3 라이선스 감사 수정으로 evaluator의 기존 확인 상태가 바뀐 것은 아니다.
 
 - 자동 선택 공개 10케이스와 `run_eval.py --auto-select`는 앞선 작업에서 추가했다. 이번 확인에서도 모델을 호출하지 않았다. 실제 스킬 선택 여부는 미확인이다.
 - Codex `workspace-write`와 평가 호출·시간 예산은 CLI 설정으로 요청한다. OS·네트워크 격리 및 실제 스킬 로드 추적은 미확인이다.

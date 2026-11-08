@@ -1,89 +1,57 @@
-# 판정 규칙
+# 판단 절차
 
-## 1. product_name 정확 일치
+분석은 관찰 가능한 제품 레코드에서 시작한다. 제품 이름, 스트림, 상태, 패치 레코드는 각각 별도로 유지하고, 서술형 설명을 기계 판정의 대체물로 삼지 않는다.
 
-- RHEL 버전 판정은 `product_name`이 정확히 `Red Hat Enterprise Linux N`인 항목만 쓴다.
-- 아래는 별개 제품·스트림으로 구분해 기재한다.
-  - `Red Hat Enterprise Linux N.M Extended Update Support` / `… Update Services for SAP Solutions` / `… Advanced Mission Critical Update Support` — EUS·E4S·AUS 스트림
-  - `Red Hat Enterprise Linux 6/7 Extended Lifecycle Support` — ELS. 표준 판정에는 반영하지 않되, ELS 계약 서버는 실제 패치가 있을 수 있음을 명시
-  - `JBoss Core Services on RHEL 7`, `Red Hat Enterprise Linux AI`, `Ansible Automation Platform … for RHEL 8` — 별도 제품
-- 관심 버전 항목이 하나도 없으면 "영향 없음"이라 쓰지 않는다. 실제 존재하는 product_name 목록을 기재한다.
+## 제품 범위 분리
 
-## 2. RPM EVR 비교와 표시
+Hydra의 `product_name`에서 제품 범위를 식별한다. 표준 RHEL 판정에는 대상 메이저 버전의 기본 제품 레코드만 포함한다. 지원 서비스(EUS/E4S/AUS), 연장 수명 채널, JBoss Core Services, RHEL AI, RHEL용 Ansible 제품 등은 별도 행으로 기록한다. 사용자가 지정한 메이저 버전 레코드가 없으면 해당 버전의 영향 여부는 미확인이다. 다른 제품의 레코드를 대신 사용하지 않는다.
 
-- 원자료의 epoch·version·release·architecture를 원본 필드로 보존한다. 비교가 필요하면 RPM EVR 규칙을 적용하고, 도구·버전·두 입력값·결과를 근거로 남긴다. 단순 문자열·숫자 비교나 epoch 제거 뒤의 비교로 판정하지 않는다.
-- Epoch를 제거하는 정규식은 비교 도구가 아니다. 실제 산출물에 epoch를 생략해야 하는 형식이면 EVR 비교를 끝낸 뒤 표시용 사본만 변환하고, 원본 EVR과 비교 결과는 작업 근거에 보존한다.
+## 상태 판정
 
-```text
-비교용 원본: 1:1.0-1  vs  0:2.0-1
-표시용 NVR 변환은 판정 이후에만 수행
-```
+먼저 `package_state`의 각 패키지 상태를 읽고, `affected_release`의 수정 릴리스는 별도 표에 적는다. 수정 릴리스의 존재는 그 제품/스트림에 패치가 발행됐다는 근거다. 둘을 하나의 목록으로 합치지 않는다.
 
-- 고객 형식상 epoch를 생략할 때는 가능한 범위에서 epoch가 표기에서 생략됐다는 점을 밝힌다. 사람이 원문과 대조할 수 있도록 소스 NVR/EVR과 비교 근거를 보관한다.
+| 관측된 원문 상태 | 표시 권장 | 해석 |
+|---|---|---|
+| `Affected` | 영향 있음 | 영향을 받는 상태이며 이 레코드에는 수정 릴리스가 나타나지 않음 |
+| `Fix deferred` | 수정 연기 | 영향이 보고됐지만 발행 시점이 정해지지 않음 |
+| `Will not fix` | 수정 계획 없음 | Red Hat이 해당 스트림의 수정 계획을 두지 않음 |
+| `Under investigation` | 조사 중 | 판정이 아직 끝나지 않음 |
+| `Not affected` | 영향 없음 | 원문이 제품을 비영향으로 분류함 |
+| `Out of support scope` | 지원 범위 밖 | 해당 지원 정책에서 평가하지 않는 상태. 비영향과 다름 |
+| 수정 `affected_release` 존재 | 수정 빌드 발행 | 해당 제품/스트림에 보안 공지와 패키지가 게시됨 |
 
-## 3. fix_state 어휘와 한국어 표기
+하나의 셀에 지원 종료 상태와 비영향 상태를 합쳐 표현하지 않는다. `package_state`와 수정 릴리스가 모두 비어 있으면 “자료 항목 없음”으로 남기고, 레코드가 없다는 이유만으로 “영향 없음”이라고 쓰지 않는다.
 
-| 원문 | 리포트·요약 표기 | 의미 | 실무 함의 |
-|---|---|---|---|
-| (affected_release에 RHSA 존재) | 수정됨(Fixed) | 패치 발행 | 해당 NVR 이상으로 업데이트 |
-| Affected | 영향 있음(Affected) | 영향 확인, 패치 미발행 | 완화책 적용, 패치 대기 |
-| Fix deferred | 패치 보류(Fix deferred) | 영향 확인, 일정 미정 | 노출 축소로 대응 |
-| Will not fix | 패치 계획 없음(Will not fix) | 영향 확인, 수정 안 함 | 완화책 또는 구성 변경 |
-| Out of support scope | 지원 범위 밖(Out of support scope) | 지원 종료 브랜치, 평가 안 함 | "영향 없음" 아님. 마이그레이션 근거 |
-| Under investigation | 조사 중(Under investigation) | 평가 진행 중 | 재확인 필요 |
-| Not affected | 영향 없음(Not affected) | 평가 결과 해당 없음 | 조치 불필요 |
+## 자료가 충돌할 때
 
-CSAF justification 번역: `vulnerable_code_not_present` → 취약한 코드 없음, `component_not_present` → 컴포넌트 없음, `vulnerable_code_not_in_execute_path` → 실행 경로에 없음, `inline_mitigations_already_exist` → 기존 완화 조치 존재.
+JSON과 XML의 제품 상태를 비교한다. 결론이 달라지면 두 값을 병기하고 `충돌`로 표시한다. 특별히 다른 원자료를 채택해야 한다는 요청이 없으면 JSON 값을 작업 결론의 기준으로 삼되, XML의 불일치를 숨기지 않는다. 설명문이나 RHSA 연결 정보는 부가 근거로만 인용한다. 원자료 간 불일치를 해결할 수 없으면 Red Hat Product Security의 확인이 필요하다고 쓴다.
 
-같은 칸에 Out of support scope와 Not affected를 함께 넣지 않는다.
+## 버전 비교
 
-## 4. JSON·XML CONFLICT
+패키지 비교에는 EVR(epoch, version, release)을 온전히 사용한다. 문자열 정렬이나 숫자 조각 비교로는 패치 포함 여부를 판정할 수 없다. RPM 호환 비교기를 사용할 수 있으면 비교기 이름·버전과 입력 EVR, 결과를 내부 근거에 기록한다. 비교 환경이 없으면 결론을 보류한다.
 
-1. 두 값이 다르면 CONFLICT로 표시하고 양쪽 값을 모두 보고한다.
-2. 기본 채택은 JSON. 사용자가 소스를 지정하면 그 소스로 판정한다.
-3. 산출물에는 채택 값을 쓰고 불일치를 드러낸다(리포트는 패키지 표의 "비고" 또는 4장에 "JSON 기준, XML은 {값}", 요약 리스트는 비고).
-4. Statement, affected_release의 RHSA 유무를 방증으로 제시한다.
-5. 확정이 필요하면 Red Hat Product Security 문의를 권고한다.
-
-## 5. Statement·Description 처리
-
-- Statement 산문만으로 제품 상태를 추정하지 않는다. 방증으로만 쓴다.
-- Description은 영문 원문을 보관하고, 한정어("statically linked", "unprivileged", 옵션 플래그, 조건절)를 번역에서 빠뜨리지 않는다.
-- Red Hat Description과 CNA(cve.org) Description이 다르면 Red Hat 원문 기준으로 쓰고 CNA 원문의 구체 정보(함수명·파일명)는 보강 용도로 쓴다.
-
-## 6. 미추적과 영향 없음
-
-| 상황 | 표기 |
+| 독립 확인 결과 | 비고 처리 |
 |---|---|
-| Red Hat CVE 페이지·Hydra 모두 NOTFOUND, RHEL 무관 근거 있음 | Red Hat 미추적 — 근거: … |
-| NOTFOUND, 근거 불충분 | 미확인 — Red Hat 포털 직접 확인 필요 |
-| EXISTS, 모든 package_state가 Not affected | 영향 없음(Not affected) |
-| EXISTS, package_state·affected_release 모두 비어 있음 | 평가 데이터 없음 |
+| Errata 발행일이 CVE 공개 시각보다 앞섬 | 원문 값을 보존하고 날짜 이상을 명시 |
+| 배포판 패키지 버전이 확인된 업스트림 수정 버전보다 낮음 | 비교 결과와 비교기 근거를 적고 공급자 권고와 구분 |
+| 이후 동일 패키지 공지에 CVE가 빠짐 | 공지 범위 차이를 설명하고 해당 공지 목록으로 확인 |
 
-## 8. 이상 데이터 판정 (1.10.x 신규)
+표시 형식이 epoch 생략을 요구한다면 판정이 끝난 뒤 표시용 문자열만 바꾼다. 비교에 사용한 원본은 보존한다.
 
-Red Hat이 지정한 **수정 빌드**가 아래 중 하나에 해당하면 리포트 4장에 **"Red Hat 데이터 특이사항"**으로 기록하고, 패키지 표 비고에도 표시한다. 이 경우에도 Red Hat 값을 표에 그대로 둔다.
+## 악용 정보와 서술문
 
-| 특이사항 | 판정 조건 |
-|---|---|
-| 수정 빌드의 errata 발행일이 CVE 공개일보다 이르다 | 발행일 < public_date |
-| 수정 빌드의 업스트림 버전이 업스트림 수정 버전보다 낮다 | Red Hat NVR 버전 < 업스트림 수정 버전 |
-| 같은 패키지의 이후 errata에 해당 CVE가 수록되지 않는다 | 이후 RHSA의 CVE 목록에 부재 |
+Red Hat 설명의 제품 상태 문장은 직접적인 상태 필드와 대조해 배경 설명으로 활용한다. 제품이 기본 설치에서 사용되지 않는다는 사유만으로 자료의 상태를 뒤집지 않는다. 설명 번역에서는 조건절, 사용자 권한, 정적 링크 등 범위를 정하는 수식어를 보존한다.
 
-- 비고 표기: "업스트림 수정(x.y.z)보다 이전 버전"처럼 구체적으로 쓴다.
-- 실무 권고(스트림 최신 빌드 적용 등)를 덧붙일 때는 "버전 비교에 근거한 판단이며 Red Hat 공지 문구 아님"을 함께 적는다.
-- 가상 예: Red Hat 지정 수정 빌드가 `pkg-a-1.2.3-4.el9_1.x86_64`, 별도 확인한 업스트림 수정 버전이 `1.2.4`이면, RPM 비교 도구와 비교 근거를 기록하고 결과가 실제로 이전일 때만 특이사항으로 분류한다.
+EPSS는 점수와 백분위, 자료 날짜를 함께 기록한다. API가 요청 ID와 다른 항목을 돌려주면 채택하지 않는다. KEV는 카탈로그 등재 여부의 근거이지 RHEL 제품의 영향도 근거가 아니다. KEV 이름이 다른 공급자 제품을 가리키면 해당 제품과 Red Hat 패키지의 관계를 확인할 때까지 구분해서 쓴다. 악용 근거가 KEV뿐이면 Red Hat 공지 자체가 악용을 확인했다고 쓰지 않는다.
 
-## 9. KEV 등재와 출처 구분
+## Red Hat에서 항목을 찾지 못한 경우
 
-- CISA KEV의 `vulnerabilityName`이 다른 벤더 제품(예: Apple)을 가리키면, 그 사실과 Red Hat 패키지가 같은 코드를 쓰는지 여부를 구분해 적는다. KEV 등재만으로 Red Hat 제품의 악용을 단정하지 않는다.
-- Red Hat 공지에 악용 사례가 없으면 "Red Hat 공지에는 악용 사례가 명시되어 있지 않습니다. 악용 근거는 CISA KEV 등재입니다."처럼 출처를 나눠 쓴다.
+페이지와 Hydra 모두에서 자료를 찾지 못하면 우선 “Red Hat 자료에 미추적”으로 기록한다. RHEL과 무관하다는 별도 근거를 확인한 경우에만 비영향 판단을 추가한다. 근거가 부족하면 “미확인”으로 남긴다. 후보 버그 ID, 다른 벤더 공지, 패키지 저장소 정보는 보조 자료로만 쓰며, Red Hat의 공식 제품 상태와 섞지 않는다.
 
-## 10. 검증 질문 모드
+## 사용자가 준 자료를 확인할 때
 
-- **영향 여부**: 해당 product_name 항목의 fix_state와 affected_release를 근거로 "해당/비해당 + 근거"를 답한다.
-- **설명문 대조**: Red Hat 원문과 구 단위로 비교해 누락·추가된 한정어를 지적한다. 일치하는 부분도 밝혀 과장하지 않는다.
-- **버전 대조**: `web_search "{NVR}" RHSA`로 RHSA·제품·발행일을 특정하고 errata SRPM 목록으로 재확인한다. epoch를 보존한 원본 EVR을 기준으로 비교하며, epoch 차이만으로 불일치라거나 일치라고 결론내리지 않는다. RPM 비교 기준과 근거를 확인한다.
-- **외부 자료 검증**: 사용자가 가져온 자료(워크시트, 타 AI 산출물)의 주장은 직접 재조회해 검증한다. 불일치 시 어느 쪽이 틀렸는지 근거와 함께 보고한다.
-- **설명만 주어진 경우**: 핵심 용어(함수명, 컴포넌트, 조건절)로 검색해 후보 CVE를 찾고 Red Hat 원문으로 확정한다. 후보가 여럿이면 제시하고 사용자에게 확정을 요청한다.
-- 답은 "일치/불일치(해당/비해당) + 근거"로 짧게. 얼버무리지 않는다.
+- 제품 영향 질문: 대상 제품·스트림의 상태와 패치 레코드를 근거로 답한다.
+- 설명문 대조: 원문과 범위 한정 조건을 비교하고, 일치한 부분과 불일치한 부분을 각각 적는다.
+- 패키지 버전 대조: 해당 RHSA, 제품, 발행일과 원본 EVR을 찾아 비교 환경과 결과를 함께 밝힌다.
+- 외부 산출물 검토: 주장을 독립 재조회한다. 불일치는 어느 출처의 어떤 필드와 맞지 않는지 제시한다.
+- 설명만 있고 CVE가 없으면 고유 용어로 후보를 좁힌 뒤 원문을 확인한다. 후보가 둘 이상이면 하나를 임의로 고르지 말고 선택을 요청한다.

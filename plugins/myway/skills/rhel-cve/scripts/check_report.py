@@ -12,9 +12,7 @@ SECTIONS = [
     "### 5. 결론",
 ]
 HEADER = ["RHEL", "Lifecycle", "Components", "Fixed Package", "RHSA", "Release Date", "비고"]
-NOTICE = ("명시적으로 영향을 받지 않는다고 언급되지 않은 한, 이 목록에 있는 제품의 모든 마이너 업데이트 스트림에 "
-          "포함된 기존 패키지 버전은 모두 취약한 것으로 간주해야 하며, 전체 분석이 이루어지지 않았을 수도 있습니다.")
-LEGACY_NOTICE = NOTICE.replace("한, 이 목록", "한 이 목록")
+SCOPE_NOTE = "표의 판정 범위는 각 행에 기재한 제품 및 스트림입니다. 별도로 확인하지 않은 스트림은 이 표의 결론에 포함하지 않습니다."
 CVE_TITLE = re.compile(r"^# (?P<cves>CVE-\d{4}-\d{4,}(?:\s*[,/]\s*CVE-\d{4}-\d{4,})*)\s+-\s+\S.+$")
 INTEGRATED_FILENAME = re.compile(r"^RHEL_CVE_리포트_\d{8}\.md$")
 INTEGRATED_TITLE = re.compile(r"^# RHEL CVE 통합 리포트 - 접수 (\d+)건 → 고유 (\d+)건$")
@@ -250,15 +248,8 @@ def check(path):
                     errors.append("패키지 표에 제품 또는 미확인 행 필요")
                 if any(len(cells(line)) != 7 for line in body):
                     errors.append("패키지 표 행은 7개 컬럼이어야 함")
-        notice_positions = [i for i, line in enumerate(segment) if line in (NOTICE, LEGACY_NOTICE)]
-        if integrated:
-            notice_position_ok = (has_header and body and len(notice_positions) == 1
-                                  and notice_positions[0] > pos + 1 + len(body))
-        else:
-            notice_position_ok = (has_header and body and len(notice_positions) == 1
-                                  and notice_positions[0] > pos + 1 + len(body))
-        if not notice_position_ok:
-            errors.append("패키지 표 아래 고정 문구 필요")
+        if not has_header or not body:
+            errors.append("패키지 표에 열 정의와 한 개 이상의 관측 행이 필요")
     if sources is not None and not any(re.match(r"^[*+-] ", line) for line in lines[sources + 1:]):
         errors.append("참고문서에 조회한 자료 또는 미확인 사유 필요")
     return errors

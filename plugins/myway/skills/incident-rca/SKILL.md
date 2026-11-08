@@ -69,7 +69,7 @@ description: 장애·오류·성능 저하의 원인을 근거로 분석해 RCA 
 
 ## 7. 보고서
 
-`references/report-format.md`의 형식을 따른다. 문서가 필요 없으면 같은 순서로 대화에서 답한다.
+`references/report-format.md`의 형식을 따른다. 대화로 답하면 같은 순서로 짧게 제시한다. 별도 보고서 파일을 만들 때는 `office-docs/references/preview-first.md`에 따라 사실·가설·판정·조치의 개요를 먼저 짧게 보여주고 확인을 받은 뒤 파일을 만든다. 사용자가 완성 보고서를 즉시 요청했으면 확인 단계를 생략한다.
 
 ## 8. 금지
 

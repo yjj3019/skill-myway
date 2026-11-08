@@ -106,6 +106,8 @@ Use `--inspect-artifacts` with Codex or Grok targeted evaluations to inspect gen
 
 `office-docs` looks for brand settings in this order: values given in the request, `brand-profile.md` in the working directory, `~/.claude/myway/brand-profile.md`, and neutral defaults. The profile template is [brand-profile.md](plugins/myway/skills/office-docs/references/brand-profile.md). Organization-specific values are never stored in the repository.
 
+For new, substantial DOCX/PPTX/XLSX files and long manuals, it normally shows a compact HTML structure preview before generating the file, then waits for explicit confirmation. If the user clearly asks for file generation or provides a complete type, scope, and structure with no open choices, skip the extra confirmation. Read/review-only work, small edits, and follow-up generation of an approved design also skip it. The preview summarizes structure and key content; it does not duplicate the full document.
+
 ## Companion Skills
 
 For proposals, RFPs, slide decks, and submission reviews, use [ProposalSkills](https://github.com/yjj3019/ProposalSkills) as a separate plugin. This repository covers everyday writing, documents, security, incident analysis, and code review; proposal-only content, PPTX builds, and the submission gate live in ProposalSkills. Files are never copied between the two repositories.

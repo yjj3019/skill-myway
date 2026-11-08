@@ -106,6 +106,8 @@ Codex/Grok 평가에서 생성 Office 파일 검사도 요청하려면 `--inspec
 
 `office-docs`는 요청에서 제공된 값, 작업 디렉터리의 `brand-profile.md`, `~/.claude/myway/brand-profile.md`, 중립 기본값 순서로 브랜드 설정을 찾습니다. 프로필 양식은 [brand-profile.md](plugins/myway/skills/office-docs/references/brand-profile.md)에 있습니다. 조직 고유 값은 저장소에 두지 않습니다.
 
+새 대형 DOCX/PPTX/XLSX와 장문 매뉴얼은 기본적으로 간결한 HTML 구성 미리보기를 먼저 보여주고 확인 후 파일을 만듭니다. 파일 생성 의사가 분명하거나 요청에 유형·범위·구성이 이미 구체적으로 담긴 경우, 읽기·검토, 단순 수정, 승인된 구성의 후속 생성은 재확인을 생략합니다. 미리보기는 본문 전체를 복제하지 않습니다.
+
 ## 함께 쓰는 스킬
 
 제안서·RFP·장표 제작과 제출 검토는 [ProposalSkills](https://github.com/yjj3019/ProposalSkills)를 별도 플러그인으로 함께 씁니다. 이 저장소는 일상 글쓰기·문서·보안·장애 분석·코드 리뷰를 담당하고, 제안서 전용 콘텐츠·PPTX 빌드·제출 게이트는 ProposalSkills가 맡습니다. 두 저장소의 파일을 서로 복사하지 않습니다.

@@ -11,16 +11,27 @@ import argparse
 import shutil
 import sys
 from pathlib import Path
+from package_skill import skill_license
 
 TARGETS = {"claude": "~/.claude/skills", "codex": "~/.agents/skills", "grok": "~/.grok/skills"}
 SRC = Path(__file__).resolve().parent.parent / "plugins" / "myway" / "skills"
+LICENSE = Path(__file__).resolve().parent.parent / "LICENSE"
 
 
 def install(dest, link=False, force=False):
     dest = Path(dest).expanduser()
+    skills = sorted(p for p in SRC.iterdir() if (p / "SKILL.md").is_file())
+    license_contents = {}
+    # Validate every selected license before changing any destination.
+    if not link:
+        for skill in skills:
+            target = dest / skill.name
+            if not force and (target.exists() or target.is_symlink()):
+                continue
+            _, license_contents[skill.name] = skill_license(skill, LICENSE)
     dest.mkdir(parents=True, exist_ok=True)
     done, skipped = [], []
-    for skill in sorted(p for p in SRC.iterdir() if (p / "SKILL.md").is_file()):
+    for skill in skills:
         target = dest / skill.name
         if target.exists() or target.is_symlink():
             if not force:
@@ -31,6 +42,8 @@ def install(dest, link=False, force=False):
             target.symlink_to(skill, target_is_directory=True)
         else:
             shutil.copytree(skill, target, ignore=shutil.ignore_patterns("__pycache__"))
+            if not (target / "LICENSE").exists():
+                (target / "LICENSE").write_bytes(license_contents[skill.name])
         done.append(skill.name)
     return done, skipped
 

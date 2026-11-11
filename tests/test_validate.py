@@ -31,6 +31,14 @@ class ValidateRepo(unittest.TestCase):
     def test_clean_repo_passes(self):
         self.assertEqual(self.errs(), [])
 
+    def test_missing_plugin_license_fails(self):
+        (self.r / "plugins/myway/LICENSE").unlink()
+        self.assertTrue(any("LICENSE" in error for error in self.errs()))
+
+    def test_changed_plugin_license_fails(self):
+        (self.r / "plugins/myway/LICENSE").write_text("incomplete", encoding="utf-8")
+        self.assertTrue(any("LICENSE" in error for error in self.errs()))
+
     def test_name_mismatch(self):
         p = self.skill()
         p.write_text(p.read_text(encoding="utf-8").replace("name: writing", "name: other", 1), encoding="utf-8")
@@ -164,6 +172,20 @@ class RhelCveExample(unittest.TestCase):
             f.write_text(self.body, encoding="utf-8")
             r = subprocess.run([sys.executable, str(d / "scripts/check_report.py"), str(f)], capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout)
+
+    def test_report_filename_must_match_cve_in_title(self):
+        with tempfile.TemporaryDirectory() as td:
+            report = Path(td) / "CVE-2099-00002_리포트.md"
+            report.write_text(self.body, encoding="utf-8")
+            self.assertTrue(self.checker.check(report))
+
+    def test_headings_inside_code_fences_do_not_count_as_structure(self):
+        with tempfile.TemporaryDirectory() as td:
+            report = Path(td) / "CVE-2099-00001_리포트.md"
+            hidden = self.body.replace("### 3. 완화 방법(Mitigation)",
+                                       "```\n### 3. 완화 방법(Mitigation)\n```", 1)
+            report.write_text(hidden, encoding="utf-8")
+            self.assertTrue(self.checker.check(report))
 
     def test_report_checker_rejects_structural_errors(self):
         import importlib.util

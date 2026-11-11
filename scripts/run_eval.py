@@ -3,7 +3,7 @@
 
 사용: python3 scripts/run_eval.py [--platform claude|codex|grok] [--only ITEM ...]
         [--auto-select | --cases FILE] [--out DIR] [--timeout SEC] [--dry-run]
-        실제 실행은 --max-calls N 또는 --max-seconds N 필수
+        실제 실행은 --max-calls N 또는 --max-seconds N 중 하나 이상 필수
 
 - 기본은 Claude Code를 `--plugin-dir`로 띄워 스킬 지침을 로드한다.
 - 각 케이스의 출력에서 필수 문자열·금지 패턴·최대 길이를 검사한다.
@@ -441,12 +441,17 @@ def claude_usage_limit(text):
     return bool(re.fullmatch(r"You've hit your (?:\d+-hour )?limit\s*[·-]\s*resets [^\r\n]+", text.strip(), re.IGNORECASE))
 
 
-def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, timeout_artifact_dir=None):
+def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, timeout_artifact_dir=None, deadline=None):
     prompt = build_prompt(case, auto_select=auto_select, platform=platform)
     command = platform_command(platform, prompt)
     started = time.time()
     workdir = prepare_workdir(platform)
     try:
+        if deadline is not None:
+            time_left = deadline - time.monotonic()
+            if time_left <= 0:
+                return {"not_started": True}
+            timeout = min(timeout, time_left)
         # 빈 임시 디렉터리에서 실행해 저장소 지침·훅·미커밋 변경이 평가에 섞이지 않게 한다.
         result = subprocess.run(
             command,
@@ -570,14 +575,12 @@ def main(argv=None):
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     parser.add_argument("--timeout", type=int, default=300)
     parser.add_argument("--repeat", type=int, default=1, help="케이스별 반복 실행 횟수")
-    parser.add_argument("--max-calls", type=int, help="전체 모델 호출 상한(이 값 또는 --max-seconds 필요)")
-    parser.add_argument("--max-seconds", type=int, help="전체 경과 시간 상한(이 값 또는 --max-calls 필요)")
+    parser.add_argument("--max-calls", type=int, help="전체 모델 호출 상한(시간 상한과 함께 지정 가능)")
+    parser.add_argument("--max-seconds", type=int, help="호출 시작 및 프로세스 timeout 예산(호출 상한과 함께 지정 가능)")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--inspect-artifacts", action="store_true",
                          help="일반 타깃 평가에서 저장소 밖에 보존한 파일을 Office 구조·보안 검사")
     args = parser.parse_args(argv)
-    if args.max_calls is not None and args.max_seconds is not None:
-        parser.error("--max-calls와 --max-seconds를 동시에 지정할 수 없습니다")
     if args.timeout <= 0 or args.repeat <= 0:
         parser.error("--timeout과 --repeat는 양수여야 합니다")
     if args.max_calls is not None and args.max_calls <= 0:
@@ -674,6 +677,13 @@ def main(argv=None):
                 stop_reason = "max_calls"
             if not stop_reason and args.max_seconds is not None and time.monotonic() - started >= args.max_seconds:
                 stop_reason = "max_seconds"
+            remaining = args.timeout
+            if not stop_reason and args.max_seconds is not None:
+                budget_left = args.max_seconds - (time.monotonic() - started)
+                if budget_left <= 0:
+                    stop_reason = "max_seconds"
+                else:
+                    remaining = min(remaining, budget_left)
             if stop_reason:
                 runs.append({"status": "not_run", "exit_code": None, "seconds": None,
                              "checks": None, "passed_auto_checks": None, "stderr_tail": "",
@@ -684,13 +694,20 @@ def main(argv=None):
             artifact_dir = (out_dir / "artifacts" / f"{output_stem(case['id'])}-r{index + 1}"
                             if auto_select or args.inspect_artifacts else None)
             artifacts_preexisting = bool(artifact_dir and (artifact_dir.exists() or artifact_dir.is_symlink()))
-            remaining = args.timeout
-            if args.max_seconds is not None:
-                remaining = min(remaining, max(0.001, args.max_seconds - (time.monotonic() - started)))
             attempted_calls += 1
             run = run_case(case, args.platform, remaining, auto_select=auto_select,
                            artifact_dir=artifact_dir,
-                           timeout_artifact_dir=out_dir / "artifacts" / f"{output_stem(case['id'])}-r{index + 1}")
+                           timeout_artifact_dir=out_dir / "artifacts" / f"{output_stem(case['id'])}-r{index + 1}",
+                           deadline=started + args.max_seconds if args.max_seconds is not None else None)
+            if run.get("not_started"):
+                attempted_calls -= 1
+                stop_reason = "max_seconds"
+                runs.append({"status": "not_run", "exit_code": None, "seconds": None,
+                             "checks": None, "passed_auto_checks": None, "stderr_tail": "",
+                             "usage": None,
+                             "selection_status": "unverified" if auto_select else None,
+                             "artifacts": [], "artifact_error": None})
+                continue
             limited = bool(run.get("usage_limit", False)) or (args.platform == "claude" and run["exit_code"] != 0 and any(
                 claude_usage_limit(line) for line in (run["output"] + "\n" + run["stderr_tail"]).splitlines()))
             if limited:

@@ -9,6 +9,8 @@
 | 스킬 | 주요 기능 |
 | --- | --- |
 | `writing` | 한국어 블로그·기술 기고·게시글·업무 문서 작성과 편집. 개인정보 점검과 실행 환경별 보정 포함 |
+| `document-authoring` | 기술 문서·매뉴얼·가이드·보고서의 구조, 근거 및 독자 관점 검토 |
+| `visual-design` | 웹 화면·대시보드·시각 자료의 설계, 접근성 및 화면 검증 |
 | `office-docs` | PPTX·DOCX·XLSX 작성 규격, 장문 DOCX 빌드, HWP/HWPX 원문 읽기 |
 | `rhel-cve` | Red Hat 자료를 바탕으로 Confluence용 한국어 Markdown CVE 리포트 작성: 단건 `CVE-ID_리포트.md`, 다건/RHSB 통합, 명시적 다건 요약, 파일 없는 영향도 검증 답변 지원 |
 | `devlog` | Notion에 개발 이력 기록. 연결되지 않으면 `SESSION_LOG.md`에 기록 |
@@ -67,7 +69,7 @@ grok plugin install myway@skill-myway --trust
 python3 scripts/package_skill.py --skill writing
 ```
 
-`dist/myway-writing-<버전>.zip`이 생기고, ZIP 안에 `<스킬이름>/SKILL.md`와 `references/`가 들어갑니다. 업로드 메뉴와 한도는 계정·앱 버전에 따라 다릅니다.
+`dist/myway-writing-<버전>.zip`이 생기고, ZIP 안에 `<스킬이름>/SKILL.md`, 라이선스 본문과 해당 스킬의 `references/`가 들어갑니다. 업로드 메뉴와 한도는 계정·앱 버전에 따라 다릅니다.
 
 ### 스킬 직접 설치
 
@@ -100,6 +102,8 @@ python3 scripts/install_skills.py --dest <경로>         # 원하는 위치
 
 `python3 scripts/run_eval.py --help`는 평가 모드를 안내합니다. 실제 모델 평가는 호출 또는 시간 예산이 필요합니다. Codex `workspace-write` 설정은 OS/VM 격리나 네트워크 차단 증거가 아닙니다. 평가 summary에 스킬 로드 이벤트가 없으면 스킬 선택은 미확인으로 남습니다.
 
+여러 형식의 제작·평가와 제한된 반복에 대한 적용 범위는 [통합 제작·평가 가이드](docs/GROWTH-WORKFLOW-2026-11-11.md)에 있습니다. 안내에 언급된 외부 실행기나 자동 복구가 이 저장소에 구현됐다는 뜻은 아닙니다.
+
 테스트 의존성은 `python -m pip install -r requirements-test.txt`로 설치합니다. Grok 평가의 `--trust`는 실행기가 직접 만든 임시 폴더에만 적용되며 샌드박스가 아닙니다. Claude·Codex 추적과 시간 초과 시 부분 산출물에는 민감한 내용이 남을 수 있으므로 결과 폴더를 보호합니다.
 
 Codex/Grok 평가에서 생성 Office 파일 검사도 요청하려면 `--inspect-artifacts`를 사용합니다. 격리 작업 폴더에서 캡처한 PPTX/DOCX/XLSX의 기본 구조, 압축 경로, 매크로 흔적과 외부 관계를 검사합니다. XLSX 계산 캐시·오류는 구조 검사와 분리합니다. 파일 구조 검사는 수식 기대값, 렌더링, 접근성, Excel/PowerPoint 호환성을 보증하지 않습니다.
@@ -130,6 +134,6 @@ python3 scripts/package_skill.py --skill all            # 업로드용 ZIP 생�
 
 ## 라이선스와 출처
 
-이 저장소의 라이선스는 [Apache License 2.0](LICENSE)입니다. 통합 과정의 라이선스·출처 판정과 반영·제외 내역은 [라이선스·출처 검토](docs/LICENSES.md)에 있습니다. 외부 저장소의 원문을 복사하지 않고 새로 작성했으며, 실명·조직·실제 게시물 인용·내부 정보는 저장소에 넣지 않습니다.
+별도 표시가 없는 저장소 콘텐츠는 [Apache License 2.0](LICENSE)을 따릅니다. `document-authoring`과 `visual-design`은 각 스킬에 포함된 MIT 라이선스를 따릅니다. 과거 유래 자료의 권리 확인 상태와 배포 이력은 [라이선스·출처 검토](docs/LICENSES.md)에 기록합니다.
 
 기준은 `docs/DECISIONS.md`에, 재발 방지 교훈은 `docs/compound-log.md`에 남깁니다.

@@ -248,9 +248,94 @@ class RunEval(unittest.TestCase):
         with self.assertRaises(SystemExit):
             run_eval.main(["--platform", "claude"])
 
-    def test_call_and_time_budgets_are_mutually_exclusive(self):
-        with self.assertRaises(SystemExit):
-            run_eval.main(["--platform", "claude", "--max-calls", "2", "--max-seconds", "60"])
+    def test_combined_budgets_stop_at_first_limit(self):
+        doc = sample_cases()
+        case = doc["cases"][0]
+        run = {"exit_code": 0, "output": "결과", "stderr_tail": "", "seconds": 0}
+        for limit in ("max_calls", "max_seconds"):
+            with self.subTest(limit=limit), tempfile.TemporaryDirectory() as tmp:
+                source = Path(tmp) / "cases.json"
+                source.write_text(json.dumps(doc), encoding="utf-8")
+                out = Path(tmp) / "out"
+                clock = [0.0]
+                def execute(*args, **kwargs):
+                    if limit == "max_seconds":
+                        clock[0] = 11.0
+                    return dict(run)
+                with mock.patch.object(run_eval.time, "monotonic", side_effect=lambda: clock[0]), \
+                        mock.patch.object(run_eval, "run_case", side_effect=execute) as call:
+                    args = ["--cases", str(source), "--out", str(out), "--only", case["skill"],
+                            "--repeat", "3", "--max-calls", "1" if limit == "max_calls" else "3",
+                            "--max-seconds", "10"]
+                    self.assertEqual(run_eval.main(args), 1)
+                    self.assertEqual(call.call_count, 1)
+                    self.assertLessEqual(call.call_args.args[2], 10)
+                summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+                self.assertEqual(summary["stop_reason"], limit)
+                self.assertEqual(summary["budget"]["attempted_calls"], 1)
+                self.assertEqual(summary["cases"][0]["not_run"], 2)
+
+    def test_time_expiring_before_call_does_not_launch(self):
+        doc = sample_cases()
+        case = doc["cases"][0]
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "cases.json"
+            source.write_text(json.dumps(doc), encoding="utf-8")
+            out = Path(tmp) / "out"
+            readings = iter([0.0, 0.0, 11.0])
+            def now():
+                return next(readings, 11.0)
+            with mock.patch.object(run_eval.time, "monotonic", side_effect=now), \
+                    mock.patch.object(run_eval, "run_case") as call:
+                args = ["--cases", str(source), "--out", str(out), "--only", case["skill"],
+                        "--max-calls", "2", "--max-seconds", "10"]
+                self.assertEqual(run_eval.main(args), 1)
+                call.assert_not_called()
+            summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["stop_reason"], "max_seconds")
+            self.assertEqual(summary["budget"]["attempted_calls"], 0)
+            self.assertEqual(summary["cases"][0]["not_run"], 1)
+
+    def test_expired_deadline_after_workspace_preparation_does_not_launch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "workspace"
+            workspace.mkdir()
+            with mock.patch.object(run_eval, "prepare_workdir", return_value=workspace), \
+                    mock.patch.object(run_eval.time, "monotonic", return_value=11.0), \
+                    mock.patch.object(run_eval.subprocess, "run") as launch:
+                result = run_eval.run_case(sample_cases()["cases"][0], "claude", 10, deadline=10.0)
+            self.assertTrue(result["not_started"])
+            launch.assert_not_called()
+            self.assertFalse(workspace.exists())
+
+    def test_subprocess_timeout_uses_remaining_deadline_after_preparation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "workspace"
+            workspace.mkdir()
+            process = subprocess.CompletedProcess([], 0, stdout="ok", stderr="")
+            with mock.patch.object(run_eval, "prepare_workdir", return_value=workspace), \
+                    mock.patch.object(run_eval.time, "monotonic", return_value=9.0), \
+                    mock.patch.object(run_eval.subprocess, "run", return_value=process) as launch:
+                result = run_eval.run_case(sample_cases()["cases"][0], "codex", 15, deadline=10.0)
+            self.assertEqual(result["exit_code"], 0)
+            self.assertEqual(launch.call_args.kwargs["timeout"], 1.0)
+
+    def test_workspace_deadline_is_counted_as_not_run(self):
+        doc = sample_cases()
+        case = doc["cases"][0]
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "cases.json"
+            source.write_text(json.dumps(doc), encoding="utf-8")
+            out = Path(tmp) / "out"
+            with mock.patch.object(run_eval, "run_case", return_value={"not_started": True}) as call:
+                args = ["--cases", str(source), "--out", str(out), "--only", case["skill"],
+                        "--repeat", "2", "--max-calls", "2", "--max-seconds", "10"]
+                self.assertEqual(run_eval.main(args), 1)
+                self.assertEqual(call.call_count, 1)
+            summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["stop_reason"], "max_seconds")
+            self.assertEqual(summary["budget"]["attempted_calls"], 0)
+            self.assertEqual(summary["cases"][0]["not_run"], 2)
 
     def test_auto_select_dry_run_does_not_require_budget(self):
         self.assertEqual(run_eval.main(["--auto-select", "--platform", "codex", "--dry-run"]), 0)

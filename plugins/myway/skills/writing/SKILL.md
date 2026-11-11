@@ -77,6 +77,8 @@ description: 한국어 블로그·사용기·설정 기록·기술 기고·조�
 
 기존 글을 고칠 때는 사실·수치·의도·출처를 그대로 두고 문장과 흐름만 바꾼다. 원문에 없는 경험을 추가하지 않는다.
 
+자연스러운 문체나 AI 티 줄이기 요청은 `references/natural-editing.md`에 따라 독자 적합성과 원문 보존을 함께 점검한다. 탐지 회피를 성과로 약속하지 않는다.
+
 ## 4. 제출 전 확인
 
 - [ ] 경험 문장이 모두 제공된 정보에 근거한다
@@ -99,6 +101,7 @@ description: 한국어 블로그·사용기·설정 기록·기술 기고·조�
 
 - `references/facts-and-privacy.md`: 사실과 경험의 경계, 익명화, 기술 글 추가 기준
 - `references/editing-modes.md`: 교정·다듬기·재작성, 비교 절차, 수정 후 대조
+- `references/natural-editing.md`: 자연스러운 문체와 의미 보존, 비교의 한계
 - `references/editing-checklist.md`: 구성 선택과 보호 대상 점검표
 - `references/examples.md`: 익명화한 가상 편집 예시. 예시의 경험을 새 글에 쓰지 않는다.
 - `references/profile-*.md`: 프로필별 규칙

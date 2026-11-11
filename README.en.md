@@ -9,6 +9,8 @@ A personal collection of skills for Korean writing, office documents, security a
 | Skill | What it does |
 | --- | --- |
 | `writing` | Writing and editing Korean blogs, technical posts, articles, and work documents. Includes personal-information checks and per-runtime adjustments |
+| `document-authoring` | Reader-focused technical documents, manuals, guides, reports, and source checks |
+| `visual-design` | Design, accessibility, and visual verification for interfaces and visual content |
 | `office-docs` | PPTX/DOCX/XLSX authoring specs, long DOCX builds, reading HWP/HWPX sources |
 | `rhel-cve` | Red Hat-based RHEL CVE analysis and Confluence-ready Korean Markdown reports: single-CVE, multi-CVE/RHSB integration, explicit batch summary, and file-free validation answers |
 | `devlog` | Logs development history to Notion. Falls back to `SESSION_LOG.md` when not connected |
@@ -67,7 +69,7 @@ Package an upload ZIP, then install it from the app's Skills menu.
 python3 scripts/package_skill.py --skill writing
 ```
 
-This produces `dist/myway-writing-<version>.zip`; the ZIP contains `<skill-name>/SKILL.md` and `references/`. Upload menus and limits vary by account and app version.
+This produces `dist/myway-writing-<version>.zip`; the ZIP contains `<skill-name>/SKILL.md`, the license text, and the skill's `references/`. Upload menus and limits vary by account and app version.
 
 ### Installing Skills Directly
 
@@ -100,6 +102,8 @@ Examples and test inputs use reserved fictional identifiers. Current Red Hat, EP
 
 `python3 scripts/run_eval.py --help` shows evaluation options. Every live model evaluation requires a call or time budget. Codex `workspace-write` requests a workspace write boundary; it does not prove OS/VM isolation or network blocking. If the summary has no skill-load event, skill selection remains unverified.
 
+The [cross-format production and evaluation guide](docs/GROWTH-WORKFLOW-2026-11-11.md) records the scope and limits of the proposed workflow; external orchestration and automatic recovery are not implied.
+
 Install test dependencies with `python -m pip install -r requirements-test.txt`. Grok evaluation uses `--trust` only for the runner's own temporary workspace; this is not a sandbox. Claude and Codex traces and partial timeout artifacts can contain sensitive data, so protect the results directory.
 
 Use `--inspect-artifacts` with Codex or Grok targeted evaluations to inspect generated Office files in the isolated work folder. The checker examines basic PPTX/DOCX/XLSX structure, archive paths, macro markers, and external relationships. XLSX formula-cache and error state are reported separately. Structural checks do not prove expected calculation values, rendering quality, accessibility, or Excel/PowerPoint compatibility.
@@ -130,6 +134,6 @@ When changing a skill, bump `VERSION` and the version in every platform manifest
 
 ## License and Sources
 
-This repository is licensed under the [Apache License 2.0](LICENSE). License and source assessments from the integration work, including what was absorbed and what was excluded, are in [license and source review](docs/LICENSES.md). Nothing is copied from external repositories verbatim; everything is newly written, and no real names, organizations, real post citations, or internal information are kept in the repository.
+Repository content is licensed under [Apache License 2.0](LICENSE) unless otherwise marked. The `document-authoring` and `visual-design` skills are licensed under their included MIT licenses. See the [license and source review](docs/LICENSES.md) for provenance and unresolved historical rights questions.
 
 Criteria live in `docs/DECISIONS.md` and regression-prevention lessons in `docs/compound-log.md`.

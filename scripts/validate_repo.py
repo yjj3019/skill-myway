@@ -273,10 +273,30 @@ def check_sensitive(root, extra_terms, errors):
                 break
 
 
+def check_license_copies(root, plugin_dirs, errors):
+    """Check distribution copies, not ownership or third-party rights."""
+    try:
+        license_content = (root / "LICENSE").read_bytes()
+        if not license_content.strip():
+            raise ValueError("empty")
+    except (OSError, ValueError):
+        errors.append("LICENSE: root license missing or empty")
+        return
+    for plugin in plugin_dirs:
+        try:
+            copy = (plugin / "LICENSE").read_bytes()
+        except OSError:
+            errors.append(f"{plugin}: LICENSE missing")
+            continue
+        if copy != license_content:
+            errors.append(f"{plugin}: LICENSE differs from root")
+
+
 def validate(root, extra_terms=()):
     root = Path(root)
     errors = []
     plugin_dirs = check_manifests(root, errors)
+    check_license_copies(root, plugin_dirs, errors)
     check_skills(plugin_dirs, errors)
     check_code(root, errors)
     check_sensitive(root, extra_terms, errors)

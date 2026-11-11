@@ -24,6 +24,47 @@ def skills():
 
 
 class PackageAllSkills(unittest.TestCase):
+    def test_declared_mit_cannot_fall_back_to_apache(self):
+        with tempfile.TemporaryDirectory() as d:
+            skill = Path(d) / "example"
+            skill.mkdir()
+            (skill / "SKILL.md").write_text("---\nname: example\nlicense: MIT\n---\n", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                package_skill.build(skill, Path(d) / "out", VERSION)
+            self.assertFalse((Path(d) / "out").exists())
+
+    def test_new_skills_include_mit_license(self):
+        with tempfile.TemporaryDirectory() as d:
+            for name in ("document-authoring", "visual-design"):
+                dest, _, _ = package_skill.build(SKILLS_DIR / name, Path(d), VERSION)
+                with zipfile.ZipFile(dest) as archive:
+                    license_text = archive.read(f"{name}/LICENSE").decode("utf-8")
+                    skill_text = archive.read(f"{name}/SKILL.md").decode("utf-8")
+                self.assertTrue(license_text.startswith("MIT License\n"))
+                self.assertIn("permission notice", license_text)
+                self.assertEqual(validate_repo.frontmatter(skill_text).get("license"), "MIT")
+
+    def test_empty_skill_license_cannot_be_packaged(self):
+        with tempfile.TemporaryDirectory() as d:
+            skill = Path(d) / "example"
+            skill.mkdir()
+            (skill / "SKILL.md").write_text("example", encoding="utf-8")
+            (skill / "LICENSE").write_text("", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                package_skill.build(skill, Path(d) / "out", VERSION)
+            self.assertFalse((Path(d) / "out").exists())
+
+    def test_skill_specific_license_is_preserved(self):
+        with tempfile.TemporaryDirectory() as d:
+            skill = Path(d) / "example"
+            skill.mkdir()
+            (skill / "SKILL.md").write_text("example", encoding="utf-8")
+            (skill / "LICENSE").write_text("specific license", encoding="utf-8")
+            dest, _, _ = package_skill.build(skill, Path(d) / "out", VERSION)
+            with zipfile.ZipFile(dest) as archive:
+                self.assertEqual(archive.namelist().count("example/LICENSE"), 1)
+                self.assertEqual(archive.read("example/LICENSE"), b"specific license")
+
     def test_every_skill_builds_with_frontmatter(self):
         self.assertGreaterEqual(len(skills()), 6)
         with tempfile.TemporaryDirectory() as d:
@@ -34,7 +75,10 @@ class PackageAllSkills(unittest.TestCase):
                 with zipfile.ZipFile(dest) as archive:
                     names = archive.namelist()
                     body = archive.read(f"{skill.name}/SKILL.md").decode("utf-8")
+                    license_content = archive.read(f"{skill.name}/LICENSE")
                 self.assertIn(f"{skill.name}/SKILL.md", names)
+                expected_license = skill / "LICENSE" if (skill / "LICENSE").exists() else ROOT / "LICENSE"
+                self.assertEqual(license_content, expected_license.read_bytes(), skill.name)
                 self.assertEqual(count, len(names))
                 front = validate_repo.frontmatter(body)
                 self.assertIsNotNone(front)
@@ -93,6 +137,59 @@ class PackageAllSkills(unittest.TestCase):
 
 
 class InstallTargets(unittest.TestCase):
+    def test_declared_mit_without_license_does_not_replace_existing(self):
+        with tempfile.TemporaryDirectory() as d:
+            skill = Path(d) / "source/example"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text("---\nname: example\nlicense: MIT\n---\n", encoding="utf-8")
+            target = Path(d) / "dest/example"
+            target.mkdir(parents=True)
+            (target / "SKILL.md").write_text("original", encoding="utf-8")
+            with mock.patch.object(install_skills, "SRC", skill.parent):
+                with self.assertRaises(ValueError):
+                    install_skills.install(target.parent, force=True)
+            self.assertEqual((target / "SKILL.md").read_text(encoding="utf-8"), "original")
+
+    def test_empty_skill_license_does_not_replace_existing_skill(self):
+        with tempfile.TemporaryDirectory() as d:
+            skill = Path(d) / "source/example"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text("new", encoding="utf-8")
+            (skill / "LICENSE").write_text("", encoding="utf-8")
+            target = Path(d) / "dest/example"
+            target.mkdir(parents=True)
+            (target / "SKILL.md").write_text("original", encoding="utf-8")
+            with mock.patch.object(install_skills, "SRC", skill.parent):
+                with self.assertRaises(ValueError):
+                    install_skills.install(target.parent, force=True)
+            self.assertEqual((target / "SKILL.md").read_text(encoding="utf-8"), "original")
+
+    def test_missing_fallback_license_does_not_replace_existing_skill(self):
+        with tempfile.TemporaryDirectory() as d:
+            source = Path(d) / "source"
+            skill = source / "example"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text("new", encoding="utf-8")
+            target = Path(d) / "dest/example"
+            target.mkdir(parents=True)
+            (target / "SKILL.md").write_text("original", encoding="utf-8")
+            with mock.patch.object(install_skills, "SRC", source), \
+                    mock.patch.object(install_skills, "LICENSE", Path(d) / "missing"):
+                with self.assertRaises(FileNotFoundError):
+                    install_skills.install(target.parent, force=True)
+            self.assertEqual((target / "SKILL.md").read_text(encoding="utf-8"), "original")
+
+    def test_skill_specific_license_is_preserved(self):
+        with tempfile.TemporaryDirectory() as d:
+            source = Path(d) / "source"
+            skill = source / "example"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text("example", encoding="utf-8")
+            (skill / "LICENSE").write_text("specific license", encoding="utf-8")
+            with mock.patch.object(install_skills, "SRC", source):
+                install_skills.install(Path(d) / "dest")
+            self.assertEqual((Path(d) / "dest/example/LICENSE").read_text(encoding="utf-8"), "specific license")
+
     def test_each_target_installs_all_skills(self):
         expected = len(skills())
         for target in ("claude", "codex", "grok"):
@@ -103,6 +200,8 @@ class InstallTargets(unittest.TestCase):
                 self.assertEqual(skipped, [], target)
                 for skill in skills():
                     self.assertTrue((dest / skill.name / "SKILL.md").is_file(), skill.name)
+                    self.assertEqual((dest / skill.name / "LICENSE").read_bytes(),
+                                     (skill / "LICENSE" if (skill / "LICENSE").exists() else ROOT / "LICENSE").read_bytes())
 
     def test_reinstall_skips_and_force_replaces(self):
         expected = len(skills())
@@ -116,6 +215,9 @@ class InstallTargets(unittest.TestCase):
 
 
 class Manifests(unittest.TestCase):
+    def test_plugin_contains_repository_license(self):
+        self.assertEqual((ROOT / "plugins/myway/LICENSE").read_bytes(), (ROOT / "LICENSE").read_bytes())
+
     def test_versions_are_synchronized(self):
         self.assertRegex(VERSION, r"^\d+\.\d+\.\d+$")
         files = {

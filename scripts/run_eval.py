@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import platform
 import re
@@ -34,15 +35,23 @@ DEFAULT_AUTO_CASES = ROOT / "tests" / "eval_cases" / "auto_select_cases.json"
 DEFAULT_OUT = ROOT / "eval-results"
 
 
-def build_prompt(case, auto_select=False):
+def build_prompt(case, auto_select=False, platform=None):
     if auto_select:
         return (
             "다음은 사용자의 요청이다. 사용 가능한 지침 중 필요한 것을 스스로 판단해 적용하고 작업을 수행해. "
             "특정 스킬 이름을 지정하지 않는다. 요청이 파일 산출물을 요구하면 현재 작업 디렉터리 안에만 저장하고, 저장소나 그 밖의 경로는 수정하지 마.\n\n"
             f"{case['request']}"
         )
+    skill = case["skill"]
+    if platform == "claude":
+        instruction = f"Use the Skill tool to load myway:{skill} before answering."
+    elif platform in ("codex", "grok"):
+        directory = ".agents" if platform == "codex" else ".grok"
+        instruction = f"먼저 {directory}/skills/{skill}/SKILL.md를 읽고 해당 지침을 적용해."
+    else:
+        instruction = f"다음 작업에 '{skill}' 스킬 지침을 적용해 수행해."
     return (
-        f"다음 작업에 '{case['skill']}' 스킬 지침을 적용해 수행해.\n"
+        instruction + "\n"
         "파일을 만들거나 저장소를 수정하지 말고, 요청한 결과만 출력해.\n\n"
         f"{case['request']}"
     )
@@ -74,10 +83,32 @@ def skill_load_evidence(jsonl_text, skill):
     return {"status": "unverified", "reason": "no tool/file event referenced the skill file"}
 
 
+def cli_usage(event, platform_name):
+    """Preserve only counters reported by the CLI; absent values stay unknown."""
+    values = event.get("usage")
+    if not isinstance(values, dict):
+        return None
+    def counter(key):
+        value = values.get(key)
+        return value if type(value) is int and value >= 0 else None
+    cost = event.get("total_cost_usd") if platform_name == "claude" else None
+    if type(cost) not in (int, float) or cost < 0 or (type(cost) is float and not math.isfinite(cost)):
+        cost = None
+    model_usage = event.get("modelUsage") if platform_name == "claude" else None
+    models = sorted(key for key in model_usage if isinstance(key, str) and key) if isinstance(model_usage, dict) else None
+    return {"source": "cli_event", "input_tokens": counter("input_tokens"),
+            "output_tokens": counter("output_tokens"),
+            "cache_read_tokens": counter("cache_read_input_tokens" if platform_name == "claude" else "cached_input_tokens"),
+            "cache_write_tokens": counter("cache_creation_input_tokens" if platform_name == "claude" else "cache_write_input_tokens"),
+            "reasoning_output_tokens": counter("reasoning_output_tokens") if platform_name == "codex" else None,
+            "cli_reported_cost_usd": cost, "models": models}
+
+
 def codex_jsonl_observation(jsonl_text):
     """Parse documented Codex JSONL items into final assistant text and load evidence."""
     messages = []
     event_types = []
+    usage = None
     for line in jsonl_text.splitlines():
         stripped = line.strip()
         if not stripped.startswith("{"):
@@ -88,6 +119,8 @@ def codex_jsonl_observation(jsonl_text):
             continue
         kind = str(event.get("type", "")).lower()
         event_types.append(kind or "unknown")
+        if kind == "turn.completed":
+            usage = cli_usage(event, "codex")
         item = event.get("item")
         if isinstance(item, dict) and str(item.get("type", "")).lower() == "agent_message":
             text = item.get("text")
@@ -98,14 +131,65 @@ def codex_jsonl_observation(jsonl_text):
     final_text = messages[-1] if messages else ""
     trace = skill_load_any_evidence(jsonl_text)
     trace["event_types"] = event_types
-    return {"final_text": final_text, "trace": trace}
+    return {"final_text": final_text, "trace": trace, "usage": usage}
+
+
+def claude_jsonl_observation(jsonl_text, skill):
+    """Require a successful Skill tool result and the exact local skill body."""
+    events = []
+    for line in jsonl_text.splitlines():
+        try:
+            events.append(json.loads(line))
+        except (ValueError, TypeError):
+            continue
+    pending = set()
+    succeeded = False
+    loaded = False
+    final_text = ""
+    result_error = False
+    usage = None
+    event_types = []
+    skill_path = simulate_eval.SKILLS / skill / "SKILL.md"
+    skill_body = skill_path.read_text(encoding="utf-8").split("---", 2)[-1].strip()
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        event_types.append(event.get("type", "unknown"))
+        message = event.get("message", {})
+        content = message.get("content", []) if isinstance(message, dict) else []
+        if isinstance(content, list):
+            for item in content:
+                if not isinstance(item, dict):
+                    continue
+                if (event.get("type") == "assistant" and item.get("type") == "tool_use"
+                        and item.get("name") == "Skill" and isinstance(item.get("input"), dict)
+                        and item["input"].get("skill") == f"myway:{skill}" and item.get("id")):
+                    pending.add(item["id"])
+                elif (event.get("type") == "user" and item.get("type") == "tool_result"
+                      and item.get("tool_use_id") in pending and not item.get("is_error") and item.get("content")):
+                    succeeded = True
+                elif (event.get("type") == "user" and item.get("type") == "text" and succeeded
+                      and isinstance(item.get("text"), str) and skill_body and skill_body in item["text"]):
+                    loaded = True
+                elif event.get("type") == "assistant" and item.get("type") == "text":
+                    final_text = item.get("text", "")
+        if event.get("type") == "result":
+            result_error = event.get("is_error") is True
+            usage = cli_usage(event, "claude")
+            if isinstance(event.get("result"), str):
+                final_text = event["result"]
+    trace = {"status": "loaded" if loaded else "unverified",
+             "reason": "successful Skill call and matching local body" if loaded else "no successful Skill call with matching local body",
+             "skills": [skill] if loaded else [], "event_types": event_types}
+    return {"final_text": final_text, "trace": trace, "result_error": result_error, "usage": usage}
 
 
 def skill_load_any_evidence(jsonl_text):
     """Find successful file-read tool events that return a skill file body."""
     if not jsonl_text.strip():
         return {"status": "unverified", "reason": "no event output"}
-    skills = {p.name for p in simulate_eval.SKILLS.iterdir() if (p / "SKILL.md").is_file()}
+    skills = {p.name: (p / "SKILL.md").read_text(encoding="utf-8").strip()
+              for p in simulate_eval.SKILLS.iterdir() if (p / "SKILL.md").is_file()}
     loaded = set()
     for line in jsonl_text.splitlines():
         if not line.strip().startswith("{"):
@@ -119,26 +203,34 @@ def skill_load_any_evidence(jsonl_text):
         item = event.get("item")
         if not isinstance(item, dict) or item.get("type") not in {"tool_call", "command_execution"}:
             continue
+        if item.get("exit_code") not in (None, 0) or item.get("status") in ("failed", "error") or item.get("is_error"):
+            continue
+        if item.get("type") == "command_execution" and (item.get("exit_code") != 0 or item.get("status") != "completed"):
+            continue
         payload = json.dumps(item, ensure_ascii=False).replace("\\\\", "/").replace("\\", "/")
-        output = " ".join(str(item.get(key, "")) for key in ("text", "output", "stdout", "content"))
+        output = " ".join(str(item.get(key, "")) for key in ("text", "output", "stdout", "content", "aggregated_output"))
+        output = output.replace("\r\n", "\n")
         combined = payload + " " + output
-        for skill in skills:
+        for skill, body in skills.items():
             needle = f"{skill}/SKILL.md"
-            if needle in combined and output.strip():
+            if needle in combined and body and body.replace("\r\n", "\n") in output:
                 loaded.add(skill)
     if loaded:
-        return {"status": "loaded", "skills": sorted(loaded), "evidence": "completed tool read with returned content"}
+        return {"status": "loaded", "skills": sorted(loaded), "evidence": "successful tool read with matching local skill content"}
     return {"status": "unverified", "reason": "Codex JSONL had no completed read-like tool event with skill path and content"}
 
 
 def platform_command(platform, prompt):
     if platform == "claude":
-        return ["claude", "--plugin-dir", str(ROOT / "plugins" / "myway"), "-p", prompt]
+        return ["claude", "--plugin-dir", str(ROOT / "plugins" / "myway"), "-p", prompt,
+                "--output-format", "stream-json", "--verbose"]
     if platform == "codex":
         # 임시 작업 디렉터리의 스킬 사본만 읽고 쓸 수 있게 제한한다.
         return ["codex", "exec", "--json", "--sandbox", "workspace-write", "--skip-git-repo-check", prompt]
     if platform == "grok":
-        return ["grok", "-p", prompt]
+        # prepare_workdir creates this isolated directory and copies only our skills.
+        # Grok 1.0.77 otherwise omits project skills in an untrusted directory.
+        return ["grok", "-p", prompt, "--trust"]
     raise ValueError(f"지원하지 않는 플랫폼: {platform}")
 
 
@@ -160,6 +252,7 @@ def evaluate_output(output, case):
         "forbidden_found": forbidden,
         "chars": len(output),
         "nonempty": bool(output.strip()),
+        "has_content_checks": bool(case.get("required") or case.get("ends_with")),
         "ends_with_ok": output.rstrip().endswith(case["ends_with"]) if "ends_with" in case else True,
         "within_limit": len(output) <= max_chars,
     }
@@ -263,7 +356,7 @@ def validate_auto_cases(document):
         if set(case) not in ({"id", "request", "artifact_policy"},
                              {"id", "request", "artifact_policy", "expected_extensions"}):
             errors.append(f"{case_id}: 공개 케이스에 허용되지 않은 필드가 있습니다")
-        if case.get("artifact_policy") not in {"required", "forbidden", "conditional"}:
+        if not isinstance(case.get("artifact_policy"), str) or case["artifact_policy"] not in {"required", "forbidden", "conditional"}:
             errors.append(f"{case_id}: artifact_policy가 잘못됐습니다")
         extensions = case.get("expected_extensions")
         if extensions is not None and (not isinstance(extensions, list) or not extensions
@@ -348,8 +441,8 @@ def claude_usage_limit(text):
     return bool(re.fullmatch(r"You've hit your (?:\d+-hour )?limit\s*[·-]\s*resets [^\r\n]+", text.strip(), re.IGNORECASE))
 
 
-def run_case(case, platform, timeout, auto_select=False, artifact_dir=None):
-    prompt = build_prompt(case, auto_select=auto_select)
+def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, timeout_artifact_dir=None):
+    prompt = build_prompt(case, auto_select=auto_select, platform=platform)
     command = platform_command(platform, prompt)
     started = time.time()
     workdir = prepare_workdir(platform)
@@ -358,24 +451,35 @@ def run_case(case, platform, timeout, auto_select=False, artifact_dir=None):
         result = subprocess.run(
             command,
             cwd=str(workdir),
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",
             timeout=timeout,
         )
-        raw_events = result.stdout if platform == "codex" else ""
+        raw_events = result.stdout if platform in ("codex", "claude") else ""
         event_types = []
         trace = {"status": "unverified", "reason": "trace unavailable"}
         output = result.stdout.strip()
+        provider_error = False
+        usage = None
         if platform == "codex" and result.stdout.lstrip().startswith("{"):
             observed = codex_jsonl_observation(result.stdout)
             output = observed["final_text"].strip()
             trace = observed["trace"]
             event_types = trace.get("event_types", [])
+            usage = observed.get("usage")
+        elif platform == "claude" and result.stdout.lstrip().startswith("{"):
+            observed = claude_jsonl_observation(result.stdout, case["skill"])
+            output = observed["final_text"].strip()
+            trace = observed["trace"]
+            event_types = trace.get("event_types", [])
+            provider_error = observed.get("result_error", False)
+            usage = observed.get("usage")
         # 오류 종료의 진단에만 적용한다. 정상 응답은 동일 문구를 인용할 수 있다.
-        limit_line = next((line.strip() for line in (result.stdout + "\n" + result.stderr).splitlines()
-                           if claude_usage_limit(line)), None) if platform == "claude" and result.returncode != 0 else None
+        limit_line = next((line.strip() for line in (output + "\n" + result.stderr).splitlines()
+                           if claude_usage_limit(line)), None) if platform == "claude" and (result.returncode != 0 or provider_error) else None
         artifacts = []
         artifact_error = None
         office_inspection = []
@@ -385,13 +489,14 @@ def run_case(case, platform, timeout, auto_select=False, artifact_dir=None):
                 office_inspection = check_office.inspect_office_artifacts(workdir, artifacts)
             except (OSError, ValueError, zipfile.BadZipFile) as exc:
                 artifact_error = str(exc)
-        exit_code = result.returncode if not artifact_error else (result.returncode or 1)
+        exit_code = result.returncode if not artifact_error and not provider_error else (result.returncode or 1)
         return {
             "exit_code": exit_code,
             "output": output,
             "raw_events": raw_events,
             "selection_trace": trace,
             "event_types": event_types,
+            "usage": usage,
             "stderr_tail": (result.stderr.strip() + (f"\n산출물 보존 실패: {artifact_error}" if artifact_error else ""))[-500:],
             "usage_limit": bool(limit_line),
             "usage_limit_message": limit_line,
@@ -407,22 +512,37 @@ def run_case(case, platform, timeout, auto_select=False, artifact_dir=None):
             "raw_events": "",
             "selection_trace": {"status": "unverified", "reason": f"process could not start: {exc}"},
             "event_types": [],
+            "usage": None,
             "stderr_tail": f"실행 실패: {exc}",
             "artifact_error": None,
             "artifacts": [],
             "office_inspection": [],
             "seconds": round(time.time() - started, 1),
         }
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        def partial_text(value):
+            return value.decode("utf-8", errors="replace") if isinstance(value, bytes) else (value or "")
+
+        raw_output = partial_text(exc.stdout)
+        observed = (codex_jsonl_observation(raw_output) if platform == "codex" else
+                    claude_jsonl_observation(raw_output, case["skill"]) if platform == "claude" else None)
+        artifacts = []
+        artifact_error = None
+        if artifact_dir or timeout_artifact_dir:
+            try:
+                artifacts = capture_artifacts(workdir, artifact_dir or timeout_artifact_dir)
+            except (OSError, ValueError, zipfile.BadZipFile) as capture_exc:
+                artifact_error = str(capture_exc)
         return {
             "exit_code": None,
-            "output": "",
-            "raw_events": "",
-            "selection_trace": {"status": "unverified", "reason": "process timed out before trace completion"},
-            "event_types": [],
-            "stderr_tail": f"timeout after {timeout}s",
-            "artifact_error": None,
-            "artifacts": [],
+            "output": observed["final_text"].strip() if observed else raw_output,
+            "raw_events": raw_output if platform in ("codex", "claude") else "",
+            "selection_trace": observed["trace"] if observed else {"status": "unverified", "reason": "process timed out before trace completion"},
+            "event_types": observed["trace"].get("event_types", []) if observed else [],
+            "usage": observed.get("usage") if observed else None,
+            "stderr_tail": (f"timeout after {timeout}s\n" + partial_text(exc.stderr))[-500:],
+            "artifact_error": artifact_error,
+            "artifacts": artifacts,
             "office_inspection": [],
             "seconds": round(time.time() - started, 1),
         }
@@ -511,7 +631,7 @@ def main(argv=None):
 
     if args.dry_run:
         for case in cases:
-            command = platform_command(args.platform, build_prompt(case, auto_select=auto_select))
+            command = platform_command(args.platform, build_prompt(case, auto_select=auto_select, platform=args.platform))
             print(f"[dry-run] {case['id']} <- {command[:2]}")
         print(f"케이스 {len(cases)}건 (모델 호출 없음)")
         return 0
@@ -520,21 +640,19 @@ def main(argv=None):
     repeats = max(1, args.repeat)
     filenames = [f"{output_stem(case['id'])}{f'-r{i + 1}' if repeats > 1 else ''}.md"
                  for case in cases for i in range(repeats)]
-    if auto_select:
-        artifact_paths = [out_dir / "artifacts" / f"{output_stem(case['id'])}-r{index + 1}"
-                          for case in cases for index in range(repeats)]
-        if len({str(path).casefold() for path in artifact_paths}) != len(artifact_paths):
-            print("오류: 산출물 경로가 충돌합니다", file=sys.stderr)
-            return 1
-    else:
-        artifact_paths = []
+    trace_filenames = [name[:-3] + ".trace.jsonl" for name in filenames] if args.platform in ("codex", "claude") else []
+    artifact_paths = [out_dir / "artifacts" / f"{output_stem(case['id'])}-r{index + 1}"
+                      for case in cases for index in range(repeats)]
+    if len({str(path).casefold() for path in artifact_paths}) != len(artifact_paths):
+        print("오류: 산출물 경로가 충돌합니다", file=sys.stderr)
+        return 1
     if len({name.casefold() for name in filenames}) != len(filenames):
         print("오류: 케이스 결과 파일명이 충돌합니다", file=sys.stderr)
         return 1
     try:
         out_dir.mkdir(parents=True, exist_ok=True)
         if any((out_dir / name).exists() or (out_dir / name).is_symlink()
-               for name in [*filenames, "summary.json"]) or any(
+               for name in [*filenames, *trace_filenames, "summary.json"]) or any(
                    path.exists() or path.is_symlink() for path in artifact_paths):
             print("오류: 결과 파일이 이미 있습니다. 빈 출력 디렉터리를 사용하세요", file=sys.stderr)
             return 1
@@ -559,6 +677,7 @@ def main(argv=None):
             if stop_reason:
                 runs.append({"status": "not_run", "exit_code": None, "seconds": None,
                              "checks": None, "passed_auto_checks": None, "stderr_tail": "",
+                             "usage": None,
                              "selection_status": "unverified" if auto_select else None,
                              "artifacts": [], "artifact_error": None})
                 continue
@@ -570,7 +689,8 @@ def main(argv=None):
                 remaining = min(remaining, max(0.001, args.max_seconds - (time.monotonic() - started)))
             attempted_calls += 1
             run = run_case(case, args.platform, remaining, auto_select=auto_select,
-                           artifact_dir=artifact_dir)
+                           artifact_dir=artifact_dir,
+                           timeout_artifact_dir=out_dir / "artifacts" / f"{output_stem(case['id'])}-r{index + 1}")
             limited = bool(run.get("usage_limit", False)) or (args.platform == "claude" and run["exit_code"] != 0 and any(
                 claude_usage_limit(line) for line in (run["output"] + "\n" + run["stderr_tail"]).splitlines()))
             if limited:
@@ -624,10 +744,20 @@ def main(argv=None):
                         passed = False
                 elif run.get("artifact_error"):
                     passed = False
+            if passed and not auto_select and not checks["has_content_checks"]:
+                passed = None
             suffix = f"-r{index + 1}" if repeats > 1 else ""
             try:
                 with (out_dir / f"{output_stem(case['id'])}{suffix}.md").open("x", encoding="utf-8") as output_file:
                     output_file.write(run["output"] + "\n")
+                trace_filename = None
+                trace_hash = None
+                if args.platform in ("codex", "claude") and run.get("raw_events"):
+                    trace_filename = f"{output_stem(case['id'])}{suffix}.trace.jsonl"
+                    trace_bytes = run["raw_events"].encode("utf-8")
+                    with (out_dir / trace_filename).open("xb") as trace_file:
+                        trace_file.write(trace_bytes)
+                    trace_hash = hashlib.sha256(trace_bytes).hexdigest()
             except OSError as exc:
                 print(f"오류: 결과 저장 실패: {exc}", file=sys.stderr)
                 return 1
@@ -636,10 +766,14 @@ def main(argv=None):
                 "status": "execution_failed" if run["exit_code"] != 0 or limited or artifact_error else "completed",
                 "selection_status": "unverified" if auto_select else None,
                 "load_trace_status": (run.get("selection_trace", {}).get("status", "unverified")
-                                      if auto_select else None),
+                                      if args.platform in ("codex", "claude") else None),
                 "load_trace_reason": (run.get("selection_trace", {}).get("reason")
-                                      if auto_select else None),
-                "event_types": (run.get("event_types", []) if auto_select else []),
+                                      if args.platform in ("codex", "claude") else None),
+                "event_types": (run.get("event_types", []) if args.platform in ("codex", "claude") else []),
+                "usage": run.get("usage"),
+                "observed_skill_reads": run.get("selection_trace", {}).get("skills", []),
+                "trace_file": trace_filename,
+                "trace_sha256": trace_hash,
                 "trace_status": (run.get("selection_trace", {}).get("status") if auto_select else None),
                 "artifact_expectation_met": artifact_expectation if auto_select else None,
                 "artifact_count": len(run.get("artifacts", [])),
@@ -671,13 +805,15 @@ def main(argv=None):
                 "seconds": run["seconds"],
                 "checks": checks,
                 "passed_auto_checks": passed,
+                "semantic_quality": "NOT VERIFIED",
                 "stderr_tail": run["stderr_tail"] if run["exit_code"] != 0 or artifact_error else "",
             })
-            print(f"  r{index + 1}: {'PASS' if passed else 'FAIL'} exit={run['exit_code']} "
+            verdict = "PASS" if passed is True else "NOT VERIFIED" if passed is None else "FAIL"
+            print(f"  r{index + 1}: {verdict} exit={run['exit_code']} "
                   f"{run['seconds']}s checks={checks}")
         passed_count = sum(1 for run in runs if run["passed_auto_checks"])
         not_run = sum(run["status"] == "not_run" for run in runs)
-        case_passed = None if not_run else passed_count == repeats
+        case_passed = None if any(run["passed_auto_checks"] is None for run in runs) else passed_count == repeats
         if case_passed is not True:
             failed += 1
         summary.append({
@@ -690,7 +826,7 @@ def main(argv=None):
             "execution_failed": sum(run["status"] == "execution_failed" for run in runs),
             "not_run": sum(run["status"] == "not_run" for run in runs),
             "passed_count": passed_count,
-            "pass_rate": round(passed_count / repeats, 2) if not not_run else None,
+            "pass_rate": round(passed_count / repeats, 2) if case_passed is not None else None,
             "passed": case_passed,
             "runs": runs,
         })

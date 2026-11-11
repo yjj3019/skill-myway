@@ -1,8 +1,11 @@
 import json
+import io
+import subprocess
 import sys
 import tempfile
 import unittest
 import zipfile
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -30,6 +33,26 @@ class SimulateEval(unittest.TestCase):
     def test_coverage_and_schema_pass(self):
         self.assertEqual(simulate_eval.validate(sample_cases()), [])
 
+    def test_public_cases_cover_each_audit_boundary(self):
+        doc = simulate_eval.load_cases(simulate_eval.DEFAULT_CASES)
+        self.assertEqual(simulate_eval.validate(doc), [])
+        cases = {case["id"]: case for case in doc["cases"]}
+        for skill in simulate_eval.skill_names():
+            for kind in ("missing", "boundary", "injection"):
+                case_id = f"{skill}-audit-{kind}"
+                self.assertIn(case_id, cases)
+                self.assertTrue(cases[case_id]["required"])
+        self.assertTrue(all(case.get("required") or case.get("ends_with") for case in doc["cases"]))
+
+    def test_rhel_missing_identifier_case_checks_response_mode(self):
+        doc = simulate_eval.load_cases(simulate_eval.DEFAULT_CASES)
+        case = next(case for case in doc["cases"] if case["id"] == "rhel-cve-audit-missing")
+        good = run_eval.evaluate_output("CVE 식별자를 알려주세요. 영향 여부는 대화로 답하겠습니다.", case)
+        bad = run_eval.evaluate_output("CVE 식별자를 알려주세요. 대화 후 리포트로 정리하겠습니다.", case)
+        self.assertEqual(good["missing_required"], [])
+        self.assertEqual(good["forbidden_found"], [])
+        self.assertTrue(bad["forbidden_found"])
+
     def test_missing_coverage_fails(self):
         doc = sample_cases()
         doc["cases"] = doc["cases"][:-1]
@@ -44,6 +67,49 @@ class SimulateEval(unittest.TestCase):
         errors = simulate_eval.validate(doc)
         self.assertTrue(any("중복" in e for e in errors))
         self.assertTrue(any("알 수 없는 스킬" in e for e in errors))
+
+    def test_invalid_skill_types_report_errors_without_crashing(self):
+        for invalid in ([], {}, None, 42):
+            with self.subTest(skill=invalid):
+                doc = sample_cases()
+                doc["cases"][0]["skill"] = invalid
+                errors = simulate_eval.validate(doc)
+                self.assertTrue(any("알 수 없는 스킬" in e for e in errors))
+                self.assertTrue(any("커버리지 누락" in e for e in errors))
+
+    def test_whitespace_only_ids_are_rejected(self):
+        for invalid in ("", "   ", "\t\n"):
+            with self.subTest(case_id=invalid):
+                doc = sample_cases()
+                doc["cases"][0]["id"] = invalid
+                self.assertIn("id가 비어 있습니다", simulate_eval.validate(doc))
+
+    def test_max_chars_requires_positive_integer_not_boolean(self):
+        for invalid in (True, False, 0, -1, 1.5, "10", None):
+            with self.subTest(max_chars=invalid):
+                doc = sample_cases()
+                doc["cases"][0]["max_chars"] = invalid
+                self.assertTrue(any("max_chars가 잘못됐습니다" in e for e in simulate_eval.validate(doc)))
+        doc = sample_cases()
+        doc["cases"][0]["max_chars"] = 1
+        self.assertEqual(simulate_eval.validate(doc), [])
+
+    def test_evaluation_entrypoint_rejects_invalid_cases_before_execution(self):
+        doc = sample_cases()
+        doc["cases"][0]["skill"] = []
+        doc["cases"][0]["max_chars"] = True
+        doc["cases"][1]["id"] = " \t "
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "cases.json"
+            path.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+            output = io.StringIO()
+            with redirect_stdout(output), mock.patch.object(run_eval, "run_case") as run_case:
+                result = run_eval.main(["--cases", str(path), "--platform", "codex", "--dry-run"])
+        self.assertEqual(result, 1)
+        self.assertIn("알 수 없는 스킬", output.getvalue())
+        self.assertIn("max_chars가 잘못됐습니다", output.getvalue())
+        self.assertIn("id가 비어 있습니다", output.getvalue())
+        run_case.assert_not_called()
 
     def test_unsafe_request_rejected(self):
         doc = sample_cases()
@@ -79,6 +145,53 @@ class RunEval(unittest.TestCase):
         artifact_as_answer = {"schema_version": 1, "cases": [{"id": "as-03", "request": "충분히 구체적인 자동 선택 요청입니다.", "artifact_policy": "forbidden", "expected_skill": "writing"}]}
         self.assertTrue(run_eval.validate_auto_cases(artifact_as_answer))
 
+    def test_auto_cases_reject_non_string_policy(self):
+        for invalid in ([], {}, None, 1):
+            with self.subTest(policy=invalid):
+                doc = {"schema_version": 1, "cases": [{"id": "as-01", "request": "A sufficiently detailed request", "artifact_policy": invalid}]}
+                self.assertTrue(any("artifact_policy" in error for error in run_eval.validate_auto_cases(doc)))
+
+    def test_timeout_preserves_partial_trace_and_artifacts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp) / "work"
+            workdir.mkdir()
+            (workdir / "partial.txt").write_text("partial", encoding="utf-8")
+            dest = Path(tmp) / "artifacts"
+            timeout = subprocess.TimeoutExpired("codex", 1, output=b'{"type":"item.completed","item":{"type":"agent_message","text":"partial answer"}}\n')
+            with mock.patch.object(run_eval, "prepare_workdir", return_value=workdir), \
+                 mock.patch.object(run_eval.subprocess, "run", side_effect=timeout) as launch:
+                result = run_eval.run_case(sample_cases()["cases"][0], "codex", 1, artifact_dir=dest)
+            self.assertIsNone(result["exit_code"])
+            self.assertIn("partial answer", result["raw_events"])
+            self.assertEqual(result["output"], "partial answer")
+            self.assertEqual(launch.call_args.kwargs["stdin"], subprocess.DEVNULL)
+            self.assertEqual((dest / "partial.txt").read_text(encoding="utf-8"), "partial")
+            self.assertEqual(result["artifacts"][0]["path"], "partial.txt")
+
+    def test_no_content_checks_cannot_pass_and_trace_is_saved(self):
+        doc = sample_cases()
+        case = doc["cases"][0]
+        case["required"] = []
+        case["forbidden"] = []
+        run = {"exit_code": 0, "output": "irrelevant", "stderr_tail": "", "seconds": 0,
+               "raw_events": '{"type":"example"}\n', "usage_limit": False,
+               "artifacts": [], "artifact_error": None}
+        with tempfile.TemporaryDirectory() as tmp:
+            source, out = Path(tmp) / "cases.json", Path(tmp) / "out"
+            source.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+            with mock.patch.object(run_eval, "run_case", return_value=run):
+                code = run_eval.main(["--cases", str(source), "--only", case["skill"],
+                                      "--platform", "codex", "--max-calls", "1", "--out", str(out)])
+            summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+            recorded = summary["cases"][0]["runs"][0]
+            self.assertEqual(code, 1)
+            self.assertIsNone(recorded["passed_auto_checks"])
+            self.assertIsNone(summary["cases"][0]["passed"])
+            self.assertIsNone(summary["cases"][0]["pass_rate"])
+            self.assertEqual(recorded["semantic_quality"], "NOT VERIFIED")
+            self.assertEqual((out / recorded["trace_file"]).read_text(encoding="utf-8"), run["raw_events"])
+            self.assertEqual(len(recorded["trace_sha256"]), 64)
+
     def test_auto_cases_reject_sensitive_values(self):
         request = "개인 정보 확인 요청 " + "test@" + "invalid.test에서 받은 내용을 검사해"
         unsafe = {"schema_version": 1, "cases": [{"id": "as-01", "request": request, "artifact_policy": "forbidden"}]}
@@ -90,6 +203,39 @@ class RunEval(unittest.TestCase):
         self.assertNotIn("'writing'", prompt)
         self.assertNotIn("writing", prompt)
         self.assertIn("일반적인 자동 선택 요청입니다", prompt)
+
+    def test_targeted_prompts_identify_platform_skill_loader(self):
+        case = {"skill": "rhel-cve", "request": "가상 요청입니다"}
+        self.assertIn("Skill tool to load myway:rhel-cve", run_eval.build_prompt(case, platform="claude"))
+        self.assertIn(".agents/skills/rhel-cve/SKILL.md", run_eval.build_prompt(case, platform="codex"))
+        self.assertIn(".grok/skills/rhel-cve/SKILL.md", run_eval.build_prompt(case, platform="grok"))
+
+    def test_claude_load_trace_requires_tool_success_and_matching_body(self):
+        skill = "rhel-cve"
+        body = (simulate_eval.SKILLS / skill / "SKILL.md").read_text(encoding="utf-8").split("---", 2)[-1].strip()
+        call = {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Skill", "id": "tool-1", "input": {"skill": "myway:rhel-cve"}}]}}
+        result = {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "tool-1", "content": "loaded"}]}}
+        payload = {"type": "user", "message": {"content": [{"type": "text", "text": body}]}}
+        finish = {"type": "result", "result": "response"}
+        def observe(events):
+            return run_eval.claude_jsonl_observation("\n".join(json.dumps(x, ensure_ascii=False) for x in events), skill)
+        self.assertEqual(observe([call, result, payload, finish])["trace"]["status"], "loaded")
+        self.assertEqual(observe([call, result, payload, finish])["final_text"], "response")
+        self.assertFalse(observe([finish])["result_error"])
+        self.assertTrue(observe([{"type": "result", "result": "provider error", "is_error": True}])["result_error"])
+        self.assertEqual(observe([call, payload, finish])["trace"]["status"], "unverified")
+        self.assertEqual(observe([call, result, finish])["trace"]["status"], "unverified")
+        result["message"]["content"][0]["is_error"] = True
+        self.assertEqual(observe([call, result, payload, finish])["trace"]["status"], "unverified")
+
+    def test_claude_stream_error_is_not_success_with_zero_exit(self):
+        message = "You've hit your limit - resets later"
+        event = json.dumps({"type": "result", "result": message, "is_error": True})
+        process = subprocess.CompletedProcess([], 0, stdout=event, stderr="")
+        with mock.patch.object(run_eval.subprocess, "run", return_value=process):
+            result = run_eval.run_case(sample_cases()["cases"][0], "claude", 5)
+        self.assertEqual(result["exit_code"], 1)
+        self.assertTrue(result["usage_limit"])
 
     def test_auto_select_is_codex_only(self):
         with self.assertRaises(SystemExit):
@@ -181,13 +327,15 @@ class RunEval(unittest.TestCase):
             shutil.copy2(recalculated, preserved)
             report = check_office.inspect_office_file(preserved)
             wb.close()
+            cached = load_workbook(preserved, data_only=True, read_only=True)
+            try:
+                self.assertEqual(cached.active["A1"].value, 3)
+            finally:
+                cached.close()
         self.assertEqual(report["status"], "PASS")
         self.assertEqual(report["calculation_status"], "PASS")
         self.assertEqual(report["formula_cells"], ["Sheet!A1"])
         self.assertEqual(report["missing_formula_caches"], [])
-        cached = load_workbook(preserved, data_only=True, read_only=True)
-        self.assertEqual(cached.active["A1"].value, 3)
-        cached.close()
 
     def test_office_inspector_flags_external_relationships(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
@@ -360,20 +508,53 @@ class RunEval(unittest.TestCase):
         case_run = {"selection_trace": parsed["trace"]}
         self.assertEqual(case_run["selection_trace"]["status"], "unverified")
         # A real read event would still not establish correctness without private expected answers.
+        body = (simulate_eval.SKILLS / "rhel-cve/SKILL.md").read_text(encoding="utf-8").strip()
         read_event = json.dumps({"type": "item.completed", "item": {"type": "tool_call",
                             "arguments": {"path": "C:/work/.agents/skills/rhel-cve/SKILL.md"},
-                            "output": "name: rhel-cve"}}, ensure_ascii=False)
+                            "output": body}}, ensure_ascii=False)
         read_trace = run_eval.skill_load_any_evidence(read_event)
         self.assertEqual(read_trace["status"], "loaded")
         self.assertNotIn("selection_status", read_trace)
 
+    def test_usage_reports_observed_values_without_filling_unknowns(self):
+        codex = json.dumps({"type": "turn.completed", "usage": {"input_tokens": 20,
+                           "cached_input_tokens": 4, "output_tokens": 0}})
+        usage = run_eval.codex_jsonl_observation(codex)["usage"]
+        self.assertEqual(usage["input_tokens"], 20)
+        self.assertEqual(usage["output_tokens"], 0)
+        self.assertEqual(usage["cache_read_tokens"], 4)
+        self.assertIsNone(usage["cache_write_tokens"])
+        self.assertIsNone(usage["cli_reported_cost_usd"])
+        claude = json.dumps({"type": "result", "result": "ok", "usage": {"input_tokens": 5,
+                            "output_tokens": 3, "cache_read_input_tokens": 2}, "total_cost_usd": 0.1,
+                            "modelUsage": {"example-model": {}}})
+        usage = run_eval.claude_jsonl_observation(claude, "rhel-cve")["usage"]
+        self.assertEqual(usage["input_tokens"], 5)
+        self.assertEqual(usage["cache_read_tokens"], 2)
+        self.assertIsNone(usage["cache_write_tokens"])
+        self.assertEqual(usage["cli_reported_cost_usd"], 0.1)
+        self.assertEqual(usage["models"], ["example-model"])
+        self.assertIsNone(run_eval.codex_jsonl_observation("")["usage"])
+
     def test_codex_tool_read_event_is_load_evidence_only_with_content(self):
+        body = (simulate_eval.SKILLS / "rhel-cve/SKILL.md").read_text(encoding="utf-8").strip()
         event = json.dumps({"type": "item.completed", "item": {"type": "tool_call",
                            "arguments": {"path": "C:/work/.agents/skills/rhel-cve/SKILL.md"},
-                           "output": "name: rhel-cve"}}, ensure_ascii=False)
+                           "output": body}}, ensure_ascii=False)
         result = run_eval.skill_load_any_evidence(event)
         self.assertEqual(result["status"], "loaded")
         self.assertIn("rhel-cve", result["skills"])
+        command = {"type": "item.completed", "item": {"type": "command_execution",
+                   "command": "cat .agents/skills/rhel-cve/SKILL.md", "aggregated_output": body,
+                   "status": "completed", "exit_code": 0}}
+        self.assertEqual(run_eval.skill_load_any_evidence(json.dumps(command))["status"], "loaded")
+        command["item"]["exit_code"] = 1
+        self.assertEqual(run_eval.skill_load_any_evidence(json.dumps(command))["status"], "unverified")
+        command["item"]["exit_code"] = None
+        self.assertEqual(run_eval.skill_load_any_evidence(json.dumps(command))["status"], "unverified")
+        command["item"]["exit_code"] = 0
+        command["item"]["aggregated_output"] = "name: rhel-cve"
+        self.assertEqual(run_eval.skill_load_any_evidence(json.dumps(command))["status"], "unverified")
 
     def test_codex_failed_tool_or_self_report_is_not_load_evidence(self):
         failed = json.dumps({"type": "item.failed", "item": {"type": "tool_call", "arguments": {
@@ -400,14 +581,14 @@ class RunEval(unittest.TestCase):
         cases = {case["id"]: case for case in document["cases"]}
         for case_id in ("evidence-first-visual-02", "code-review-independent-02"):
             case = cases[case_id]
-            self.assertEqual(case["required"], [])
+            self.assertTrue(case["required"])
             self.assertEqual(case["forbidden"], [])
             checks = run_eval.evaluate_output("", case)
-            # 필수 항목이 없어도 빈 응답은 자동 통과하지 않는다.
             self.assertFalse(checks["nonempty"])
-            self.assertEqual(checks["missing_required"], [])
+            self.assertTrue(checks["missing_required"])
             self.assertEqual(checks["forbidden_found"], [])
             self.assertTrue(checks["within_limit"])
+            self.assertTrue(run_eval.evaluate_output("irrelevant", case)["missing_required"])
 
     def test_optional_ending_check_and_schema(self):
         self.assertTrue(run_eval.evaluate_output("내용\n끝. \n", {"ends_with": "끝."})["ends_with_ok"])
@@ -537,6 +718,7 @@ class RunEval(unittest.TestCase):
         self.assertEqual(codex[codex.index("--sandbox") + 1], "workspace-write")
         self.assertNotIn("danger-full-access", codex)
         self.assertEqual(run_eval.platform_command("grok", "hi")[:2], ["grok", "-p"])
+        self.assertIn("--trust", run_eval.platform_command("grok", "hi"))
         with self.assertRaises(ValueError):
             run_eval.platform_command("nope", "hi")
 

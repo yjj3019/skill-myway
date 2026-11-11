@@ -88,7 +88,7 @@ HWP/HWPX 원문 읽기 요청은 `references/hwp-read.md`를 따른다. 읽기�
 - 발표자료의 근거·시각 검증 절차는 `references/deck-evidence.md`를 따른다.
 - 새 문서·발표자료·대형 통합문서는 `references/preview-first.md` 절차를 따른다. 기존 파일의 작은 수정이나 이미 승인한 동일 구성 후속 작업은 재확인을 생략한다.
 - PDF 작업은 `references/pdf.md`를 따른다. 공식 document skills(PDF·DOCX·PPTX·XLSX)는 필요하면 마켓플레이스에서 설치해 쓰고, 그 구현을 복사하지 않는다.
-- 리뷰 심각도와 증거 요건은 `docs/REVIEW-CONTRACT.md`를 따른다. 실행하지 않은 검증을 완료로 쓰지 않는다.
+- 리뷰 심각도와 증거 요건은 `references/review-contract.md`를 따른다. 실행하지 않은 검증을 완료로 쓰지 않는다.
 
 ## 특정 정보가 필요할 때
 

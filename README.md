@@ -100,6 +100,8 @@ python3 scripts/install_skills.py --dest <경로>         # 원하는 위치
 
 `python3 scripts/run_eval.py --help`는 평가 모드를 안내합니다. 실제 모델 평가는 호출 또는 시간 예산이 필요합니다. Codex `workspace-write` 설정은 OS/VM 격리나 네트워크 차단 증거가 아닙니다. 평가 summary에 스킬 로드 이벤트가 없으면 스킬 선택은 미확인으로 남습니다.
 
+테스트 의존성은 `python -m pip install -r requirements-test.txt`로 설치합니다. Grok 평가의 `--trust`는 실행기가 직접 만든 임시 폴더에만 적용되며 샌드박스가 아닙니다. Claude·Codex 추적과 시간 초과 시 부분 산출물에는 민감한 내용이 남을 수 있으므로 결과 폴더를 보호합니다.
+
 Codex/Grok 평가에서 생성 Office 파일 검사도 요청하려면 `--inspect-artifacts`를 사용합니다. 격리 작업 폴더에서 캡처한 PPTX/DOCX/XLSX의 기본 구조, 압축 경로, 매크로 흔적과 외부 관계를 검사합니다. XLSX 계산 캐시·오류는 구조 검사와 분리합니다. 파일 구조 검사는 수식 기대값, 렌더링, 접근성, Excel/PowerPoint 호환성을 보증하지 않습니다.
 
 ## 브랜드 프로필

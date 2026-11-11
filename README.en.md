@@ -100,6 +100,8 @@ Examples and test inputs use reserved fictional identifiers. Current Red Hat, EP
 
 `python3 scripts/run_eval.py --help` shows evaluation options. Every live model evaluation requires a call or time budget. Codex `workspace-write` requests a workspace write boundary; it does not prove OS/VM isolation or network blocking. If the summary has no skill-load event, skill selection remains unverified.
 
+Install test dependencies with `python -m pip install -r requirements-test.txt`. Grok evaluation uses `--trust` only for the runner's own temporary workspace; this is not a sandbox. Claude and Codex traces and partial timeout artifacts can contain sensitive data, so protect the results directory.
+
 Use `--inspect-artifacts` with Codex or Grok targeted evaluations to inspect generated Office files in the isolated work folder. The checker examines basic PPTX/DOCX/XLSX structure, archive paths, macro markers, and external relationships. XLSX formula-cache and error state are reported separately. Structural checks do not prove expected calculation values, rendering quality, accessibility, or Excel/PowerPoint compatibility.
 
 ## Brand Profile

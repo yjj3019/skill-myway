@@ -214,6 +214,15 @@ class OfficeCalculationStatus(unittest.TestCase):
 
 
 class SkillAssets(unittest.TestCase):
+    def test_packaged_shared_preview_copies_match(self):
+        source = (SKILLS_DIR / "office-docs/references/preview-first.md").read_bytes()
+        for skill in ("writing", "incident-rca"):
+            self.assertEqual((SKILLS_DIR / skill / "references/preview-first.md").read_bytes(), source)
+
+    def test_standalone_office_contract_has_no_repository_dependency(self):
+        text = (SKILLS_DIR / "office-docs/references/review-contract.md").read_text(encoding="utf-8")
+        self.assertNotIn("`docs/", text)
+
     def test_every_skill_has_openai_yaml(self):
         for skill in skills():
             meta = skill / "agents/openai.yaml"

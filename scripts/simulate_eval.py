@@ -52,13 +52,13 @@ def validate(cases):
         case_id = item.get("id")
         skill = item.get("skill")
         request = item.get("request")
-        if not isinstance(case_id, str) or not case_id:
+        if not isinstance(case_id, str) or not case_id.strip():
             errors.append("id가 비어 있습니다")
             continue
         if case_id in seen:
             errors.append(f"{case_id}: id가 중복됩니다")
         seen.add(case_id)
-        if skill not in known:
+        if not isinstance(skill, str) or skill not in known:
             errors.append(f"{case_id}: 알 수 없는 스킬 {skill}")
         if not isinstance(request, str) or len(request.strip()) < 10:
             errors.append(f"{case_id}: request가 너무 짧습니다")
@@ -90,9 +90,11 @@ def validate(cases):
                 break
         if "ends_with" in item and (cases["schema_version"] != 2 or not isinstance(item["ends_with"], str) or not item["ends_with"]):
             errors.append(f"{case_id}: ends_with는 schema_version 2의 비어 있지 않은 문자열이어야 합니다")
-        if not isinstance(item.get("max_chars", 8000), int) or item.get("max_chars", 8000) <= 0:
+        max_chars = item.get("max_chars", 8000)
+        if isinstance(max_chars, bool) or not isinstance(max_chars, int) or max_chars <= 0:
             errors.append(f"{case_id}: max_chars가 잘못됐습니다")
-    covered = {item.get("skill") for item in items if isinstance(item, dict)}
+    covered = {item["skill"] for item in items
+               if isinstance(item, dict) and isinstance(item.get("skill"), str)}
     for name in known:
         if name not in covered:
             errors.append(f"커버리지 누락: {name}")

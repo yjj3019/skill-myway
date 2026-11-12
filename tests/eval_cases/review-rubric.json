@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "criteria": [
+    {"id": "meaning", "instruction": "입력의 값, 조건, 불확실성과 사실 및 가설 구분을 보존했는가?", "evidence_required": true},
+    {"id": "completeness", "instruction": "요청한 내용과 구조가 충분히 제시됐는가?", "evidence_required": true},
+    {"id": "completion-evidence", "instruction": "실행, 저장, 렌더, 검토 또는 통과를 주장하면 독립적으로 관측한 근거가 있는가? 해당 주장이 없으면 그 사실을 기록한다.", "evidence_required": true}
+  ]
+}

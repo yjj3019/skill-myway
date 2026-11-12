@@ -93,6 +93,10 @@ def validate(cases):
         max_chars = item.get("max_chars", 8000)
         if isinstance(max_chars, bool) or not isinstance(max_chars, int) or max_chars <= 0:
             errors.append(f"{case_id}: max_chars가 잘못됐습니다")
+        if "forbid_unprovided_advisories" in item and type(item["forbid_unprovided_advisories"]) is not bool:
+            errors.append(f"{case_id}: forbid_unprovided_advisories는 불리언이어야 합니다")
+        if "requires_followup" in item and type(item["requires_followup"]) is not bool:
+            errors.append(f"{case_id}: requires_followup은 불리언이어야 합니다")
     covered = {item["skill"] for item in items
                if isinstance(item, dict) and isinstance(item.get("skill"), str)}
     for name in known:
@@ -114,6 +118,8 @@ def manifest(cases):
             "required": item.get("required", []),
             "forbidden": item.get("forbidden", []),
             "max_chars": item.get("max_chars", 8000),
+            **({"forbid_unprovided_advisories": item["forbid_unprovided_advisories"]} if "forbid_unprovided_advisories" in item else {}),
+            **({"requires_followup": item["requires_followup"]} if "requires_followup" in item else {}),
             **({"ends_with": item["ends_with"]} if "ends_with" in item else {}),
         })
     return {"schema_version": 1, "cases": items}

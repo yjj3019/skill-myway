@@ -2,6 +2,42 @@
 
 스킬·지침 변경이 실제로 나아졌는지 판단하는 절차다. 모델 출력은 흔들리므로 한 번의 성공으로 품질을 주장하지 않는다.
 
+공통 필수 게이트와 스킬·하네스별 평가 항목, 점수별 판정 기준은 `docs/QUALITY-RUBRIC.md`를 사용한다. 배포 요건은 `docs/QUALITY-BAR.md`가 정본이다.
+
+## 의미·완료 근거 검토
+
+`run_eval.py`의 `passed_auto_checks`와 종료 코드 0은 문자열·길이 등 **자동 검사만** 뜻한다. 자동 검사 PASS도 의미 품질은 `NOT VERIFIED`다. 목표와 실측의 관계가 바뀌거나, 단어만 있는 답변, 근거 없는 저장·렌더·테스트 완료 선언을 이 검사만으로 배제할 수 없다. 케이스에 맞는 세부 기준을 사전에 정하고 출력, 입력과 실행 추적·산출물을 보고 별도 검토한다. 출력에 없는 파일이나 화면을 본 것으로 간주하지 않는다.
+
+공개 개발용 공통 기준은 `tests/eval_cases/review-rubric.json`이다. 이 기준은 의미 보존, 요청의 충실성, 완료 주장과 관측 근거를 별도로 판정한다. 케이스에 따라 목표 10·실제 8, 백업 조건, 가설과 확정 원인, 화면 부재, 저장·테스트 수행 여부 등 구체적인 판단 기준을 **실행 전** 별도 rubric에 명시한다. 공개 기준과 공개 사례는 최종 미노출 평가가 아니다.
+
+`scripts/review_evaluation.py`는 출력과 기준의 SHA-256에 결부된 리뷰 기록의 누락·중복·불일치를 검사한다. 사용 예시는 다음과 같다. 결과와 리뷰에는 민감정보가 있을 수 있으므로 저장소 밖에서 보관한다.
+
+```text
+python scripts/review_evaluation.py --template OUTPUT.md RUBRIC.json REVIEW.json
+# REVIEW.json의 reviewer, independent, 각 기준의 status, reason, evidence 작성
+python scripts/review_evaluation.py OUTPUT.md RUBRIC.json REVIEW.json
+```
+
+각 기준은 `PASS`, `FAIL`, `NOT VERIFIED` 중 하나다. 필수 근거가 지정된 기준의 PASS에는 구체적인 근거 위치가 필요하다. `declared_result`는 입력된 판정을 요약한다. `verdict`는 FAIL이 하나라도 있으면 FAIL, 그 외에는 언제나 NOT VERIFIED다. 근거 문자열과 독립성 선언만으로 근거의 진위·검토자 독립성·판정의 정확성을 확인할 수 없기 때문이다. 리뷰 검사 명령의 종료 코드는 검증 완료를 나타내지 않도록 1이다. 동일 작성자의 점검은 `independent: false`로 기록한다. 이 도구는 실제 파일, 로그, 화면이나 테스트의 진위를 자동으로 판정하지 않으며 임의의 거짓 주장 전체를 기계적으로 탐지하지 않는다.
+
+파일 근거의 존재와 무결성을 확인할 때는 각 `evidence` 배열에 `{"path": "relative/file.txt", "sha256": "..."}` 객체를 넣고 `python scripts/review_evaluation.py --evidence-root EVIDENCE_DIR OUTPUT.md RUBRIC.json REVIEW.json`을 실행한다. 해시는 파일의 실제 SHA-256 소문자 64자리다. 경로는 지정된 디렉터리의 상대 경로이며 경로 이탈·링크·존재하지 않는 파일·해시 불일치를 거부한다. 각 파일은 최대 1 MiB다. 검사된 파일이 있으면 `evidence_file_integrity: PASS`를 기록하지만 이는 해당 시점의 바이트 일치만 뜻한다. 파일 내용의 진실성·관련성·평가자의 독립성과 동시 변경 방지는 검증하지 않는다. 일반 문자열 근거는 이 선택적 파일 검사 없이만 사용한다.
+
+평가자가 검토할 때는 (1) 목표·실측과 조건의 관계가 그대로인지, (2) 요청한 구조와 내용이 빠지지 않았는지, (3) 실행·파일·화면 관련 완료 주장이 있으면 해당 실행 로그와 산출물이 있는지 각각 확인한다. 근거가 없는 경우 `NOT VERIFIED`, 반례가 확인되면 `FAIL`이다. 자동 문자열 검사의 결과와 리뷰 결과를 합산하거나 같은 의미의 PASS로 보고하지 않는다.
+
+## 격리 테스트 환경
+
+저장소 밖 가상 환경을 만들고 `requirements-test.txt`를 설치한 Python으로 검증한다. 예를 들어 Windows PowerShell에서는 다음과 같다. `soffice`의 PATH와 버전은 별도 확인한다.
+
+```powershell
+python -m venv "$env:TEMP\skill-myway-test-env"
+& "$env:TEMP\skill-myway-test-env\Scripts\python.exe" -m pip install -r requirements-test.txt
+& "$env:TEMP\skill-myway-test-env\Scripts\python.exe" scripts/validate_repo.py
+& "$env:TEMP\skill-myway-test-env\Scripts\python.exe" scripts/run_tests.py
+& "$env:TEMP\skill-myway-test-env\Scripts\python.exe" -m unittest discover -s tests
+```
+
+고정된 직접 의존성 이외의 하위 의존성까지 완전 고정하거나 OS·네트워크 환경을 격리한 절차는 아니다. 환경과 실패·skip을 기록한다.
+
 ## 평가 축 (0/1/2)
 
 | 축 | 0 | 1 | 2 |
@@ -154,4 +190,23 @@ python3 scripts/blind_review.py --cases cases.json \
    - 요약의 `schema_version`은 3이다. 실패 실행의 `checks`, 미실행 또는 내용 조건이 없는 실행의 `passed_auto_checks`는 `null`일 수 있으며 기존 소비자는 추가 필드와 상태를 처리해야 한다.
    - 현재 실행기는 기준선·후보의 자동 대응과 블라인드 판정을 제공하지 않는다. 모든 실제 평가에는 `--max-calls` 또는 `--max-seconds` 중 하나 이상이 필요하며 둘 다 지정할 수 있다. 먼저 도달한 상한으로 남은 케이스를 미실행으로 기록한다. 둘이 동시에 충족되면 호출 상한을 우선 기록한다.
    - 시간 상한은 다음 호출의 시작 여부와 모델 CLI에 전달하는 timeout을 제한한다. 작업 폴더 준비가 끝난 뒤에도 잔여 시간을 확인해 소진됐으면 호출하지 않는다. 프로세스 생성·산출물 회수·정리, OS 스케줄링 및 자식 프로세스 종료까지 포함한 엄격한 전체 벽시계 기한은 보장하지 않는다. 비용 상한이나 네트워크·OS 격리도 강제하지 않는다. Codex `workspace-write`는 OS·VM 격리의 증거가 아니다.
+   - `process_timeout_seconds`는 프로세스에 전달한 제한값, `preparation_seconds`는 작업 폴더 준비 시간, `process_seconds`는 프로세스 호출에서 복귀하기까지 측정 시간이다. `seconds`에는 준비·호출·일부 결과 처리가 포함되며 정리 작업은 포함되지 않는다. OS의 프로세스 생성·종료 지연으로 측정 시간은 제한값을 넘을 수 있다.
+   - 가상 사례에서만 선택적으로 `forbid_unprovided_advisories: true`를 지정하면 요청에 없던 실제 연도 형식의 CVE/RHSA가 답변에 새로 나오면 자동 검사에서 실패한다. 요청에 포함된 식별자와 예약된 2099년 예시는 허용한다. 실제 보안 조사의 정확성이나 다른 형태의 허구 식별자를 판정하지 않는다.
+   - `run_eval.py`의 `requires_followup: true` 사례는 첫 응답의 자동 검사 결과만 기록하므로 전체 사례를 통과시키지 않는다. 후속 대화를 실행하려면 아래의 `dialogue_eval.py`를 사용한다. 첫 응답에 특정 단어가 없다는 이유만으로 미래 행동의 실패를 추정하지 않는다.
+
+### 후속 대화 자동 검사
+
+`dialogue_eval.py`는 별도의 평가 도구다. `run_eval.py`가 첫 턴을 실행한 뒤 자동으로 호출하지 않는다. 사전 정의된 첫 요청과 후속 요청을 같은 Claude 또는 Codex 세션에서 각각 실행하고 세션 ID 일치·스킬 로드 추적·요청별 자동 검사·작업 폴더에 남은 파일을 기록한다. Grok의 세션 재개는 지원하지 않는다. 다음은 공개 개발 사례이며 출력 디렉터리는 아직 존재하지 않아야 한다.
+
+```text
+python scripts/dialogue_eval.py --platform codex --case rhel-cve-audit-missing --out EVAL_DIR --max-calls 2 --max-seconds 300 --timeout 120
+```
+
+호출 수는 두 턴을 각각 센다. 예산 소진·첫 턴 오류·세션 ID 누락 또는 불일치·시간 초과·스킬 로드 미확인 시 전체 후속 결과는 `NOT VERIFIED`다. 확인된 자동 조건이나 파일 정책 위반은 `AUTO FAIL`이다. 설치된 스킬 트리도 시작 시점과 각 턴의 해시를 비교해 변경을 검출한다. 두 턴의 자동 조건을 만족해도 `AUTO PASS`는 문자열·로컬 파일 스냅샷에 한정되며 의미 정확성은 `NOT VERIFIED`로 남는다. 한 번도 보이지 않은 파일의 생성 후 삭제, 외부 경로 변경, 모델의 안전한 행동이나 참값을 보증하지 않는다. 각 턴의 출력·원본 추적, 예산, 요청 해시 및 요약은 지정한 디렉터리에 저장하므로 민감정보를 검토하고 보호한다. 사례는 `tests/eval_cases/dialogue_cases.json`에서 사전에 정한다.
+
+### 프로세스 종료 범위
+
+평가 프로세스는 `scripts/process_control.py`를 거친다. Windows에서는 `scripts/windows_job.py`가 실행 대기 중인 부트스트랩을 breakaway가 허용되지 않는 Job Object에 넣은 뒤 실제 명령을 시작한다. 시간 초과로 감독 프로세스가 종료되거나 평가 프로세스가 사라지면 Job 핸들이 닫혀 Job에 속한 프로세스가 종료된다. Job 생성·할당 실패 시 실제 명령을 시작하지 않는다. 통상적인 `CreateProcess` 자손은 Job에 포함되지만 WMI 등 Job 바깥에서 생성된 프로세스까지 보장하지 않는다. 운영체제의 범위와 예외는 [Microsoft Job Objects 문서](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects)를 따른다.
+
+POSIX에서는 새 세션의 프로세스 그룹을 시간 초과 시 종료한다. 별도 세션으로 이탈한 프로세스까지 보장하지 않으며, 현재 Windows 이외의 실제 동작은 별도 확인이 필요하다. 어떤 방식도 네트워크 격리나 OS 스케줄링을 포함한 엄격한 전체 벽시계 상한을 제공하지 않는다.
    - 결과는 `docs/EVALUATION-RESULTS-2026-11-01.md`에 기록했다.

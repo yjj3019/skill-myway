@@ -94,6 +94,24 @@ class SimulateEval(unittest.TestCase):
         doc["cases"][0]["max_chars"] = 1
         self.assertEqual(simulate_eval.validate(doc), [])
 
+    def test_advisory_check_flag_requires_boolean(self):
+        doc = sample_cases()
+        doc["cases"][0]["forbid_unprovided_advisories"] = "yes"
+        self.assertTrue(any("forbid_unprovided_advisories" in error for error in simulate_eval.validate(doc)))
+        doc["cases"][0]["requires_followup"] = 1
+        self.assertTrue(any("requires_followup" in error for error in simulate_eval.validate(doc)))
+
+    def test_unprovided_advisory_detection_preserves_input_and_fake_examples(self):
+        identifier = "CVE-" + "2024-" + "12345"
+        case = {"request": "가상 질문입니다", "forbid_unprovided_advisories": True}
+        self.assertEqual(run_eval.evaluate_output(identifier, case)["unexpected_advisory_count"], 1)
+        case["request"] += " " + identifier
+        self.assertEqual(run_eval.evaluate_output(identifier, case)["unexpected_advisory_count"], 0)
+        self.assertEqual(run_eval.evaluate_output("CVE-2099-00001", case)["unexpected_advisory_count"], 0)
+        case["forbid_unprovided_advisories"] = False
+        case["request"] = "가상 질문입니다"
+        self.assertEqual(run_eval.evaluate_output(identifier, case)["unexpected_advisory_count"], 0)
+
     def test_evaluation_entrypoint_rejects_invalid_cases_before_execution(self):
         doc = sample_cases()
         doc["cases"][0]["skill"] = []
@@ -131,6 +149,42 @@ class SimulateEval(unittest.TestCase):
 
 
 class RunEval(unittest.TestCase):
+    def test_first_turn_can_pass_checks_but_followup_is_not_verified(self):
+        doc = sample_cases()
+        case = next(c for c in doc["cases"] if c["skill"] == "rhel-cve")
+        case.update({"required": ["CVE"], "requires_followup": True, "forbid_unprovided_advisories": True})
+        run = {"exit_code": 0, "output": "CVE 식별자를 알려주세요.", "stderr_tail": "",
+               "seconds": 0, "artifacts": [], "artifact_error": None}
+        with tempfile.TemporaryDirectory() as tmp:
+            source, out = Path(tmp) / "cases.json", Path(tmp) / "out"
+            source.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+            with mock.patch.object(run_eval, "run_case", return_value=run):
+                status = run_eval.main(["--cases", str(source), "--only", "rhel-cve",
+                                        "--platform", "codex", "--max-calls", "1", "--out", str(out)])
+            result = json.loads((out / "summary.json").read_text(encoding="utf-8"))["cases"][0]
+            self.assertEqual(status, 1)
+            self.assertTrue(result["runs"][0]["passed_auto_checks"])
+            self.assertEqual(result["runs"][0]["followup_status"], "NOT VERIFIED")
+            self.assertIsNone(result["passed"])
+
+    def test_unprovided_advisory_fails_execution_checks(self):
+        doc = sample_cases()
+        case = next(c for c in doc["cases"] if c["skill"] == "rhel-cve")
+        case["forbid_unprovided_advisories"] = True
+        run = {"exit_code": 0, "output": "결과 " + "CVE-" + "2024-" + "12345",
+               "stderr_tail": "", "seconds": 0, "artifacts": [], "artifact_error": None}
+        with tempfile.TemporaryDirectory() as tmp:
+            source, out = Path(tmp) / "cases.json", Path(tmp) / "out"
+            source.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+            with mock.patch.object(run_eval, "run_case", return_value=run):
+                status = run_eval.main(["--cases", str(source), "--only", "rhel-cve",
+                                        "--platform", "codex", "--max-calls", "1", "--out", str(out)])
+            summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+            observed = summary["cases"][0]["runs"][0]
+            self.assertEqual(status, 1)
+            self.assertFalse(observed["passed_auto_checks"])
+            self.assertEqual(observed["checks"]["unexpected_advisory_count"], 1)
+
     def test_auto_cases_reject_expected_answers(self):
         clean = {"schema_version": 1, "cases": [{"id": "as-01", "request": "충분히 구체적인 자동 선택 요청입니다.", "artifact_policy": "forbidden"}]}
         self.assertEqual(run_eval.validate_auto_cases(clean), [])
@@ -159,14 +213,40 @@ class RunEval(unittest.TestCase):
             dest = Path(tmp) / "artifacts"
             timeout = subprocess.TimeoutExpired("codex", 1, output=b'{"type":"item.completed","item":{"type":"agent_message","text":"partial answer"}}\n')
             with mock.patch.object(run_eval, "prepare_workdir", return_value=workdir), \
-                 mock.patch.object(run_eval.subprocess, "run", side_effect=timeout) as launch:
+                 mock.patch.object(run_eval.process_control, "run", side_effect=timeout) as launch:
                 result = run_eval.run_case(sample_cases()["cases"][0], "codex", 1, artifact_dir=dest)
             self.assertIsNone(result["exit_code"])
+            self.assertEqual(result["process_timeout_seconds"], 1)
+            self.assertGreaterEqual(result["preparation_seconds"], 0)
+            self.assertGreaterEqual(result["process_seconds"], 0)
             self.assertIn("partial answer", result["raw_events"])
             self.assertEqual(result["output"], "partial answer")
             self.assertEqual(launch.call_args.kwargs["stdin"], subprocess.DEVNULL)
             self.assertEqual((dest / "partial.txt").read_text(encoding="utf-8"), "partial")
             self.assertEqual(result["artifacts"][0]["path"], "partial.txt")
+
+    def test_capture_failure_is_recorded_without_hiding_original_error(self):
+        process = subprocess.CompletedProcess([], 0, stdout="ok", stderr="")
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(run_eval.process_control, "run", return_value=process), \
+             mock.patch.object(run_eval, "capture_artifacts", side_effect=OSError("capture unavailable")):
+            result = run_eval.run_case(sample_cases()["cases"][0], "grok", 5,
+                                       artifact_dir=Path(tmp) / "artifacts")
+        self.assertEqual(result["exit_code"], 1)
+        self.assertIn("capture unavailable", result["artifact_error"])
+
+    def test_real_process_timeout_stops_direct_child(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp) / "work"
+            workdir.mkdir()
+            command = [sys.executable, "-c", "import time; time.sleep(15)"]
+            with mock.patch.object(run_eval, "prepare_workdir", return_value=workdir), \
+                 mock.patch.object(run_eval, "platform_command", return_value=command):
+                result = run_eval.run_case(sample_cases()["cases"][0], "codex", 0.5)
+            self.assertIsNone(result["exit_code"])
+            self.assertIn("timeout", result["stderr_tail"])
+            self.assertEqual(result["process_timeout_seconds"], 0.5)
+            self.assertLess(result["process_seconds"], 10)
 
     def test_no_content_checks_cannot_pass_and_trace_is_saved(self):
         doc = sample_cases()
@@ -186,6 +266,7 @@ class RunEval(unittest.TestCase):
             recorded = summary["cases"][0]["runs"][0]
             self.assertEqual(code, 1)
             self.assertIsNone(recorded["passed_auto_checks"])
+            self.assertEqual(recorded["overall_status"], "NOT VERIFIED")
             self.assertIsNone(summary["cases"][0]["passed"])
             self.assertIsNone(summary["cases"][0]["pass_rate"])
             self.assertEqual(recorded["semantic_quality"], "NOT VERIFIED")
@@ -232,7 +313,7 @@ class RunEval(unittest.TestCase):
         message = "You've hit your limit - resets later"
         event = json.dumps({"type": "result", "result": message, "is_error": True})
         process = subprocess.CompletedProcess([], 0, stdout=event, stderr="")
-        with mock.patch.object(run_eval.subprocess, "run", return_value=process):
+        with mock.patch.object(run_eval.process_control, "run", return_value=process):
             result = run_eval.run_case(sample_cases()["cases"][0], "claude", 5)
         self.assertEqual(result["exit_code"], 1)
         self.assertTrue(result["usage_limit"])
@@ -302,7 +383,7 @@ class RunEval(unittest.TestCase):
             workspace.mkdir()
             with mock.patch.object(run_eval, "prepare_workdir", return_value=workspace), \
                     mock.patch.object(run_eval.time, "monotonic", return_value=11.0), \
-                    mock.patch.object(run_eval.subprocess, "run") as launch:
+                    mock.patch.object(run_eval.process_control, "run") as launch:
                 result = run_eval.run_case(sample_cases()["cases"][0], "claude", 10, deadline=10.0)
             self.assertTrue(result["not_started"])
             launch.assert_not_called()
@@ -315,7 +396,7 @@ class RunEval(unittest.TestCase):
             process = subprocess.CompletedProcess([], 0, stdout="ok", stderr="")
             with mock.patch.object(run_eval, "prepare_workdir", return_value=workspace), \
                     mock.patch.object(run_eval.time, "monotonic", return_value=9.0), \
-                    mock.patch.object(run_eval.subprocess, "run", return_value=process) as launch:
+                    mock.patch.object(run_eval.process_control, "run", return_value=process) as launch:
                 result = run_eval.run_case(sample_cases()["cases"][0], "codex", 15, deadline=10.0)
             self.assertEqual(result["exit_code"], 0)
             self.assertEqual(launch.call_args.kwargs["timeout"], 1.0)
@@ -538,6 +619,7 @@ class RunEval(unittest.TestCase):
             self.assertEqual(inspected_run["office_calculation_status"], "NOT VERIFIED")
             self.assertEqual(inspected_run["status"], "completed")
             self.assertTrue(inspected_run["passed_auto_checks"])
+            self.assertEqual(inspected_run["overall_status"], "NOT VERIFIED")
 
     def test_inspected_office_artifact_structure_error_fails_run(self):
         doc = sample_cases()
@@ -749,13 +831,13 @@ class RunEval(unittest.TestCase):
     def test_limit_in_diagnostics_detected_before_tail_truncation(self):
         msg = "You've hit your 5-hour limit · resets 3:50am (Asia/Seoul)"
         process = mock.Mock(returncode=1, stdout="warning\n" + msg, stderr="x" * 900)
-        with mock.patch.object(run_eval.subprocess, "run", return_value=process):
+        with mock.patch.object(run_eval.process_control, "run", return_value=process):
             result = run_eval.run_case(sample_cases()["cases"][0], "claude", 5)
         self.assertTrue(result["usage_limit"])
         self.assertEqual(result["usage_limit_message"], msg)
         process.returncode = 0
         process.stdout = msg
-        with mock.patch.object(run_eval.subprocess, "run", return_value=process):
+        with mock.patch.object(run_eval.process_control, "run", return_value=process):
             self.assertFalse(run_eval.run_case(sample_cases()["cases"][0], "claude", 5)["usage_limit"])
 
     def test_usage_limit_requires_exact_error_message(self):

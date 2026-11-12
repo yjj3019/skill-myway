@@ -654,9 +654,10 @@
       "skill": "rhel-cve",
       "id": "rhel-cve-audit-missing",
       "request": "RHEL 9 취약점 영향 여부를 묻지만 CVE 식별자가 없다. 필요한 입력을 물어봐. 파일은 요청하지 않았으며 식별자를 받은 뒤에도 대화 답변 모드를 유지해야 한다.",
+      "forbid_unprovided_advisories": true,
+      "requires_followup": true,
       "required": [
-        "CVE",
-        "대화"
+        "CVE"
       ],
       "forbidden": [
         "리포트로 정리하겠습니다",

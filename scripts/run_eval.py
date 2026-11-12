@@ -23,12 +23,14 @@ import subprocess
 import sys
 import tempfile
 import time
+import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 import simulate_eval  # noqa: E402
 import check_office  # noqa: E402
+import process_control  # noqa: E402
 
 DEFAULT_CASES = simulate_eval.DEFAULT_CASES
 DEFAULT_AUTO_CASES = ROOT / "tests" / "eval_cases" / "auto_select_cases.json"
@@ -48,6 +50,10 @@ def build_prompt(case, auto_select=False, platform=None):
     elif platform in ("codex", "grok"):
         directory = ".agents" if platform == "codex" else ".grok"
         instruction = f"먼저 {directory}/skills/{skill}/SKILL.md를 읽고 해당 지침을 적용해."
+        if platform == "codex":
+            instruction += (f" 파일을 UTF-8로 온전히 읽어 출력해. 예: python -X utf8 -c "
+                            f"\"from pathlib import Path; print(Path('{directory}/skills/{skill}/SKILL.md').read_text(encoding='utf-8'))\". "
+                            "출력 인코딩이 깨지면 로드된 것으로 가정하지 마.")
     else:
         instruction = f"다음 작업에 '{skill}' 스킬 지침을 적용해 수행해."
     return (
@@ -247,6 +253,9 @@ def evaluate_output(output, case):
     missing = [item for item in case.get("required", []) if not requirement_met(item, lowered)]
     forbidden = [item for item in case.get("forbidden", []) if requirement_met(item, lowered)]
     max_chars = case.get("max_chars", 8000)
+    pattern = next(pattern for kind, pattern in simulate_eval.validate_repo.SENSITIVE if kind == "real-advisory-id")
+    expected_ids = set(pattern.findall(case.get("request", "")))
+    unexpected_ids = set(pattern.findall(output)) - expected_ids if case.get("forbid_unprovided_advisories") else set()
     return {
         "missing_required": missing,
         "forbidden_found": forbidden,
@@ -255,6 +264,7 @@ def evaluate_output(output, case):
         "has_content_checks": bool(case.get("required") or case.get("ends_with")),
         "ends_with_ok": output.rstrip().endswith(case["ends_with"]) if "ends_with" in case else True,
         "within_limit": len(output) <= max_chars,
+        "unexpected_advisory_count": len(unexpected_ids),
     }
 
 
@@ -444,8 +454,10 @@ def claude_usage_limit(text):
 def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, timeout_artifact_dir=None, deadline=None):
     prompt = build_prompt(case, auto_select=auto_select, platform=platform)
     command = platform_command(platform, prompt)
-    started = time.time()
+    started = time.perf_counter()
     workdir = prepare_workdir(platform)
+    prepared = time.perf_counter()
+    process_started = None
     try:
         if deadline is not None:
             time_left = deadline - time.monotonic()
@@ -453,7 +465,8 @@ def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, time
                 return {"not_started": True}
             timeout = min(timeout, time_left)
         # 빈 임시 디렉터리에서 실행해 저장소 지침·훅·미커밋 변경이 평가에 섞이지 않게 한다.
-        result = subprocess.run(
+        process_started = time.perf_counter()
+        result = process_control.run(
             command,
             cwd=str(workdir),
             stdin=subprocess.DEVNULL,
@@ -463,6 +476,7 @@ def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, time
             errors="replace",
             timeout=timeout,
         )
+        process_seconds = time.perf_counter() - process_started
         raw_events = result.stdout if platform in ("codex", "claude") else ""
         event_types = []
         trace = {"status": "unverified", "reason": "trace unavailable"}
@@ -508,7 +522,10 @@ def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, time
             "artifacts": artifacts,
             "office_inspection": office_inspection,
             "artifact_error": artifact_error,
-            "seconds": round(time.time() - started, 1),
+            "seconds": round(time.perf_counter() - started, 1),
+            "preparation_seconds": round(prepared - started, 3),
+            "process_seconds": round(process_seconds, 3),
+            "process_timeout_seconds": timeout,
         }
     except OSError as exc:
         return {
@@ -522,9 +539,13 @@ def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, time
             "artifact_error": None,
             "artifacts": [],
             "office_inspection": [],
-            "seconds": round(time.time() - started, 1),
+            "seconds": round(time.perf_counter() - started, 1),
+            "preparation_seconds": round(prepared - started, 3),
+            "process_seconds": round(time.perf_counter() - process_started, 3) if process_started is not None else None,
+            "process_timeout_seconds": timeout,
         }
     except subprocess.TimeoutExpired as exc:
+        process_seconds = time.perf_counter() - process_started if process_started is not None else None
         def partial_text(value):
             return value.decode("utf-8", errors="replace") if isinstance(value, bytes) else (value or "")
 
@@ -549,7 +570,10 @@ def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, time
             "artifact_error": artifact_error,
             "artifacts": artifacts,
             "office_inspection": [],
-            "seconds": round(time.time() - started, 1),
+            "seconds": round(time.perf_counter() - started, 1),
+            "preparation_seconds": round(prepared - started, 3),
+            "process_seconds": round(process_seconds, 3) if process_seconds is not None else None,
+            "process_timeout_seconds": timeout,
         }
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
@@ -687,6 +711,8 @@ def main(argv=None):
             if stop_reason:
                 runs.append({"status": "not_run", "exit_code": None, "seconds": None,
                              "checks": None, "passed_auto_checks": None, "stderr_tail": "",
+                             "overall_status": "NOT VERIFIED",
+                             "followup_status": "NOT VERIFIED" if case.get("requires_followup") else "NOT APPLICABLE",
                              "usage": None,
                              "selection_status": "unverified" if auto_select else None,
                              "artifacts": [], "artifact_error": None})
@@ -704,6 +730,8 @@ def main(argv=None):
                 stop_reason = "max_seconds"
                 runs.append({"status": "not_run", "exit_code": None, "seconds": None,
                              "checks": None, "passed_auto_checks": None, "stderr_tail": "",
+                             "overall_status": "NOT VERIFIED",
+                             "followup_status": "NOT VERIFIED" if case.get("requires_followup") else "NOT APPLICABLE",
                              "usage": None,
                              "selection_status": "unverified" if auto_select else None,
                              "artifacts": [], "artifact_error": None})
@@ -714,7 +742,8 @@ def main(argv=None):
                 stop_reason = "claude_usage_limit"
             checks = evaluate_output(run["output"], case) if run["exit_code"] == 0 and not limited else None
             passed = bool(checks and checks["nonempty"] and not checks["missing_required"]
-                          and not checks["forbidden_found"] and checks["within_limit"] and checks["ends_with_ok"])
+                          and not checks["forbidden_found"] and checks["within_limit"] and checks["ends_with_ok"]
+                          and not checks["unexpected_advisory_count"])
             artifact_expectation = None
             office_inspection = []
             if auto_select or args.inspect_artifacts:
@@ -820,17 +849,24 @@ def main(argv=None):
                 "artifact_error": run.get("artifact_error"),
                 "exit_code": run["exit_code"],
                 "seconds": run["seconds"],
+                "preparation_seconds": run.get("preparation_seconds"),
+                "process_seconds": run.get("process_seconds"),
+                "process_timeout_seconds": run.get("process_timeout_seconds"),
                 "checks": checks,
                 "passed_auto_checks": passed,
+                "overall_status": "FAIL" if passed is False else "NOT VERIFIED",
+                "followup_status": "NOT VERIFIED" if case.get("requires_followup") else "NOT APPLICABLE",
                 "semantic_quality": "NOT VERIFIED",
                 "stderr_tail": run["stderr_tail"] if run["exit_code"] != 0 or artifact_error else "",
             })
-            verdict = "PASS" if passed is True else "NOT VERIFIED" if passed is None else "FAIL"
+            verdict = "AUTO CHECK PASS; QUALITY NOT VERIFIED" if passed is True else "AUTO CHECK NOT VERIFIED" if passed is None else "AUTO CHECK FAIL"
             print(f"  r{index + 1}: {verdict} exit={run['exit_code']} "
                   f"{run['seconds']}s checks={checks}")
         passed_count = sum(1 for run in runs if run["passed_auto_checks"])
         not_run = sum(run["status"] == "not_run" for run in runs)
-        case_passed = None if any(run["passed_auto_checks"] is None for run in runs) else passed_count == repeats
+        case_passed = (None if any(run["passed_auto_checks"] is None for run in runs) else
+                       False if any(run["passed_auto_checks"] is False for run in runs) else
+                       None if case.get("requires_followup") else True)
         if case_passed is not True:
             failed += 1
         summary.append({

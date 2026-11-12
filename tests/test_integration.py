@@ -24,6 +24,146 @@ def skills():
 
 
 class PackageAllSkills(unittest.TestCase):
+    def test_skill_selection_rejects_linked_directory(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d) / "skills"
+            skill = root / "example"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text("example", encoding="utf-8")
+            with mock.patch.object(package_skill, "SKILLS", root), \
+                    mock.patch.object(Path, "is_symlink", autospec=True,
+                                      side_effect=lambda path: path.name == "example"):
+                with self.assertRaises(ValueError):
+                    package_skill.skill_dirs(["all"])
+
+    def test_skill_selection_rejects_parent_directory(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d) / "skills"
+            root.mkdir()
+            outside = Path(d) / "outside"
+            outside.mkdir()
+            (outside / "SKILL.md").write_text("example", encoding="utf-8")
+            with mock.patch.object(package_skill, "SKILLS", root):
+                with self.assertRaises(SystemExit):
+                    package_skill.skill_dirs(["../outside"])
+
+    def test_package_rejects_linked_files(self):
+        with tempfile.TemporaryDirectory() as d:
+            skill = Path(d) / "example"
+            skill.mkdir()
+            (skill / "SKILL.md").write_text("example", encoding="utf-8")
+            (skill / "untrusted.txt").write_text("content", encoding="utf-8")
+            with mock.patch.object(Path, "is_symlink", autospec=True,
+                                   side_effect=lambda path: path.name == "untrusted.txt"):
+                with self.assertRaises(ValueError):
+                    package_skill.build(skill, Path(d) / "out", VERSION)
+            self.assertFalse((Path(d) / "out").exists())
+
+    def test_standard_mit_declarations_with_comments_are_accepted(self):
+        with tempfile.TemporaryDirectory() as d:
+            skill = Path(d) / "example"
+            skill.mkdir()
+            original = (SKILLS_DIR / "document-authoring/LICENSE").read_bytes()
+            (skill / "LICENSE").write_bytes(original)
+            for index, value in enumerate(("MIT", "'MIT' # note", '"MIT" # note', "MIT # note")):
+                (skill / "SKILL.md").write_text(f"---\nname: example\nlicense: {value}\n---\n", encoding="utf-8")
+                dest, _, _ = package_skill.build(skill, Path(d) / f"out-{index}", VERSION)
+                with zipfile.ZipFile(dest) as archive:
+                    self.assertEqual(archive.read("example/LICENSE"), original)
+
+    def test_unsupported_license_expression_is_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            skill = Path(d) / "example"
+            skill.mkdir()
+            (skill / "LICENSE").write_bytes((SKILLS_DIR / "document-authoring/LICENSE").read_bytes())
+            for value in ("MIT OR Apache-2.0", '"MIT OR Apache-2.0"', "", "''", '""'):
+                (skill / "SKILL.md").write_text(f"---\nname: example\nlicense: {value}\n---\n", encoding="utf-8")
+                with self.subTest(value=value), self.assertRaises(ValueError):
+                    package_skill.build(skill, Path(d) / "out", VERSION)
+
+    def test_duplicate_license_declarations_are_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            skill = Path(d) / "example"
+            skill.mkdir()
+            (skill / "SKILL.md").write_text(
+                "---\nname: example\nlicense: MIT\nlicense: Apache-2.0\n---\n", encoding="utf-8")
+            (skill / "LICENSE").write_bytes((SKILLS_DIR / "document-authoring/LICENSE").read_bytes())
+            with self.assertRaises(ValueError):
+                package_skill.build(skill, Path(d) / "out", VERSION)
+
+    def test_package_keeps_checked_license_if_source_is_removed(self):
+        with tempfile.TemporaryDirectory() as d:
+            skill = Path(d) / "example"
+            skill.mkdir()
+            (skill / "SKILL.md").write_text("---\nname: example\nlicense: MIT\n---\n", encoding="utf-8")
+            license_file = skill / "LICENSE"
+            original = (SKILLS_DIR / "document-authoring/LICENSE").read_bytes()
+            license_file.write_bytes(original)
+            resolve = package_skill.skill_license
+            def remove_after_validation(*args):
+                result = resolve(*args)
+                license_file.unlink()
+                return result
+            with mock.patch.object(package_skill, "skill_license", side_effect=remove_after_validation):
+                dest, _, _ = package_skill.build(skill, Path(d) / "out", VERSION)
+            with zipfile.ZipFile(dest) as archive:
+                self.assertEqual(archive.read("example/LICENSE"), original)
+
+    def test_package_keeps_the_skill_declaration_that_was_checked(self):
+        with tempfile.TemporaryDirectory() as d:
+            skill = Path(d) / "example"
+            skill.mkdir()
+            instruction = skill / "SKILL.md"
+            original = b"---\nname: example\nlicense: MIT\n---\n"
+            instruction.write_bytes(original)
+            (skill / "LICENSE").write_bytes((SKILLS_DIR / "document-authoring/LICENSE").read_bytes())
+            resolve = package_skill.skill_license
+            def change_declaration(*args):
+                result = resolve(*args)
+                instruction.write_bytes(original.replace(b"MIT", b"Apache-2.0"))
+                return result
+            with mock.patch.object(package_skill, "skill_license", side_effect=change_declaration):
+                dest, _, _ = package_skill.build(skill, Path(d) / "out", VERSION)
+            with zipfile.ZipFile(dest) as archive:
+                self.assertEqual(archive.read("example/SKILL.md"), original)
+
+    def test_mit_check_rejects_missing_owner_and_modified_terms(self):
+        original = (SKILLS_DIR / "document-authoring/LICENSE").read_bytes()
+        package_skill.validate_mit_text(original.replace(b"\n", b"\r\n"))
+        for altered in (original.replace(b"skill-myway contributors", b""),
+                        original.replace(b"substantial portions", b"selected portions")):
+            with self.subTest(altered=altered), self.assertRaises(ValueError):
+                package_skill.validate_mit_text(altered)
+
+    def test_declared_mit_requires_complete_license_text(self):
+        with tempfile.TemporaryDirectory() as d:
+            skill = Path(d) / "example"
+            skill.mkdir()
+            (skill / "LICENSE").write_text("MIT License\n", encoding="utf-8")
+            for value in ("MIT", "'MIT'", '"MIT"', "MIT # comment", "'MIT' # comment", '"MIT" # comment'):
+                (skill / "SKILL.md").write_text(f"---\nname: example\nlicense: {value}\n---\n", encoding="utf-8")
+                with self.subTest(value=value), self.assertRaises(ValueError):
+                    package_skill.build(skill, Path(d) / "out", VERSION)
+            self.assertFalse((Path(d) / "out").exists())
+
+    def test_package_contains_the_license_that_was_validated(self):
+        with tempfile.TemporaryDirectory() as d:
+            skill = Path(d) / "example"
+            skill.mkdir()
+            (skill / "SKILL.md").write_text("---\nname: example\nlicense: MIT\n---\n", encoding="utf-8")
+            source = skill / "LICENSE"
+            original = (SKILLS_DIR / "document-authoring/LICENSE").read_bytes()
+            source.write_bytes(original)
+            resolve = package_skill.skill_license
+            def mutate_after_validation(*args):
+                result = resolve(*args)
+                source.write_text("changed", encoding="utf-8")
+                return result
+            with mock.patch.object(package_skill, "skill_license", side_effect=mutate_after_validation):
+                dest, _, _ = package_skill.build(skill, Path(d) / "out", VERSION)
+            with zipfile.ZipFile(dest) as archive:
+                self.assertEqual(archive.read("example/LICENSE"), original)
+
     def test_declared_mit_cannot_fall_back_to_apache(self):
         with tempfile.TemporaryDirectory() as d:
             skill = Path(d) / "example"
@@ -137,6 +277,72 @@ class PackageAllSkills(unittest.TestCase):
 
 
 class InstallTargets(unittest.TestCase):
+    def test_linked_source_does_not_replace_existing_skill(self):
+        with tempfile.TemporaryDirectory() as d:
+            skill = Path(d) / "source/example"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text("new", encoding="utf-8")
+            (skill / "untrusted.txt").write_text("content", encoding="utf-8")
+            target = Path(d) / "dest/example"
+            target.mkdir(parents=True)
+            (target / "SKILL.md").write_text("original", encoding="utf-8")
+            with mock.patch.object(install_skills, "SRC", skill.parent), \
+                    mock.patch.object(Path, "is_symlink", autospec=True,
+                                      side_effect=lambda path: path.name == "untrusted.txt"):
+                with self.assertRaises(ValueError):
+                    install_skills.install(target.parent, force=True)
+            self.assertEqual((target / "SKILL.md").read_text(encoding="utf-8"), "original")
+
+    def test_license_directory_does_not_replace_existing_skill(self):
+        with tempfile.TemporaryDirectory() as d:
+            skill = Path(d) / "source/example"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text("example", encoding="utf-8")
+            (skill / "LICENSE").mkdir()
+            target = Path(d) / "dest/example"
+            target.mkdir(parents=True)
+            (target / "SKILL.md").write_text("original", encoding="utf-8")
+            with mock.patch.object(install_skills, "SRC", skill.parent):
+                with self.assertRaises(ValueError):
+                    install_skills.install(target.parent, force=True)
+            self.assertEqual((target / "SKILL.md").read_text(encoding="utf-8"), "original")
+
+    def test_install_keeps_the_skill_declaration_that_was_checked(self):
+        with tempfile.TemporaryDirectory() as d:
+            skill = Path(d) / "source/example"
+            skill.mkdir(parents=True)
+            instruction = skill / "SKILL.md"
+            original = b"---\nname: example\nlicense: MIT\n---\n"
+            instruction.write_bytes(original)
+            (skill / "LICENSE").write_bytes((SKILLS_DIR / "document-authoring/LICENSE").read_bytes())
+            resolve = install_skills.skill_license
+            def change_declaration(*args):
+                result = resolve(*args)
+                instruction.write_bytes(original.replace(b"MIT", b"Apache-2.0"))
+                return result
+            with mock.patch.object(install_skills, "SRC", skill.parent), \
+                    mock.patch.object(install_skills, "skill_license", side_effect=change_declaration):
+                install_skills.install(Path(d) / "dest")
+            self.assertEqual((Path(d) / "dest/example/SKILL.md").read_bytes(), original)
+
+    def test_install_contains_the_license_that_was_validated(self):
+        with tempfile.TemporaryDirectory() as d:
+            skill = Path(d) / "source/example"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text("---\nname: example\nlicense: MIT\n---\n", encoding="utf-8")
+            source = skill / "LICENSE"
+            original = (SKILLS_DIR / "document-authoring/LICENSE").read_bytes()
+            source.write_bytes(original)
+            resolve = install_skills.skill_license
+            def mutate_after_validation(*args):
+                result = resolve(*args)
+                source.write_text("changed", encoding="utf-8")
+                return result
+            with mock.patch.object(install_skills, "SRC", skill.parent), \
+                    mock.patch.object(install_skills, "skill_license", side_effect=mutate_after_validation):
+                install_skills.install(Path(d) / "dest")
+            self.assertEqual((Path(d) / "dest/example/LICENSE").read_bytes(), original)
+
     def test_declared_mit_without_license_does_not_replace_existing(self):
         with tempfile.TemporaryDirectory() as d:
             skill = Path(d) / "source/example"

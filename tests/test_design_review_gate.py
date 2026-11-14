@@ -86,7 +86,7 @@ class DesignReviewGateTests(unittest.TestCase):
                 item["artifacts"][0]["source"]["path"] = path
                 with self.assertRaises((OSError, ValueError)):
                     gate.check(self.root, item)
-        linked = self.root / "page-1.png"
+        linked = self.root.resolve(strict=True) / "page-1.png"
         original = Path.is_symlink
         with mock.patch.object(Path, "is_symlink", lambda p: p == linked or original(p)):
             with self.assertRaises(ValueError):

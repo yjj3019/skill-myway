@@ -182,6 +182,7 @@ def main(argv=None):
             raise ValueError("invalid cases")
         dialogue = validate_dialogue(simulate_eval.load_cases(args.dialogues), cases["cases"])[args.case]
         case = next(case for case in cases["cases"] if case["id"] == args.case)
+        input_manifest = simulate_eval.manifest({"cases": [case]})["cases"][0]
         out = Path(args.out)
         out.mkdir(parents=True, exist_ok=False)
     except (OSError, ValueError, KeyError, StopIteration) as exc:
@@ -192,7 +193,7 @@ def main(argv=None):
     workdir = None
     summary = {"schema_version": 1, "case": case["id"], "platform": args.platform,
                "max_calls": args.max_calls, "max_seconds": args.max_seconds, "attempted_calls": 0,
-               "input_manifest": simulate_eval.manifest({"cases": [case]})["cases"][0],
+               "input_manifest": input_manifest,
                "followup_request_sha256": hashlib.sha256(dialogue["followup"]["request"].encode("utf-8")).hexdigest(),
                "dialogue_contract_sha256": hashlib.sha256(json.dumps(dialogue, ensure_ascii=False, sort_keys=True,
                                                                        separators=(",", ":")).encode("utf-8")).hexdigest(),

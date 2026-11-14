@@ -146,9 +146,102 @@ class SimulateEval(unittest.TestCase):
         for item in first["cases"]:
             self.assertEqual(len(item["request_sha256"]), 64)
             self.assertEqual(len(item["skill_sha256"]), 64)
+            self.assertEqual(len(item["skill_tree_sha256"]), 64)
+            self.assertEqual(item["skill_files_sha256"]["SKILL.md"], item["skill_sha256"])
+
+    def test_manifest_tracks_add_change_and_removal_of_reference(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            skill = root / "sample"
+            skill.mkdir()
+            (skill / "SKILL.md").write_text("skill", encoding="utf-8")
+            document = {"cases": [{"id": "sample-1", "skill": "sample", "request": "example"}]}
+            with mock.patch.object(simulate_eval, "SKILLS", root):
+                base = simulate_eval.manifest(document)["cases"][0]
+                refdir = skill / "references"
+                refdir.mkdir()
+                ref = refdir / "guide.md"
+                ref.write_text("one", encoding="utf-8")
+                added = simulate_eval.manifest(document)["cases"][0]
+                ref.write_text("two", encoding="utf-8")
+                changed = simulate_eval.manifest(document)["cases"][0]
+                ref.unlink()
+                removed = simulate_eval.manifest(document)["cases"][0]
+            self.assertNotEqual(base["skill_tree_sha256"], added["skill_tree_sha256"])
+            self.assertNotEqual(added["skill_tree_sha256"], changed["skill_tree_sha256"])
+            self.assertEqual(base["skill_tree_sha256"], removed["skill_tree_sha256"])
+            self.assertEqual(base["skill_sha256"], changed["skill_sha256"])
+
+    def test_manifest_rejects_linked_skill_content(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            skill = root / "sample"
+            skill.mkdir()
+            (skill / "SKILL.md").write_text("skill", encoding="utf-8")
+            linked = skill / "linked.md"
+            linked.write_text("content", encoding="utf-8")
+            original = Path.is_symlink
+            with mock.patch.object(simulate_eval, "SKILLS", root), \
+                 mock.patch.object(Path, "is_symlink", lambda p: p == linked or original(p)):
+                with self.assertRaises(ValueError):
+                    simulate_eval.skill_tree_hashes("sample")
+
+    def test_schema_rejects_boolean_missing_fields_and_unknown_fields(self):
+        for kind in ("boolean", "missing", "unknown"):
+            with self.subTest(kind=kind):
+                doc = sample_cases()
+                if kind == "boolean":
+                    doc["schema_version"] = True
+                elif kind == "missing":
+                    del doc["cases"][0]["required"]
+                else:
+                    doc["cases"][0]["max_char"] = 1
+                self.assertTrue(simulate_eval.validate(doc))
+
+    def test_schema_rejects_invalid_optional_artifact_settings(self):
+        for key, invalid in (("artifact_policy", "unexpected"), ("expected_extensions", ["../bad"])):
+            with self.subTest(key=key):
+                doc = sample_cases()
+                doc["cases"][0][key] = invalid
+                self.assertTrue(any(key in error for error in simulate_eval.validate(doc)))
+
+    def test_loader_rejects_duplicate_keys_including_nested(self):
+        for raw in ('{"schema_version": 1, "schema_version": 2}',
+                    '{"cases": [{"id": "a", "id": "b"}]}'):
+            with self.subTest(raw=raw), mock.patch.object(Path, "read_text", return_value=raw):
+                with self.assertRaises(ValueError):
+                    simulate_eval.load_cases("case.json")
 
 
 class RunEval(unittest.TestCase):
+    def test_misleading_auto_pass_never_becomes_verified_success(self):
+        source_cases = simulate_eval.load_cases(simulate_eval.DEFAULT_CASES)
+        source_cases = {item["id"]: item for item in source_cases["cases"]}
+        examples = (
+            ("research-brief-extraction-loss-01", "18명이며 3쪽에서 확인했다."),
+            ("research-brief-search-negation-01", "지원하지 않는 경우가 없으므로 해당 환경은 지원한다."),
+            ("document-authoring-ocr-table-01", "12건은 성공, 8건은 실패이며 2쪽에서 확인했다."),
+        )
+        for case_id, answer in examples:
+            with self.subTest(case_id=case_id), tempfile.TemporaryDirectory() as tmp:
+                doc = sample_cases()
+                example = source_cases[case_id]
+                index = next(i for i, case in enumerate(doc["cases"]) if case["skill"] == example["skill"])
+                doc["cases"][index] = example
+                path, out = Path(tmp) / "cases.json", Path(tmp) / "out"
+                path.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+                result = {"exit_code": 0, "output": answer, "stderr_tail": "", "seconds": 0,
+                          "artifacts": [], "artifact_error": None}
+                with mock.patch.object(run_eval, "run_case", return_value=result), redirect_stdout(io.StringIO()):
+                    status = run_eval.main(["--cases", str(path), "--only", example["skill"],
+                                            "--platform", "codex", "--max-calls", "1", "--out", str(out)])
+                report = json.loads((out / "summary.json").read_text(encoding="utf-8"))["cases"][0]
+                self.assertEqual(status, 0)  # command reports automatic checks, not quality
+                self.assertTrue(report["auto_checks_passed"])
+                self.assertIsNone(report["passed"])
+                self.assertEqual(report["overall_status"], "NOT VERIFIED")
+                self.assertEqual(report["runs"][0]["semantic_quality"], "NOT VERIFIED")
+
     def test_first_turn_can_pass_checks_but_followup_is_not_verified(self):
         doc = sample_cases()
         case = next(c for c in doc["cases"] if c["skill"] == "rhel-cve")
@@ -268,7 +361,7 @@ class RunEval(unittest.TestCase):
             self.assertIsNone(recorded["passed_auto_checks"])
             self.assertEqual(recorded["overall_status"], "NOT VERIFIED")
             self.assertIsNone(summary["cases"][0]["passed"])
-            self.assertIsNone(summary["cases"][0]["pass_rate"])
+            self.assertIsNone(summary["cases"][0]["auto_check_pass_rate"])
             self.assertEqual(recorded["semantic_quality"], "NOT VERIFIED")
             self.assertEqual((out / recorded["trace_file"]).read_text(encoding="utf-8"), run["raw_events"])
             self.assertEqual(len(recorded["trace_sha256"]), 64)
@@ -376,6 +469,32 @@ class RunEval(unittest.TestCase):
             self.assertEqual(summary["stop_reason"], "max_seconds")
             self.assertEqual(summary["budget"]["attempted_calls"], 0)
             self.assertEqual(summary["cases"][0]["not_run"], 1)
+
+    def test_manifest_preparation_consumes_start_budget(self):
+        doc = sample_cases()
+        case = doc["cases"][0]
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "cases.json"
+            source.write_text(json.dumps(doc), encoding="utf-8")
+            out = Path(tmp) / "out"
+            clock = [0.0]
+            real_manifest = run_eval.simulate_eval.manifest
+
+            def slow_manifest(*args, **kwargs):
+                result = real_manifest(*args, **kwargs)
+                clock[0] = 11.0
+                return result
+
+            with mock.patch.object(run_eval.time, "monotonic", side_effect=lambda: clock[0]), \
+                 mock.patch.object(run_eval.simulate_eval, "manifest", side_effect=slow_manifest), \
+                 mock.patch.object(run_eval, "run_case") as call:
+                args = ["--cases", str(source), "--out", str(out), "--only", case["skill"],
+                        "--max-seconds", "10"]
+                self.assertEqual(run_eval.main(args), 1)
+                call.assert_not_called()
+            summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["stop_reason"], "max_seconds")
+            self.assertEqual(summary["budget"]["attempted_calls"], 0)
 
     def test_expired_deadline_after_workspace_preparation_does_not_launch(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -819,9 +938,9 @@ class RunEval(unittest.TestCase):
                 self.assertEqual(run_eval.main(["--cases", str(source), "--out", str(out), "--repeat", "2", "--max-calls", "2"]), 1)
                 self.assertEqual(call.call_count, 1)
             summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
-            self.assertEqual(summary["schema_version"], 3)
+            self.assertEqual(summary["schema_version"], 4)
             self.assertEqual(summary["stop_reason"], "claude_usage_limit")
-            self.assertIsNone(summary["cases"][0]["pass_rate"])
+            self.assertIsNone(summary["cases"][0]["auto_check_pass_rate"])
             self.assertIsNone(summary["cases"][0]["runs"][1]["passed_auto_checks"])
             self.assertEqual(summary["cases"][0]["runs"][0]["status"], "execution_failed")
             self.assertIsNone(summary["cases"][0]["runs"][0]["checks"])

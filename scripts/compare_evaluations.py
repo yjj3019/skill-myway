@@ -9,6 +9,7 @@ from collections import Counter
 MAX_BYTES = 1024 * 1024
 MAX_TRIALS = 10000
 CONTEXT_KEYS = ("cases", "rubric", "scorer", "environment")
+ADDITIONAL_CONTEXT_KEYS = ("model", "execution_budget", "tool_configuration", "prompt")
 VERDICTS = ("PASS", "FAIL", "UNJUDGED", "TIMEOUT", "ERROR", "NOT_RUN")
 
 
@@ -24,15 +25,17 @@ def _label(value):
 def summarize(record):
     """Count declared trial pairs; matching declarations do not establish truth."""
     _object(record, ("schema_version", "judgment_source", "context", "planned", "trials"))
-    if type(record["schema_version"]) is not int or record["schema_version"] != 1:
+    if type(record["schema_version"]) is not int or record["schema_version"] not in (1, 2):
         raise ValueError("unsupported schema")
+    version = record["schema_version"]
+    context_keys = CONTEXT_KEYS + ADDITIONAL_CONTEXT_KEYS if version == 2 else CONTEXT_KEYS
     if record["judgment_source"] not in ("human", "automatic"):
         raise ValueError("bad judgment source")
     contexts = record["context"]
     _object(contexts, ("baseline", "candidate"))
     for side in ("baseline", "candidate"):
-        _object(contexts[side], CONTEXT_KEYS)
-        for field in CONTEXT_KEYS:
+        _object(contexts[side], context_keys)
+        for field in context_keys:
             value = contexts[side][field]
             if value is not None and (not _label(value) or value.upper() in ("UNKNOWN", "N/A", "TBD", "NONE")):
                 raise ValueError("bad context value")
@@ -78,10 +81,12 @@ def summarize(record):
     if seen != expected:
         raise ValueError("missing planned trial")
 
-    missing = [field for field in CONTEXT_KEYS if any(contexts[side][field] is None for side in ("baseline", "candidate"))]
-    different = [field for field in CONTEXT_KEYS if all(contexts[side][field] is not None for side in ("baseline", "candidate"))
+    missing = [field for field in context_keys if any(contexts[side][field] is None for side in ("baseline", "candidate"))]
+    if version == 1:
+        missing.extend(ADDITIONAL_CONTEXT_KEYS)
+    different = [field for field in context_keys if all(contexts[side][field] is not None for side in ("baseline", "candidate"))
                  and contexts["baseline"][field] != contexts["candidate"][field]]
-    return {"schema_version": 1, "judgment_source": record["judgment_source"],
+    return {"schema_version": version, "judgment_source": record["judgment_source"],
             "context_status": "UNVERIFIED" if missing or different else "DECLARED_MATCH",
             "missing_context": missing, "different_context": different, "pairs": counts,
             "status_counts": {side: {status: side_counts[side][status] for status in VERDICTS}

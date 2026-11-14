@@ -7,3 +7,7 @@ node_modules/
 /.claude/
 /dist/
 /eval-results*/
+/.test-tmp/
+/.test-venv/
+/.test-deps/
+/.manual-eval/

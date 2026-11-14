@@ -1,5 +1,44 @@
 # 라이선스·출처 검토
 
+## 가상 원장 평가 시범 (2026-11-14)
+
+`benchmarks/ledger-pilot/`의 과제·결함 기준 구현·공개 검사는 이번 작업을 위해 자체 작성한 가상 자료다. 외부 코드·데이터·자산·의존성을 옮기지 않았다. 기준 구현은 의도적으로 결함이 있으며 운영 코드가 아니다. 저장소의 기존 라이선스 및 과거 권리 미확인 범위는 변경하지 않는다.
+
+## 장애 시간 경계 평가 (2026-11-14)
+
+자체 작성한 가상 시간·영향 구간과 이 저장소의 기존 지침만 사용했다. 외부 소스·데이터·이미지·글꼴·의존성을 추가하지 않았고 기존 라이선스와 과거 권리 미확인 범위는 유지한다.
+
+## 실측 반례 보강 (2026-11-14)
+
+기존 프로젝트의 자체 가상 평가 결과에서 요구사항을 추출해 6개 스킬 지침과 7개 개발용 사례를 새로 작성했다. 외부 저장소 소스·문서·데이터·이미지·폰트·의존성은 새로 반입하지 않았다. 기존 라이선스 본문과 과거 권리관계의 미확인 범위는 유지한다. 이 기록은 법률상 무위험을 보증하지 않는다.
+
+## 공통 워크플로 시뮬레이션 수정 (2026-11-14)
+
+Windows 프로세스 수명 재설계에는 [Microsoft Job Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects), [Python venv](https://docs.python.org/3/library/venv.html), [Python 실행 옵션](https://docs.python.org/3/using/cmdline.html)의 API 동작을 확인했다. `scripts/process_control.py`와 `scripts/windows_job.py`의 변경은 기존 프로젝트 코드와 요구에 맞춰 작성했으며 공식 문서의 원문·예제 코드를 가져오지 않았다.
+
+`scripts/run_eval.py`, `scripts/simulate_eval.py`, `tests/test_process_control.py`와 신규 `tests/test_workflow_simulation.py`의 이번 변경은 현재 프로젝트의 입력·오류·산출물 계약에 맞춰 작성했다. 외부 저장소 코드·문장·데이터·템플릿·폰트·이미지·새 의존성을 도입하지 않았다. 기존 라이선스 본문·배포 고지·선행 권리 미확인 범위는 유지한다. 외부 원문의 단순 재서술로 이용 제한이 사라진다고 가정하지 않는다. 이 기록은 신규 차용 범위에 대한 설명이며 법적 무위험 보증은 아니다.
+
+## 디자인 하네스 조사 (2026-11-14)
+
+- 공개 설명에서 역할별 디자인 검토와 산출물 검증의 관점을 확인했다: [Open Design Agent](https://github.com/dragonoasis/open-design-agent/tree/e2c458d02feef0bc7d1c6819570af1b34de90698)(MIT 표시), [design-engineering](https://github.com/AgentsORG/design-engineering/tree/a79af5c5161dfa36a5cf2ab6423528936bc76df3)(MIT 표시), [taste-skill](https://github.com/Leonxlnx/taste-skill/tree/f6b76575f949707b4e3c37cd86cb44b0b98643e8)(MIT 표시), [better-web-ui](https://github.com/aladicf/better-web-ui/tree/af21dcfa71d83104a9e0beb04ffedf79f800f53c)(별도 제한 라이선스 표시). 저장소 수준 표시는 개별 자산·의존성의 권리를 확정하지 않는다.
+- 외부 코드·설치 스크립트·문장·이미지·템플릿이나 폰트를 복사하지 않고, 이 저장소의 검토 요구에 맞춰 파일 정합성 도구와 지침을 자체 작성했다. `better-web-ui`는 재판매 및 소스 공개 관련 별도 조건이 있어 MIT로 취급하지 않았다. 어떤 도구도 설치하지 않았다.
+- 신규 구현이라는 사실만으로 실질적 유사성이나 기존 권리 관계에 대한 법적 적합성을 보증하지 않는다. 독립 법률 검토는 수행하지 않았다.
+
+## 시각 디자인 스킬 강화 (2026-11-14)
+
+기존 프로젝트의 디자인 계획과 사용자 요구를 바탕으로 구성 선택·이미지 브리프·매체별 검토 지침 및 가상 사례를 작성했다. 외부 코드·템플릿·이미지·글꼴·문장을 복사하거나 의존성을 추가하지 않았다. `visual-design`의 기존 MIT 선언은 유지하며, 신규 파일의 실질적 유사성이나 과거 자료의 권리 문제를 법적으로 확정한 것은 아니다.
+
+## 사용자 지정 11개 저장소 검토 (2026-11-14)
+
+- 고정 HEAD와 저장소별 공개 안내·루트 라이선스·주요 고지의 확인 범위는 `REPOSITORY-REVIEW-2026-11-14.md`에 기록했다. 코드·문장·이미지·모델·테스트·설치 스크립트나 의존성을 복사·설치하지 않았으며 이 프로젝트의 스킬 절차와 평가 사례를 새로 작성했다.
+- Open WebUI는 별도 브랜딩 조건이 있고, Trafilatura는 이전 버전의 라이선스가 다르며, Kiwi·DeepSeek Harness·TalkAbout·OpenSearch에는 별도 고지나 데이터·의존성 확인 범위가 있다. 저장소 수준 표시를 개별 구성요소의 권리나 배포 적합성의 증거로 취급하지 않는다.
+- 이 기록과 자체 작성은 개별 표현의 실질적 유사성, 기존 공개 이력의 권리 또는 법적 적합성을 보증하지 않는다. 독립 법률 검토와 과거 미확인 원본의 권리 검토는 수행하지 않았다.
+
+## 평가 비교 방식 조사 (2026-11-14)
+
+- 공개 저장소 [skill-eval-harness](https://github.com/adewale/skill-eval-harness)(저장소 표시 MIT), [harness-eval](https://github.com/redhat-community-ai-tools/harness-eval)(저장소 표시 Apache-2.0), [skillguard](https://github.com/OSSAfrica/skillguard)(저장소 표시 MIT)의 공개 설명을 읽어 평가 조건, 설정 검토, 보안 검사의 적용 범위를 비교했다. 저장소 수준 표시는 개별 파일이나 제3자 자산의 권리 확인이 아니다.
+- 외부 코드·문장·테스트·데이터·의존성을 복사하거나 설치하지 않았다. 기존 비교기의 입력 계약을 이 프로젝트 요구에 맞게 변경했다. 해당 저장소의 라이선스를 이 프로젝트 전체에 적용하거나 기존 권리관계가 해결됐다고 판단하지 않는다. 유사성 대조와 독립 법률 검토는 수행하지 않았다.
+
 기준일 2026-11-01. 당시 이 저장소의 기본 라이선스는 Apache-2.0이었다. 통합 검토 대상 저장소의 라이선스 상태와 반영 방식을 기록한다. 현재 적용 범위는 아래 MIT 전환 기록을 확인한다.
 
 ## MIT 전환 범위 (2026-11-11, 작업 트리)

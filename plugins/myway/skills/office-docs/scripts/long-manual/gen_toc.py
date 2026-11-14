@@ -21,9 +21,9 @@ def main():
 
     txt = subprocess.run(
         ["pdftotext", "-layout", pdf, "-"],
-        capture_output=True, text=True, check=True,
+        capture_output=True, text=True, check=True, timeout=120,
     ).stdout
-    pages = txt.split("\x0c")  # form feed = 페이지 경계
+    pages = [norm(page) for page in txt.split("\x0c")]  # 정규화는 페이지당 한 번
 
     with open(titles_path, encoding="utf-8") as f:
         titles = json.load(f)
@@ -32,7 +32,7 @@ def main():
     for t in titles:
         key, found = norm(t), None
         for i, pg in enumerate(pages, start=1):
-            if key in norm(pg):
+            if key in pg:
                 found = i
                 break
         toc.append({"title": t, "page": found})

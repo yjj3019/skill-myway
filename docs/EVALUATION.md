@@ -1,5 +1,9 @@
 # 스킬 평가
 
+최고 성과를 비교·입증할 수 있는 조건과 남은 준비물은 `docs/MEASUREMENT-READINESS-2026-11-14.md`에 정리한다. 문서 준비는 실제 독립 평가나 최고 성과 달성을 뜻하지 않는다.
+
+전체 11개 스킬의 공개 개발용 실측 입력, 쌍별 미실행 장부와 실행·개선 절차는 `docs/ALL-SKILL-MEASUREMENT-PLAN.md`를 따른다. 이 자료의 준비는 모델 호출이나 품질 향상 검증을 뜻하지 않는다.
+
 스킬·지침 변경이 실제로 나아졌는지 판단하는 절차다. 모델 출력은 흔들리므로 한 번의 성공으로 품질을 주장하지 않는다.
 
 공통 필수 게이트와 스킬·하네스별 평가 항목, 점수별 판정 기준은 `docs/QUALITY-RUBRIC.md`를 사용한다. 배포 요건은 `docs/QUALITY-BAR.md`가 정본이다.
@@ -24,7 +28,15 @@ python scripts/review_evaluation.py OUTPUT.md RUBRIC.json REVIEW.json
 
 평가자가 검토할 때는 (1) 목표·실측과 조건의 관계가 그대로인지, (2) 요청한 구조와 내용이 빠지지 않았는지, (3) 실행·파일·화면 관련 완료 주장이 있으면 해당 실행 로그와 산출물이 있는지 각각 확인한다. 근거가 없는 경우 `NOT VERIFIED`, 반례가 확인되면 `FAIL`이다. 자동 문자열 검사의 결과와 리뷰 결과를 합산하거나 같은 의미의 PASS로 보고하지 않는다.
 
+추출 자료 공개 개발 사례의 사전 수동 판정 기준: `research-brief-extraction-loss-01`은 18의 단위·표 관계·페이지를 확정하지 않는지, `research-brief-search-negation-01`은 원문의 미지원과 검색 조각의 차이를 보존하는지, `document-authoring-ocr-table-01`은 12와 8의 행 관계·단위·페이지를 만들지 않는지 확인한다. 해당 위치에 실제로 접근했다는 허구의 주장도 실패다. 세 공개 사례와 자동 문자열 조건만으로 일반적 모델 품질을 입증하지 않는다.
+
 ## 격리 테스트 환경
+
+일반 타깃 평가에서도 `artifact_policy`와 `expected_extensions`를 manifest에 보존한다. 파일 필수 케이스는 `--platform codex --cases FILE --inspect-artifacts`가 필요하며, 검사 설정이 없으면 모델 호출 전에 거부한다. 검사 모드에서 필수·금지 파일과 확장자를 확인한다. 파일 정책을 관측하지 않은 실행은 자동 통과로 집계하지 않는다. 파일이 조건부이고 보존·검사를 요청하지 않았다면 생성 금지 프롬프트를 사용한다. 프롬프트는 쓰기 차단 장치가 아니다.
+
+시간 초과는 `runs[].status: timeout`과 케이스별 `timed_out`으로 집계한다. `completed + execution_failed + timed_out + not_run = repeats`다. 종료 코드가 0이어도 Codex 실패 이벤트가 관측되면 실행 실패다.
+
+오프라인 고장 주입 절차는 `docs/WORKFLOW-SIMULATION-2026-11-14.md`를 따른다. 외부 경로 쓰기가 허용되지 않은 세션에서는 `TEMP`·`TMP`를 승인된 프로젝트 내부 임시 경로로 지정하고 기존 Python 환경을 사용한다. 아래 환경 생성 예시는 해당 경로 사용이 허용될 때만 적용한다.
 
 저장소 밖 가상 환경을 만들고 `requirements-test.txt`를 설치한 Python으로 검증한다. 예를 들어 Windows PowerShell에서는 다음과 같다. `soffice`의 PATH와 버전은 별도 확인한다.
 
@@ -74,7 +86,7 @@ python -m venv "$env:TEMP\skill-myway-test-env"
 
 - 개발 중 살펴보는 사례와 최종 확인용 사례를 분리한다. 최종 사례·정답·판정 메모는 지침 작성이나 반복 튜닝에 제공하지 않고, 요청과 판정 기준을 최종 실행 전에 고정한다. 이 저장소에 공개된 사례는 노출된 개발·회귀 사례이지 비공개 최종 평가가 아니다.
 - 최종 결과를 보고 지침이나 기준을 수정했다면 그 사례는 개발용으로 전환하고, 별도로 준비한 미노출 사례로 다시 확인한다. 미노출 사례가 없으면 독립 확인은 **미검증**이다. 실제 데이터는 사용 권한과 민감정보를 확인하고 기록에는 최소한만 남긴다.
-- 빈 임시 작업 디렉터리를 사용해 저장소의 지침·훅 혼입을 줄이되, 사용자·전역 설정, 캐시, 네트워크와 플랫폼별 자동 로드까지 격리된다고 가정하지 않는다. 접근 가능한 환경과 로드된 지침을 확인·기록하고 확인하지 못하면 한계로 남긴다. manifest의 스킬 본문 해시만으로 참조 파일과 런타임 전체가 고정되지는 않는다.
+- 빈 임시 작업 디렉터리를 사용해 저장소의 지침·훅 혼입을 줄이되, 사용자·전역 설정, 캐시, 네트워크와 플랫폼별 자동 로드까지 격리된다고 가정하지 않는다. 접근 가능한 환경과 로드된 지침을 확인·기록하고 확인하지 못하면 한계로 남긴다. 스킬 트리 해시는 생성 시점의 파일 내용을 기록하며 실제 로드와 런타임 전체를 보장하지 않는다.
 
 ### 실험 기록 예시
 
@@ -106,11 +118,11 @@ python -m venv "$env:TEMP\skill-myway-test-env"
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "judgment_source": "human",
   "context": {
-    "baseline": {"cases": "set-a", "rubric": "r1", "scorer": "s1", "environment": "e1"},
-    "candidate": {"cases": "set-a", "rubric": "r1", "scorer": "s1", "environment": "e1"}
+    "baseline": {"cases": "set-a", "rubric": "r1", "scorer": "s1", "environment": "e1", "model": "m1", "execution_budget": "b1", "tool_configuration": "t1", "prompt": "p1"},
+    "candidate": {"cases": "set-a", "rubric": "r1", "scorer": "s1", "environment": "e1", "model": "m1", "execution_budget": "b1", "tool_configuration": "t1", "prompt": "p1"}
   },
   "planned": [{"case": "sample-a", "repeat": 1}, {"case": "sample-b", "repeat": 1}],
   "trials": [
@@ -121,6 +133,8 @@ python -m venv "$env:TEMP\skill-myway-test-env"
 ```
 
 출력은 예정·양쪽 판정 완료·미완료 쌍과 양쪽 상태별 건수만 제공한다. 동일한 조건을 선언해도 실제 환경이나 사전 계획의 일치를 증명하지 않는다. 조건 값이 없으면 `null`로 표시하며, 누락이나 차이가 있으면 맥락을 `UNVERIFIED`로 남긴다. 입력에는 민감정보를 넣지 않는다. 출력은 사례 식별자와 조건 값을 포함하지 않지만, 입력 파일 자체는 별도로 보호한다.
+
+버전 2는 모델·실행 예산·도구 구성·공통 과제 프롬프트도 비교한다. 각 값은 실제 버전이나 설정을 구별할 수 있는 비민감 식별자로 기록한다. 의도한 스킬 변경은 비교 대상이므로 공통 과제 프롬프트와 구별한다. 기존 버전 1은 계속 집계하지만 네 추가 조건이 없어 맥락은 항상 `UNVERIFIED`다. `DECLARED_MATCH`도 선언값의 일치일 뿐 실행 증거나 판정의 진위를 확인하지 않는다.
 
 ## 한계
 
@@ -173,7 +187,7 @@ python3 scripts/blind_review.py --cases cases.json \
 
 1. **가상 테스트** — `python3 scripts/simulate_eval.py`
    - `tests/eval_cases/cases.json`의 케이스 스키마·id 중복·스킬 커버리지·민감 패턴을 검사한다.
-   - 케이스별 요청 해시와 스킬 본문 해시로 manifest를 만든다. 모델은 호출하지 않는다.
+   - 케이스별 요청과 스킬 트리의 파일별 해시 및 목록을 담은 manifest 버전 2를 만든다. `__pycache__`는 제외하고 링크·정규 파일이 아닌 경로는 거부한다. 본문 해시 `skill_sha256`은 호환을 위해 유지한다. 모델은 호출하지 않는다.
 2. **실제 테스트** — `python3 scripts/run_eval.py --platform claude [--max-calls N] [--max-seconds N]`
    - 각 케이스에 스킬 지침을 적용해 모델을 실행하고 출력을 저장한다.
    - 필수 요소·금지 패턴·최대 길이를 자동 검사한다. `eval-results/summary.json`에 기록한다. Codex/Grok에서 Office 산출물 검사도 요청하면 `--inspect-artifacts`를 사용한다. 파일 구조·압축 경로·매크로 흔적·외부 관계를 확인하고 XLSX 계산 캐시 상태는 별도 표시한다. Claude 플러그인은 평가 작업 폴더 밖에서 로드되므로 이 옵션과 함께 사용할 수 없다.
@@ -184,10 +198,10 @@ python3 scripts/blind_review.py --cases cases.json \
    - 비대화형 모델 프로세스에는 닫힌 표준입력을 전달한다. 시간 초과 시 완성된 메시지가 부분 JSONL에 있으면 결과 파일에 보존하되 그 실행을 성공으로 바꾸지 않는다.
    - Claude·Codex가 이벤트에 제공한 토큰 수와 CLI 보고 비용은 각 실행의 `usage`에 기록한다. 제공하지 않은 값은 `null`이다. 캐시 토큰과 입력 토큰의 포함 관계는 제공자에 따라 다르므로 임의로 합산하지 않는다. CLI 보고 금액은 추정치일 수 있으며 실제 청구액이나 절감액이 아니다. Grok의 사용량은 현재 수집하지 않는다.
    - Grok 평가기는 자체 생성한 임시 폴더의 스킬을 탐색하도록 `--trust`를 사용한다. 이는 평가 폴더 신뢰 설정이지 OS·네트워크 샌드박스가 아니다. 임의의 외부 작업 폴더에 이 옵션을 자동 적용하지 않는다.
-   - 기존 결과 파일을 덮어쓰지 않으므로 실행마다 별도 출력 디렉터리를 지정한다. 저장 도중 오류가 나면 일부 파일이 남을 수 있다. 특수하거나 긴 사례 ID는 해시 파일명으로 저장한다. 요약의 요청·스킬 본문 해시는 전체 references·모델 버전·환경의 재현을 보장하지 않는다.
+   - 기존 결과 파일을 덮어쓰지 않으므로 실행마다 별도 출력 디렉터리를 지정한다. 저장 도중 오류가 나면 일부 파일이 남을 수 있다. 특수하거나 긴 사례 ID는 해시 파일명으로 저장한다. 트리 해시는 읽는 동안의 동시 변경을 방지하지 않으며 모델 버전·환경·실제 로드를 보장하지 않는다.
    - 사례 스키마 2는 선택적 `ends_with`로 공백을 제외한 응답 끝을 검사한다. 표의 행별 수치·의미·사실성은 자동 검사하지 않으므로 수동 판정한다. 구 실행기는 스키마 2를 거부한다.
-   - Claude가 오류 종료하거나 결과 이벤트에 오류가 표시되고 확인된 영문 한도 메시지를 출력하면 남은 호출을 중단하고 `stop_reason`, `attempted`, `completed`, `execution_failed`, `not_run`을 기록한다. 미실행이 있으면 케이스 `passed`와 `pass_rate`는 `null`이다. 이 감지는 관찰된 문구에 한정되며 다른 형식·공급자나 결과 이벤트에 오류가 표시되지 않는 한도는 인식하지 못할 수 있다. 별도 병렬 실행 프로세스를 중단하지 않는다.
-   - 요약의 `schema_version`은 3이다. 실패 실행의 `checks`, 미실행 또는 내용 조건이 없는 실행의 `passed_auto_checks`는 `null`일 수 있으며 기존 소비자는 추가 필드와 상태를 처리해야 한다.
+   - Claude가 오류 종료하거나 결과 이벤트에 오류가 표시되고 확인된 영문 한도 메시지를 출력하면 남은 호출을 중단하고 `stop_reason`, `attempted`, `completed`, `execution_failed`, `not_run`을 기록한다. 미실행이 있고 자동 검사 실패가 없다면 케이스 `passed`와 `auto_check_pass_rate`는 `null`이다. 이 감지는 관찰된 문구에 한정되며 다른 형식·공급자나 결과 이벤트에 오류가 표시되지 않는 한도는 인식하지 못할 수 있다. 별도 병렬 실행 프로세스를 중단하지 않는다.
+   - 요약의 `schema_version`은 4다. 이전 `pass_rate`는 자동 검사 전용인 `auto_check_pass_rate`로 바뀌었다. `auto_checks_passed`는 자동 검사 상태이며 최종 `passed`는 확인된 자동 실패에서만 `false`, 그 외에는 `null`이다. 자동 검사가 모두 통과해도 `overall_status`와 의미 품질은 `NOT VERIFIED`다. 종료 코드 0은 자동 검사만 통과한 상태다. 기존 소비자는 스키마 변경을 처리해야 한다.
    - 현재 실행기는 기준선·후보의 자동 대응과 블라인드 판정을 제공하지 않는다. 모든 실제 평가에는 `--max-calls` 또는 `--max-seconds` 중 하나 이상이 필요하며 둘 다 지정할 수 있다. 먼저 도달한 상한으로 남은 케이스를 미실행으로 기록한다. 둘이 동시에 충족되면 호출 상한을 우선 기록한다.
    - 시간 상한은 다음 호출의 시작 여부와 모델 CLI에 전달하는 timeout을 제한한다. 작업 폴더 준비가 끝난 뒤에도 잔여 시간을 확인해 소진됐으면 호출하지 않는다. 프로세스 생성·산출물 회수·정리, OS 스케줄링 및 자식 프로세스 종료까지 포함한 엄격한 전체 벽시계 기한은 보장하지 않는다. 비용 상한이나 네트워크·OS 격리도 강제하지 않는다. Codex `workspace-write`는 OS·VM 격리의 증거가 아니다.
    - `process_timeout_seconds`는 프로세스에 전달한 제한값, `preparation_seconds`는 작업 폴더 준비 시간, `process_seconds`는 프로세스 호출에서 복귀하기까지 측정 시간이다. `seconds`에는 준비·호출·일부 결과 처리가 포함되며 정리 작업은 포함되지 않는다. OS의 프로세스 생성·종료 지연으로 측정 시간은 제한값을 넘을 수 있다.
@@ -206,7 +220,7 @@ python scripts/dialogue_eval.py --platform codex --case rhel-cve-audit-missing -
 
 ### 프로세스 종료 범위
 
-평가 프로세스는 `scripts/process_control.py`를 거친다. Windows에서는 `scripts/windows_job.py`가 실행 대기 중인 부트스트랩을 breakaway가 허용되지 않는 Job Object에 넣은 뒤 실제 명령을 시작한다. 시간 초과로 감독 프로세스가 종료되거나 평가 프로세스가 사라지면 Job 핸들이 닫혀 Job에 속한 프로세스가 종료된다. Job 생성·할당 실패 시 실제 명령을 시작하지 않는다. 통상적인 `CreateProcess` 자손은 Job에 포함되지만 WMI 등 Job 바깥에서 생성된 프로세스까지 보장하지 않는다. 운영체제의 범위와 예외는 [Microsoft Job Objects 문서](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects)를 따른다.
+평가 프로세스는 `scripts/process_control.py`를 거친다. Windows에서는 평가기가 직접 소유한 상속 불가 Job 핸들을 `scripts/windows_job.py`가 관리한다. 기본 Python의 표준 라이브러리만 사용하는 게이트를 breakaway가 허용되지 않는 Job에 넣은 뒤 실제 명령을 시작한다. 게이트에는 `-I -S -B`를 적용하지만 요청한 프로그램의 실행 파일·가상환경은 유지한다. stdin은 DEVNULL만 지원한다. 시간 초과·루트 종료·평가기 종료 시 핸들을 닫아 Job 멤버를 종료한다. 루트 종료를 기다리는 스레드가 Job을 닫으므로 자손이 출력 파이프를 상속해도 정상 종료를 막지 않는다. Job 할당 실패 시 명령은 시작하지 않는다. WMI 등 Job 바깥에서 생성된 프로세스나 호스트 지연에 따른 엄격한 벽시계 상한은 보장하지 않는다. [Microsoft Job Objects 문서](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects)의 범위를 따른다.
 
 POSIX에서는 새 세션의 프로세스 그룹을 시간 초과 시 종료한다. 별도 세션으로 이탈한 프로세스까지 보장하지 않으며, 현재 Windows 이외의 실제 동작은 별도 확인이 필요하다. 어떤 방식도 네트워크 격리나 OS 스케줄링을 포함한 엄격한 전체 벽시계 상한을 제공하지 않는다.
    - 결과는 `docs/EVALUATION-RESULTS-2026-11-01.md`에 기록했다.

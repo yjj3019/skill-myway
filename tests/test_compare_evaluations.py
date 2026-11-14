@@ -33,7 +33,8 @@ class ComparisonTests(unittest.TestCase):
                            "fail_to_pass": 1, "pass_to_fail": 1, "pass_to_pass": 1, "fail_to_fail": 1})
         self.assertEqual(report["status_counts"]["baseline"]["TIMEOUT"], 1)
         self.assertEqual(report["status_counts"]["candidate"]["NOT_RUN"], 1)
-        self.assertEqual(report["context_status"], "DECLARED_MATCH")
+        self.assertEqual(report["context_status"], "UNVERIFIED")
+        self.assertEqual(report["missing_context"], list(compare_evaluations.ADDITIONAL_CONTEXT_KEYS))
         self.assertNotIn("case-a", json.dumps(report))
 
     def test_unknown_and_changed_context_never_imply_comparability(self):
@@ -42,9 +43,28 @@ class ComparisonTests(unittest.TestCase):
         doc["context"]["candidate"]["scorer"] = "scorer-b"
         report = compare_evaluations.summarize(doc)
         self.assertEqual(report["context_status"], "UNVERIFIED")
-        self.assertEqual(report["missing_context"], ["environment"])
+        self.assertEqual(report["missing_context"], ["environment", *compare_evaluations.ADDITIONAL_CONTEXT_KEYS])
         self.assertEqual(report["different_context"], ["scorer"])
         self.assertEqual(report["pairs"]["planned"], 5)
+
+    def test_expanded_context_requires_matching_model_budget_tools_and_prompt(self):
+        doc = fixture()
+        doc["schema_version"] = 2
+        for side in ("baseline", "candidate"):
+            doc["context"][side].update({key: f"{key}-a" for key in compare_evaluations.ADDITIONAL_CONTEXT_KEYS})
+        report = compare_evaluations.summarize(doc)
+        self.assertEqual(report["context_status"], "DECLARED_MATCH")
+        self.assertEqual(report["schema_version"], 2)
+        for key in compare_evaluations.ADDITIONAL_CONTEXT_KEYS:
+            with self.subTest(key=key):
+                changed = copy.deepcopy(doc)
+                changed["context"]["candidate"][key] = "different"
+                self.assertEqual(compare_evaluations.summarize(changed)["different_context"], [key])
+                changed["context"]["candidate"][key] = None
+                self.assertEqual(compare_evaluations.summarize(changed)["missing_context"], [key])
+                del changed["context"]["candidate"][key]
+                with self.assertRaises(ValueError):
+                    compare_evaluations.summarize(changed)
 
     def test_duplicate_missing_and_invalid_records_are_rejected(self):
         variants = []

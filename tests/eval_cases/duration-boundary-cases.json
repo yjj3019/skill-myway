@@ -1,0 +1,6 @@
+[
+  {"id":"incident-rca-duration-unknown-context-01","skill":"incident-rca","request":"가상 장애 시작은 08:10이고 08:44에 완화됐다. 날짜와 시간대의 일치 여부, 완전 복구 시각, 영향 지속 여부는 제공되지 않았다. 경과와 전체 영향 시간의 확인 범위를 설명해.","required":[["34분","34 분"],["날짜","시간대"],["가정","전제","조건"],["복구","지속"]],"forbidden":[],"max_chars":5000},
+  {"id":"incident-rca-duration-confirmed-02","skill":"incident-rca","request":"가상 장애는 같은 날 같은 시간대의 08:10에 시작해 08:44에 완전히 복구됐다. 이 시작과 복구 시각은 확인됐다. 경과 시간과 확인 범위를 설명해.","required":[["34분","34 분"],["복구","종료"]],"forbidden":[],"max_chars":5000},
+  {"id":"incident-rca-duration-midnight-03","skill":"incident-rca","request":"가상 장애가 같은 시간대 기준 첫째 날 23:50에 시작해 다음 날 00:10에 완전히 복구됐다. 이 시각과 날짜가 확인됐을 때 경과 시간을 설명해.","required":[["20분","20 분"],["복구","종료"]],"forbidden":[],"max_chars":5000},
+  {"id":"incident-rca-duration-intermittent-04","skill":"incident-rca","request":"같은 날짜·시간대의 가상 장애는 10:05에 시작해 11:00에 완전히 복구됐다. 실제 영향은 10:05~10:10과 10:30~10:40 두 구간에서만 있었다고 확인됐다. 시작부터 복구까지 경과 시간과 누적 영향 시간을 구분해.","required":[["55분","55 분"],["15분","15 분"],["영향","누적"]],"forbidden":[],"max_chars":5000}
+]

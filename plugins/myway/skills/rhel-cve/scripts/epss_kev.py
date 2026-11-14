@@ -9,6 +9,7 @@ import json
 import math
 import re
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -20,6 +21,7 @@ CVE_SYNTAX = re.compile(r"CVE-(\d{4})-(\d{4,})\Z", re.IGNORECASE)
 REQUEST_AGENT = "skill-myway-rhel-cve/1"
 MAX_RESPONSE_BYTES = 32 * 1024 * 1024
 REQUEST_GROUP_SIZE = 100
+DEFAULT_NETWORK_BUDGET_SECONDS = 45.0
 KEV_OUTPUT_FIELDS = ("dateAdded", "dueDate", "vulnerabilityName", "knownRansomwareCampaignUse")
 
 
@@ -88,14 +90,26 @@ def to_score(record: dict, address: str) -> dict | None:
     }
 
 
-def query_ep_first(identifiers: list[str]) -> tuple[dict[str, dict], dict[str, str]]:
+def request_timeout(deadline: float | None, limit: float) -> float:
+    if deadline is None:
+        return limit
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError("network budget exhausted")
+    return min(limit, remaining)
+
+
+def query_ep_first(identifiers: list[str], deadline: float | None = None) -> tuple[dict[str, dict], dict[str, str]]:
     successful: dict[str, dict] = {}
     unresolved: dict[str, str] = {}
     for offset in range(0, len(identifiers), REQUEST_GROUP_SIZE):
         chunk = identifiers[offset:offset + REQUEST_GROUP_SIZE]
         address = EPSS_ENDPOINT + "?" + urllib.parse.urlencode({"cve": ",".join(chunk)})
+        if deadline is not None and time.monotonic() >= deadline:
+            unresolved.update({identifier: "budget_exhausted" for identifier in identifiers[offset:]})
+            break
         try:
-            payload = json.loads(fetch(address, timeout=15))
+            payload = json.loads(fetch(address, timeout=request_timeout(deadline, 15)))
             if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
                 raise ValueError("EPSS response does not contain data array")
         except urllib.error.HTTPError as exc:
@@ -127,11 +141,14 @@ def query_ep_first(identifiers: list[str]) -> tuple[dict[str, dict], dict[str, s
     return successful, unresolved
 
 
-def query_backup(identifier: str, year: str) -> dict:
+def query_backup(identifier: str, year: str, deadline: float | None = None) -> dict:
     """Resolve one missing API result from a date-stamped CSV mirror row."""
     address = f"{EPSS_BACKUP_ROOT}/{year}/{identifier}.csv"
+    if deadline is not None and time.monotonic() >= deadline:
+        return {"source_url": address, "epss_percent": None, "percentile_percent": None,
+                "score_date": None, "error": "budget_exhausted"}
     try:
-        raw_text = fetch(address)
+        raw_text = fetch(address, timeout=request_timeout(deadline, 20))
     except urllib.error.HTTPError as exc:
         return {"source_url": address, "epss_percent": None, "percentile_percent": None,
                 "score_date": None, "error": f"backup_http_{exc.code}"}
@@ -167,9 +184,11 @@ def query_backup(identifier: str, year: str) -> dict:
     return score
 
 
-def query_kev() -> tuple[dict | None, str | None]:
+def query_kev(deadline: float | None = None) -> tuple[dict | None, str | None]:
+    if deadline is not None and time.monotonic() >= deadline:
+        return None, "budget_exhausted"
     try:
-        payload = json.loads(fetch(KEV_ENDPOINT))
+        payload = json.loads(fetch(KEV_ENDPOINT, timeout=request_timeout(deadline, 20)))
     except urllib.error.HTTPError as exc:
         return None, f"http_{exc.code}"
     except (OSError, TimeoutError, urllib.error.URLError, UnicodeDecodeError, json.JSONDecodeError, ValueError):
@@ -199,19 +218,22 @@ def query_kev() -> tuple[dict | None, str | None]:
     return {"released": release, "index": index}, None
 
 
-def lookup(values: list[str]) -> tuple[dict | None, int]:
+def lookup(values: list[str], max_seconds: float = DEFAULT_NETWORK_BUDGET_SECONDS) -> tuple[dict | None, int]:
     normalized, bad = check_arguments(values)
     if bad or not normalized:
         return None, 2
+    if not math.isfinite(max_seconds) or max_seconds <= 0:
+        raise ValueError("max_seconds must be finite and positive")
+    deadline = time.monotonic() + max_seconds
     ids = [identifier for identifier, _year in normalized]
-    epss, epss_errors = query_ep_first(ids)
-    catalog, catalog_error = query_kev()
+    epss, epss_errors = query_ep_first(ids, deadline)
+    catalog, catalog_error = query_kev(deadline)
     rows = []
     for identifier, year in normalized:
         result = epss.get(identifier)
         if result is None:
             api_error = epss_errors.get(identifier, "no_usable_record")
-            result = query_backup(identifier, year)
+            result = query_backup(identifier, year, deadline)
             if result["error"] is None:
                 result["api_error"] = api_error
             else:

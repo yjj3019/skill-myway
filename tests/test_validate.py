@@ -19,7 +19,14 @@ class ValidateRepo(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.tmp, True)
-        shutil.copytree(ROOT, self.tmp / "r", ignore=shutil.ignore_patterns(".git", "__pycache__", "tests"))
+        ignored = {".git", "__pycache__", "tests", "eval-results*"}
+        # A project-local temporary directory must not copy itself recursively.
+        for local in (Path(tempfile.gettempdir()), Path(sys.prefix)):
+            try:
+                ignored.add(local.resolve().relative_to(ROOT.resolve()).parts[0])
+            except (ValueError, IndexError):
+                pass
+        shutil.copytree(ROOT, self.tmp / "r", ignore=shutil.ignore_patterns(*ignored))
         self.r = self.tmp / "r"
 
     def errs(self, terms=()):

@@ -56,9 +56,12 @@ def build_prompt(case, auto_select=False, platform=None):
                             "출력 인코딩이 깨지면 로드된 것으로 가정하지 마.")
     else:
         instruction = f"다음 작업에 '{skill}' 스킬 지침을 적용해 수행해."
+    file_instruction = ("요청된 파일은 현재 작업 디렉터리 안에만 저장해. 저장소나 그 밖의 경로는 수정하지 마."
+                        if case.get("artifact_policy") in ("required", "conditional") else
+                        "파일을 만들거나 저장소를 수정하지 말고, 요청한 결과만 출력해.")
     return (
         instruction + "\n"
-        "파일을 만들거나 저장소를 수정하지 말고, 요청한 결과만 출력해.\n\n"
+        + file_instruction + "\n\n"
         f"{case['request']}"
     )
 
@@ -115,6 +118,7 @@ def codex_jsonl_observation(jsonl_text):
     messages = []
     event_types = []
     usage = None
+    result_error = False
     for line in jsonl_text.splitlines():
         stripped = line.strip()
         if not stripped.startswith("{"):
@@ -125,6 +129,8 @@ def codex_jsonl_observation(jsonl_text):
             continue
         kind = str(event.get("type", "")).lower()
         event_types.append(kind or "unknown")
+        if kind in {"turn.failed", "error"}:
+            result_error = True
         if kind == "turn.completed":
             usage = cli_usage(event, "codex")
         item = event.get("item")
@@ -137,7 +143,7 @@ def codex_jsonl_observation(jsonl_text):
     final_text = messages[-1] if messages else ""
     trace = skill_load_any_evidence(jsonl_text)
     trace["event_types"] = event_types
-    return {"final_text": final_text, "trace": trace, "usage": usage}
+    return {"final_text": final_text, "trace": trace, "usage": usage, "result_error": result_error}
 
 
 def claude_jsonl_observation(jsonl_text, skill):
@@ -275,12 +281,17 @@ def prepare_workdir(platform):
     Codex·Grok은 프로젝트 스킬 경로에서 읽으므로 해당 경로에 스킬 사본을 만든다.
     """
     workdir = Path(tempfile.mkdtemp(prefix="myway-eval-"))
-    if platform in ("codex", "grok"):
-        base = workdir / (".agents/skills" if platform == "codex" else ".grok/skills")
-        base.mkdir(parents=True)
-        for skill in simulate_eval.SKILLS.iterdir():
-            if (skill / "SKILL.md").is_file():
-                shutil.copytree(skill, base / skill.name, ignore=shutil.ignore_patterns("__pycache__"))
+    try:
+        if platform in ("codex", "grok"):
+            base = workdir / (".agents/skills" if platform == "codex" else ".grok/skills")
+            base.mkdir(parents=True)
+            for skill in simulate_eval.SKILLS.iterdir():
+                if (skill / "SKILL.md").is_file():
+                    simulate_eval.skill_tree_hashes(skill.name)
+                    shutil.copytree(skill, base / skill.name, ignore=shutil.ignore_patterns("__pycache__"))
+    except (OSError, ValueError):
+        shutil.rmtree(workdir, ignore_errors=True)
+        raise
     return workdir
 
 
@@ -299,6 +310,9 @@ def capture_artifacts(workdir, artifact_dir):
             filenames.sort()
             current_path = Path(current)
             rel_dir = current_path.relative_to(workdir)
+            for name in dirnames + filenames:
+                if simulate_eval._is_link(current_path / name):
+                    raise OSError("linked artifact path is not permitted")
             dirnames[:] = [name for name in dirnames
                            if not (rel_dir == Path(".") and name in ignored_roots)
                            and name != "__pycache__"
@@ -344,7 +358,7 @@ def capture_artifacts(workdir, artifact_dir):
 
 def validate_auto_cases(document):
     """공개 자동 선택 케이스를 정답 스킬 필드 없이 검증한다."""
-    if not isinstance(document, dict) or set(document) != {"schema_version", "cases"} or document.get("schema_version") != 1:
+    if not isinstance(document, dict) or set(document) != {"schema_version", "cases"} or type(document.get("schema_version")) is not int or document["schema_version"] != 1:
         return ["schema_version 1과 cases만 포함된 문서가 필요합니다"]
     cases = document.get("cases")
     if not isinstance(cases, list) or not cases:
@@ -452,13 +466,16 @@ def claude_usage_limit(text):
 
 
 def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, timeout_artifact_dir=None, deadline=None):
-    prompt = build_prompt(case, auto_select=auto_select, platform=platform)
+    prompt_case = case if artifact_dir else {**case, "artifact_policy": "forbidden"}
+    prompt = build_prompt(prompt_case, auto_select=auto_select, platform=platform)
     command = platform_command(platform, prompt)
     started = time.perf_counter()
-    workdir = prepare_workdir(platform)
-    prepared = time.perf_counter()
+    workdir = None
+    prepared = started
     process_started = None
     try:
+        workdir = prepare_workdir(platform)
+        prepared = time.perf_counter()
         if deadline is not None:
             time_left = deadline - time.monotonic()
             if time_left <= 0:
@@ -483,13 +500,14 @@ def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, time
         output = result.stdout.strip()
         provider_error = False
         usage = None
-        if platform == "codex" and result.stdout.lstrip().startswith("{"):
+        if platform == "codex":
             observed = codex_jsonl_observation(result.stdout)
             output = observed["final_text"].strip()
             trace = observed["trace"]
             event_types = trace.get("event_types", [])
             usage = observed.get("usage")
-        elif platform == "claude" and result.stdout.lstrip().startswith("{"):
+            provider_error = observed.get("result_error", False)
+        elif platform == "claude":
             observed = claude_jsonl_observation(result.stdout, case["skill"])
             output = observed["final_text"].strip()
             trace = observed["trace"]
@@ -497,7 +515,7 @@ def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, time
             provider_error = observed.get("result_error", False)
             usage = observed.get("usage")
         # 오류 종료의 진단에만 적용한다. 정상 응답은 동일 문구를 인용할 수 있다.
-        limit_line = next((line.strip() for line in (output + "\n" + result.stderr).splitlines()
+        limit_line = next((line.strip() for line in (output + "\n" + result.stdout + "\n" + result.stderr).splitlines()
                            if claude_usage_limit(line)), None) if platform == "claude" and (result.returncode != 0 or provider_error) else None
         artifacts = []
         artifact_error = None
@@ -527,7 +545,7 @@ def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, time
             "process_seconds": round(process_seconds, 3),
             "process_timeout_seconds": timeout,
         }
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         return {
             "exit_code": None,
             "output": "",
@@ -561,6 +579,7 @@ def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, time
                 artifact_error = str(capture_exc)
         return {
             "exit_code": None,
+            "timed_out": True,
             "output": observed["final_text"].strip() if observed else raw_output,
             "raw_events": raw_output if platform in ("codex", "claude") else "",
             "selection_trace": observed["trace"] if observed else {"status": "unverified", "reason": "process timed out before trace completion"},
@@ -576,7 +595,8 @@ def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, time
             "process_timeout_seconds": timeout,
         }
     finally:
-        shutil.rmtree(workdir, ignore_errors=True)
+        if workdir is not None:
+            shutil.rmtree(workdir, ignore_errors=True)
 
 
 def output_stem(case_id):
@@ -651,10 +671,18 @@ def main(argv=None):
             return 1
         cases = [case for case in cases if case["id"] in args.only]
     elif args.only:
+        unknown = set(args.only) - {case["skill"] for case in cases}
+        if unknown:
+            print("오류: 알 수 없는 스킬 선택: " + ", ".join(sorted(unknown)), file=sys.stderr)
+            return 1
         cases = [c for c in cases if c["skill"] in args.only]
         if not cases:
             print("실행할 케이스가 없습니다")
             return 1
+
+    if not auto_select and not args.inspect_artifacts and any(case.get("artifact_policy") == "required" for case in cases):
+        print("오류: 파일 필수 케이스에는 --inspect-artifacts와 Codex 작업공간이 필요합니다", file=sys.stderr)
+        return 1
 
     if args.dry_run:
         for case in cases:
@@ -663,6 +691,8 @@ def main(argv=None):
         print(f"케이스 {len(cases)}건 (모델 호출 없음)")
         return 0
 
+    # Include output and manifest preparation in the model-start budget.
+    started = time.monotonic()
     out_dir = Path(args.out)
     repeats = max(1, args.repeat)
     filenames = [f"{output_stem(case['id'])}{f'-r{i + 1}' if repeats > 1 else ''}.md"
@@ -684,13 +714,12 @@ def main(argv=None):
             print("오류: 결과 파일이 이미 있습니다. 빈 출력 디렉터리를 사용하세요", file=sys.stderr)
             return 1
         input_manifest = auto_manifest(cases) if auto_select else simulate_eval.manifest({"cases": cases})
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         print(f"오류: 결과 준비 실패: {exc}", file=sys.stderr)
         return 1
     summary = []
     failed = 0
     stop_reason = None
-    started = time.monotonic()
     attempted_calls = 0
     for case in cases:
         label = case.get("skill", "auto-select")
@@ -775,7 +804,7 @@ def main(argv=None):
                     run["artifact_error"] = "Office formula cached error detected"
                     run["office_calculation_failures"] = failed_calculations
                     run["exit_code"] = run.get("exit_code") or 1
-                if auto_select:
+                if "artifact_policy" in case:
                     has_artifact = bool(run.get("artifacts"))
                     policy = case["artifact_policy"]
                     extensions = [Path(item["path"]).suffix.lower() for item in run.get("artifacts", [])]
@@ -790,6 +819,9 @@ def main(argv=None):
                         passed = False
                 elif run.get("artifact_error"):
                     passed = False
+            elif "artifact_policy" in case:
+                # No artifact observation was requested: never imply that the contract passed.
+                passed = None if passed else False
             if passed and not auto_select and not checks["has_content_checks"]:
                 passed = None
             suffix = f"-r{index + 1}" if repeats > 1 else ""
@@ -809,7 +841,8 @@ def main(argv=None):
                 return 1
             artifact_error = run.get("artifact_error")
             runs.append({
-                "status": "execution_failed" if run["exit_code"] != 0 or limited or artifact_error else "completed",
+                "status": "timeout" if run.get("timed_out") else
+                          "execution_failed" if run["exit_code"] != 0 or limited or artifact_error else "completed",
                 "selection_status": "unverified" if auto_select else None,
                 "load_trace_status": (run.get("selection_trace", {}).get("status", "unverified")
                                       if args.platform in ("codex", "claude") else None),
@@ -821,7 +854,7 @@ def main(argv=None):
                 "trace_file": trace_filename,
                 "trace_sha256": trace_hash,
                 "trace_status": (run.get("selection_trace", {}).get("status") if auto_select else None),
-                "artifact_expectation_met": artifact_expectation if auto_select else None,
+                "artifact_expectation_met": artifact_expectation,
                 "artifact_count": len(run.get("artifacts", [])),
                 "office_inspection": office_inspection if (auto_select or args.inspect_artifacts) else [],
                 "office_inspection_error": run.get("office_inspection_error"),
@@ -864,10 +897,10 @@ def main(argv=None):
                   f"{run['seconds']}s checks={checks}")
         passed_count = sum(1 for run in runs if run["passed_auto_checks"])
         not_run = sum(run["status"] == "not_run" for run in runs)
-        case_passed = (None if any(run["passed_auto_checks"] is None for run in runs) else
-                       False if any(run["passed_auto_checks"] is False for run in runs) else
+        auto_passed = (False if any(run["passed_auto_checks"] is False for run in runs) else
+                       None if any(run["passed_auto_checks"] is None for run in runs) else
                        None if case.get("requires_followup") else True)
-        if case_passed is not True:
+        if auto_passed is not True:
             failed += 1
         summary.append({
             "id": case["id"],
@@ -877,15 +910,20 @@ def main(argv=None):
             "attempted": sum(run["status"] != "not_run" for run in runs),
             "completed": sum(run["status"] == "completed" for run in runs),
             "execution_failed": sum(run["status"] == "execution_failed" for run in runs),
+            "timed_out": sum(run["status"] == "timeout" for run in runs),
             "not_run": sum(run["status"] == "not_run" for run in runs),
             "passed_count": passed_count,
-            "pass_rate": round(passed_count / repeats, 2) if case_passed is not None else None,
-            "passed": case_passed,
+            "auto_check_pass_rate": (round(passed_count / repeats, 2)
+                                     if auto_passed is not None and not any(run["status"] == "not_run" for run in runs)
+                                     else None),
+            "auto_checks_passed": auto_passed,
+            "passed": False if auto_passed is False else None,
+            "overall_status": "FAIL" if auto_passed is False else "NOT VERIFIED",
             "runs": runs,
         })
 
     summary_doc = {
-        "schema_version": 3,
+        "schema_version": 4,
         "mode": "auto_select" if auto_select else "targeted",
         "inspect_artifacts": args.inspect_artifacts,
         "platform": args.platform,

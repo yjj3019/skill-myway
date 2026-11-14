@@ -1,0 +1,910 @@
+{
+  "schema_version": 2,
+  "judgment_source": "human",
+  "context": {
+    "baseline": {
+      "cases": null,
+      "rubric": null,
+      "scorer": null,
+      "environment": null,
+      "model": null,
+      "execution_budget": null,
+      "tool_configuration": null,
+      "prompt": null
+    },
+    "candidate": {
+      "cases": null,
+      "rubric": null,
+      "scorer": null,
+      "environment": null,
+      "model": null,
+      "execution_budget": null,
+      "tool_configuration": null,
+      "prompt": null
+    }
+  },
+  "planned": [
+    {
+      "case": "code-review-01",
+      "repeat": 1
+    },
+    {
+      "case": "code-review-01",
+      "repeat": 2
+    },
+    {
+      "case": "code-review-audit-missing",
+      "repeat": 1
+    },
+    {
+      "case": "code-review-audit-missing",
+      "repeat": 2
+    },
+    {
+      "case": "code-review-audit-boundary",
+      "repeat": 1
+    },
+    {
+      "case": "code-review-audit-boundary",
+      "repeat": 2
+    },
+    {
+      "case": "code-review-audit-injection",
+      "repeat": 1
+    },
+    {
+      "case": "code-review-audit-injection",
+      "repeat": 2
+    },
+    {
+      "case": "devlog-01",
+      "repeat": 1
+    },
+    {
+      "case": "devlog-01",
+      "repeat": 2
+    },
+    {
+      "case": "devlog-audit-missing",
+      "repeat": 1
+    },
+    {
+      "case": "devlog-audit-missing",
+      "repeat": 2
+    },
+    {
+      "case": "devlog-audit-boundary",
+      "repeat": 1
+    },
+    {
+      "case": "devlog-audit-boundary",
+      "repeat": 2
+    },
+    {
+      "case": "devlog-audit-injection",
+      "repeat": 1
+    },
+    {
+      "case": "devlog-audit-injection",
+      "repeat": 2
+    },
+    {
+      "case": "document-authoring-procedure-01",
+      "repeat": 1
+    },
+    {
+      "case": "document-authoring-procedure-01",
+      "repeat": 2
+    },
+    {
+      "case": "document-authoring-audit-missing",
+      "repeat": 1
+    },
+    {
+      "case": "document-authoring-audit-missing",
+      "repeat": 2
+    },
+    {
+      "case": "document-authoring-audit-boundary",
+      "repeat": 1
+    },
+    {
+      "case": "document-authoring-audit-boundary",
+      "repeat": 2
+    },
+    {
+      "case": "document-authoring-audit-injection",
+      "repeat": 1
+    },
+    {
+      "case": "document-authoring-audit-injection",
+      "repeat": 2
+    },
+    {
+      "case": "evidence-first-01",
+      "repeat": 1
+    },
+    {
+      "case": "evidence-first-01",
+      "repeat": 2
+    },
+    {
+      "case": "evidence-first-audit-missing",
+      "repeat": 1
+    },
+    {
+      "case": "evidence-first-audit-missing",
+      "repeat": 2
+    },
+    {
+      "case": "evidence-first-audit-boundary",
+      "repeat": 1
+    },
+    {
+      "case": "evidence-first-audit-boundary",
+      "repeat": 2
+    },
+    {
+      "case": "evidence-first-audit-injection",
+      "repeat": 1
+    },
+    {
+      "case": "evidence-first-audit-injection",
+      "repeat": 2
+    },
+    {
+      "case": "incident-rca-01",
+      "repeat": 1
+    },
+    {
+      "case": "incident-rca-01",
+      "repeat": 2
+    },
+    {
+      "case": "incident-rca-audit-missing",
+      "repeat": 1
+    },
+    {
+      "case": "incident-rca-audit-missing",
+      "repeat": 2
+    },
+    {
+      "case": "incident-rca-audit-boundary",
+      "repeat": 1
+    },
+    {
+      "case": "incident-rca-audit-boundary",
+      "repeat": 2
+    },
+    {
+      "case": "incident-rca-audit-injection",
+      "repeat": 1
+    },
+    {
+      "case": "incident-rca-audit-injection",
+      "repeat": 2
+    },
+    {
+      "case": "office-docs-01",
+      "repeat": 1
+    },
+    {
+      "case": "office-docs-01",
+      "repeat": 2
+    },
+    {
+      "case": "office-docs-audit-missing",
+      "repeat": 1
+    },
+    {
+      "case": "office-docs-audit-missing",
+      "repeat": 2
+    },
+    {
+      "case": "office-docs-audit-boundary",
+      "repeat": 1
+    },
+    {
+      "case": "office-docs-audit-boundary",
+      "repeat": 2
+    },
+    {
+      "case": "office-docs-audit-injection",
+      "repeat": 1
+    },
+    {
+      "case": "office-docs-audit-injection",
+      "repeat": 2
+    },
+    {
+      "case": "prompt-engineering-01",
+      "repeat": 1
+    },
+    {
+      "case": "prompt-engineering-01",
+      "repeat": 2
+    },
+    {
+      "case": "prompt-engineering-audit-missing",
+      "repeat": 1
+    },
+    {
+      "case": "prompt-engineering-audit-missing",
+      "repeat": 2
+    },
+    {
+      "case": "prompt-engineering-audit-boundary",
+      "repeat": 1
+    },
+    {
+      "case": "prompt-engineering-audit-boundary",
+      "repeat": 2
+    },
+    {
+      "case": "prompt-engineering-audit-injection",
+      "repeat": 1
+    },
+    {
+      "case": "prompt-engineering-audit-injection",
+      "repeat": 2
+    },
+    {
+      "case": "research-brief-01",
+      "repeat": 1
+    },
+    {
+      "case": "research-brief-01",
+      "repeat": 2
+    },
+    {
+      "case": "research-brief-audit-missing",
+      "repeat": 1
+    },
+    {
+      "case": "research-brief-audit-missing",
+      "repeat": 2
+    },
+    {
+      "case": "research-brief-audit-boundary",
+      "repeat": 1
+    },
+    {
+      "case": "research-brief-audit-boundary",
+      "repeat": 2
+    },
+    {
+      "case": "research-brief-audit-injection",
+      "repeat": 1
+    },
+    {
+      "case": "research-brief-audit-injection",
+      "repeat": 2
+    },
+    {
+      "case": "rhel-cve-01",
+      "repeat": 1
+    },
+    {
+      "case": "rhel-cve-01",
+      "repeat": 2
+    },
+    {
+      "case": "rhel-cve-audit-missing",
+      "repeat": 1
+    },
+    {
+      "case": "rhel-cve-audit-missing",
+      "repeat": 2
+    },
+    {
+      "case": "rhel-cve-audit-boundary",
+      "repeat": 1
+    },
+    {
+      "case": "rhel-cve-audit-boundary",
+      "repeat": 2
+    },
+    {
+      "case": "rhel-cve-audit-injection",
+      "repeat": 1
+    },
+    {
+      "case": "rhel-cve-audit-injection",
+      "repeat": 2
+    },
+    {
+      "case": "visual-design-context-02",
+      "repeat": 1
+    },
+    {
+      "case": "visual-design-context-02",
+      "repeat": 2
+    },
+    {
+      "case": "visual-design-audit-missing",
+      "repeat": 1
+    },
+    {
+      "case": "visual-design-audit-missing",
+      "repeat": 2
+    },
+    {
+      "case": "visual-design-audit-boundary",
+      "repeat": 1
+    },
+    {
+      "case": "visual-design-audit-boundary",
+      "repeat": 2
+    },
+    {
+      "case": "visual-design-audit-injection",
+      "repeat": 1
+    },
+    {
+      "case": "visual-design-audit-injection",
+      "repeat": 2
+    },
+    {
+      "case": "writing-01",
+      "repeat": 1
+    },
+    {
+      "case": "writing-01",
+      "repeat": 2
+    },
+    {
+      "case": "writing-audit-missing",
+      "repeat": 1
+    },
+    {
+      "case": "writing-audit-missing",
+      "repeat": 2
+    },
+    {
+      "case": "writing-audit-boundary",
+      "repeat": 1
+    },
+    {
+      "case": "writing-audit-boundary",
+      "repeat": 2
+    },
+    {
+      "case": "writing-audit-injection",
+      "repeat": 1
+    },
+    {
+      "case": "writing-audit-injection",
+      "repeat": 2
+    }
+  ],
+  "trials": [
+    {
+      "case": "code-review-01",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "code-review-01",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "code-review-audit-missing",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "code-review-audit-missing",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "code-review-audit-boundary",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "code-review-audit-boundary",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "code-review-audit-injection",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "code-review-audit-injection",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "devlog-01",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "devlog-01",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "devlog-audit-missing",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "devlog-audit-missing",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "devlog-audit-boundary",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "devlog-audit-boundary",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "devlog-audit-injection",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "devlog-audit-injection",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "document-authoring-procedure-01",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "document-authoring-procedure-01",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "document-authoring-audit-missing",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "document-authoring-audit-missing",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "document-authoring-audit-boundary",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "document-authoring-audit-boundary",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "document-authoring-audit-injection",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "document-authoring-audit-injection",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "evidence-first-01",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "evidence-first-01",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "evidence-first-audit-missing",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "evidence-first-audit-missing",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "evidence-first-audit-boundary",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "evidence-first-audit-boundary",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "evidence-first-audit-injection",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "evidence-first-audit-injection",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "incident-rca-01",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "incident-rca-01",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "incident-rca-audit-missing",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "incident-rca-audit-missing",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "incident-rca-audit-boundary",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "incident-rca-audit-boundary",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "incident-rca-audit-injection",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "incident-rca-audit-injection",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "office-docs-01",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "office-docs-01",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "office-docs-audit-missing",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "office-docs-audit-missing",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "office-docs-audit-boundary",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "office-docs-audit-boundary",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "office-docs-audit-injection",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "office-docs-audit-injection",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "prompt-engineering-01",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "prompt-engineering-01",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "prompt-engineering-audit-missing",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "prompt-engineering-audit-missing",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "prompt-engineering-audit-boundary",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "prompt-engineering-audit-boundary",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "prompt-engineering-audit-injection",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "prompt-engineering-audit-injection",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "research-brief-01",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "research-brief-01",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "research-brief-audit-missing",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "research-brief-audit-missing",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "research-brief-audit-boundary",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "research-brief-audit-boundary",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "research-brief-audit-injection",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "research-brief-audit-injection",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "rhel-cve-01",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "rhel-cve-01",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "rhel-cve-audit-missing",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "rhel-cve-audit-missing",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "rhel-cve-audit-boundary",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "rhel-cve-audit-boundary",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "rhel-cve-audit-injection",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "rhel-cve-audit-injection",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "visual-design-context-02",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "visual-design-context-02",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "visual-design-audit-missing",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "visual-design-audit-missing",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "visual-design-audit-boundary",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "visual-design-audit-boundary",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "visual-design-audit-injection",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "visual-design-audit-injection",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "writing-01",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "writing-01",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "writing-audit-missing",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "writing-audit-missing",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "writing-audit-boundary",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "writing-audit-boundary",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "writing-audit-injection",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "writing-audit-injection",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    }
+  ]
+}

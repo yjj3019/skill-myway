@@ -33,7 +33,9 @@ class IdentifierInputs(unittest.TestCase):
                   "score_date": "2099-08-10", "error": None}
         with mock.patch.object(MODULE, "query_ep_first", return_value=({}, {identifier: "row_invalid"})) as first, mock.patch.object(MODULE, "query_backup", return_value=backup) as fallback, mock.patch.object(MODULE, "query_kev", return_value=({"released": "2099-08-10", "index": {}}, None)):
             document, code = MODULE.lookup([identifier])
-        fallback.assert_called_once_with(identifier, "2099")
+        self.assertEqual(fallback.call_count, 1)
+        self.assertEqual(fallback.call_args.args[:2], (identifier, "2099"))
+        self.assertIsInstance(fallback.call_args.args[2], float)
         self.assertEqual(code, 0)
         self.assertEqual(document["results"][0]["epss"]["epss_percent"], 12.5)
         self.assertEqual(document["results"][0]["epss"]["api_error"], "row_invalid")
@@ -148,12 +150,45 @@ class CombinedLookup(unittest.TestCase):
 
     def test_unknown_kev_and_missing_epss_return_partial_status(self):
         with mock.patch.object(MODULE, "query_ep_first", return_value=({}, {"CVE-2099-00001": "row_invalid"})), \
-             mock.patch.object(MODULE, "query_kev", return_value=(None, "catalog_unavailable_or_invalid")):
+             mock.patch.object(MODULE, "query_kev", return_value=(None, "catalog_unavailable_or_invalid")), \
+             mock.patch.object(MODULE, "fetch", side_effect=MODULE.urllib.error.HTTPError("test", 404, "missing", {}, None)):
             result, code = MODULE.lookup(["CVE-2099-00001"])
         self.assertEqual(code, 1)
         self.assertIsNone(result["results"][0]["kev"]["listed"])
         self.assertEqual(result["results"][0]["epss"]["error"], "backup_http_404")
         self.assertEqual(result["results"][0]["epss"]["api_error"], "row_invalid")
+
+    def test_expired_budget_keeps_partial_data_unknown_and_skips_requests(self):
+        identifier = "CVE-2099-00001"
+        with mock.patch.object(MODULE.time, "monotonic", side_effect=[0.0, 2.0, 2.0, 2.0]), \
+             mock.patch.object(MODULE, "fetch", side_effect=AssertionError("network called")):
+            result, code = MODULE.lookup([identifier], max_seconds=1)
+        self.assertEqual(code, 1)
+        self.assertEqual(result["results"][0]["epss"]["error"], "budget_exhausted")
+        self.assertIsNone(result["results"][0]["epss"]["epss_percent"])
+        self.assertIsNone(result["results"][0]["kev"]["listed"])
+        self.assertEqual(result["kev_error"], "budget_exhausted")
+
+    def test_request_timeout_uses_remaining_budget(self):
+        with mock.patch.object(MODULE.time, "monotonic", return_value=9.0):
+            self.assertEqual(MODULE.request_timeout(10.0, 20), 1.0)
+            with self.assertRaises(TimeoutError):
+                MODULE.request_timeout(9.0, 20)
+
+    def test_batch_budget_stops_further_calls_and_preserves_all_rows(self):
+        ids = [f"CVE-2099-{number:05d}" for number in range(101)]
+        clock = [0.0]
+        def slow_fetch(*args, **kwargs):
+            clock[0] = 2.0
+            return json.dumps({"data": []})
+        with mock.patch.object(MODULE.time, "monotonic", side_effect=lambda: clock[0]), \
+             mock.patch.object(MODULE, "fetch", side_effect=slow_fetch) as fetch:
+            result, code = MODULE.lookup(ids, max_seconds=1)
+        self.assertEqual(fetch.call_count, 1)
+        self.assertEqual(code, 1)
+        self.assertEqual(len(result["results"]), 101)
+        self.assertTrue(all(row["epss"]["error"] == "budget_exhausted" for row in result["results"]))
+        self.assertTrue(all(row["kev"]["listed"] is None for row in result["results"]))
 
 
 if __name__ == "__main__":

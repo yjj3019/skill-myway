@@ -19,7 +19,7 @@ class ValidateRepo(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.tmp, True)
-        ignored = {".git", "__pycache__", "tests", "eval-results*"}
+        ignored = {".git", "__pycache__", "tests", "eval-results*", "node_modules", ".manual-eval"}
         # A project-local temporary directory must not copy itself recursively.
         for local in (Path(tempfile.gettempdir()), Path(sys.prefix)):
             try:

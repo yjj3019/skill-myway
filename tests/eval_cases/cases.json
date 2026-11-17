@@ -794,6 +794,38 @@
       ],
       "forbidden": [],
       "max_chars": 6000
+    },
+    {
+      "skill": "writing",
+      "id": "writing-edit-protected-condition",
+      "request": "가상 원문을 자연스럽게 다듬되 명령과 의미를 유지해: '가상 도구에서 --dry-run을 지정한 경우에만 파일을 만들지 않습니다. 결과는 아직 확인하지 못했습니다.'",
+      "required": ["--dry-run"],
+      "forbidden": [],
+      "max_chars": 6000
+    },
+    {
+      "skill": "writing",
+      "id": "writing-edit-english-uncertainty",
+      "request": "Edit this English technical note without changing its meaning: 'The service may restart only after approval. The result has not been verified.'",
+      "required": [["approv", "authoriz"], ["verif", "confirm"]],
+      "forbidden": [],
+      "max_chars": 6000
+    },
+    {
+      "skill": "writing",
+      "id": "writing-edit-formal-voice",
+      "request": "공식 안내문을 적절한 격식을 유지하며 필요할 때만 다듬어: '검토 결과는 별도로 안내됩니다.'",
+      "required": [["검토", "결과"]],
+      "forbidden": [],
+      "max_chars": 6000
+    },
+    {
+      "skill": "visual-design",
+      "id": "visual-design-contextual-screen-review",
+      "request": "가상의 기존 제품 화면이 획일적으로 보인다는 피드백이 있다. 브랜드는 유지해야 하며 실제 화면과 조작 권한은 제공되지 않았다. 확인해야 할 시각 요소와 미검증 범위를 설명해.",
+      "required": [["브랜드", "기존"], ["확인", "검토"]],
+      "forbidden": [],
+      "max_chars": 6000
     }
   ]
 }

@@ -71,6 +71,8 @@ python3 scripts/package_skill.py --skill writing
 
 This produces `dist/myway-writing-<version>.zip`; the ZIP contains `<skill-name>/SKILL.md`, the license text, and the skill's `references/`. Upload menus and limits vary by account and app version.
 
+An existing ZIP is never overwritten. Choose a new output directory when rebuilding.
+
 ### Installing Skills Directly
 
 ```sh

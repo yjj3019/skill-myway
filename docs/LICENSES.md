@@ -1,5 +1,9 @@
 # 라이선스·출처 검토
 
+## 안전 보강 (2026-11-17)
+
+패키지 경로 검사, 목차 일치·재검증, 프로젝트 내부 임시 경로 및 테스트는 기존 프로젝트 코드와 사용자 요청을 바탕으로 작성했다. 외부 코드·자산·새 의존성은 추가하지 않았다. 이 기록은 과거 자료의 권리 확인이나 법률 의견을 대체하지 않는다.
+
 ## 문체·화면 검토 참고 (2026-11-17)
 
 - 사용자가 제공한 비교 자료와 공개 저장소 설명을 검토했다. 확인한 저장소 기본 브랜치 커밋: [humanizer-ko](https://github.com/IsaacEryn/humanizer-ko/tree/b1562c26315b8d264d7830cd98d280e4d92333ea)(GitHub 저장소 수준 MIT 표시), [personal-skills](https://github.com/retieedra/personal-skills/tree/9eb003b628515f0d84aa811a59a473cbd04a8edd)(저장소 수준 라이선스 미확인), [Unslop](https://github.com/heydamir/unslop/tree/620163eedb3529d9cd23a3994ed8d287d06f760d)(CC BY 4.0 표시), [humanizer](https://github.com/blader/humanizer/tree/b48c832f0f809c1b5658edbb838c2521b72f2413)(MIT 표시). 저장소 수준 표시는 특정 파일의 권리나 전체 자산의 재배포 허가를 확정하지 않는다.

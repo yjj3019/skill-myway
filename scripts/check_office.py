@@ -18,6 +18,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import workspace_tmp
 import zipfile
 import xml.etree.ElementTree as ET
 from pathlib import Path, PurePosixPath
@@ -40,7 +41,7 @@ def recalculate_xlsx(path, expected_formula, expected_value):
     try:
         from openpyxl import load_workbook
 
-        with tempfile.TemporaryDirectory(prefix="myway-recalc-") as recalc_dir:
+        with tempfile.TemporaryDirectory(prefix="myway-recalc-", dir=workspace_tmp.temp_root()) as recalc_dir:
             profile = Path(recalc_dir) / "profile"
             profile.mkdir()
             result = subprocess.run(
@@ -281,7 +282,7 @@ def main(argv=None):
         if args.out:
             result = check(args.out)
         else:
-            with tempfile.TemporaryDirectory(prefix="myway-office-") as workdir:
+            with tempfile.TemporaryDirectory(prefix="myway-office-", dir=workspace_tmp.temp_root()) as workdir:
                 result = check(workdir)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         calculation = result.get("xlsx", {}).get("calculation", {})

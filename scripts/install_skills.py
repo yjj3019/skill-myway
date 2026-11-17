@@ -43,7 +43,7 @@ def install(dest, link=False, force=False):
         if link:
             target.symlink_to(skill, target_is_directory=True)
         else:
-            shutil.copytree(skill, target, ignore=shutil.ignore_patterns("__pycache__"))
+            shutil.copytree(skill, target, ignore=shutil.ignore_patterns("__pycache__", ".*"))
             license_content, skill_body = license_contents[skill.name]
             (target / "LICENSE").write_bytes(license_content)
             (target / "SKILL.md").write_bytes(skill_body)

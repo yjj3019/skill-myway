@@ -22,6 +22,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import workspace_tmp
 import time
 import zipfile
 from pathlib import Path
@@ -280,7 +281,7 @@ def prepare_workdir(platform):
     Claude는 `--plugin-dir`로 스킬을 읽으므로 빈 디렉터리를 쓴다.
     Codex·Grok은 프로젝트 스킬 경로에서 읽으므로 해당 경로에 스킬 사본을 만든다.
     """
-    workdir = Path(tempfile.mkdtemp(prefix="myway-eval-"))
+    workdir = Path(tempfile.mkdtemp(prefix="myway-eval-", dir=workspace_tmp.temp_root()))
     try:
         if platform in ("codex", "grok"):
             base = workdir / (".agents/skills" if platform == "codex" else ".grok/skills")
@@ -481,7 +482,7 @@ def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, time
             if time_left <= 0:
                 return {"not_started": True}
             timeout = min(timeout, time_left)
-        # 빈 임시 디렉터리에서 실행해 저장소 지침·훅·미커밋 변경이 평가에 섞이지 않게 한다.
+        # 이 디렉터리는 저장소 안에 있다. 상위 지침 탐색과 권한 격리는 별도 검증이 필요하다.
         process_started = time.perf_counter()
         result = process_control.run(
             command,
@@ -936,7 +937,7 @@ def main(argv=None):
                    "elapsed_seconds": round(time.monotonic() - started, 1)},
         "input_manifest": input_manifest,
         "cases": summary,
-        "note": "자동 검사는 형식·필수 요소만 본다. 문장 품질과 사실 정확성은 사람이 판정해야 한다.",
+        "note": "자동 검사는 형식·필수 요소만 본다. 문장 품질과 사실 정확성은 사람이 판정해야 한다. 저장소 내부 작업 공간에서 상위 지침 탐색과 쓰기 격리는 별도 검증이 필요하다.",
     }
     try:
         with (out_dir / "summary.json").open("x", encoding="utf-8") as summary_file:

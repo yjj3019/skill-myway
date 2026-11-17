@@ -11,9 +11,10 @@ const path = require("path");
 const { pathToFileURL } = require("url");
 const { execFileSync } = require("child_process");
 const {
-  Document, Packer, Paragraph, TextRun, TabStopType, TabStopPosition, AlignmentType,
+  Document, Packer, Paragraph, TextRun, TabStopType, TabStopPosition, AlignmentType, Footer, PageNumber,
 } = require("docx");
 const m = require("./fmh");
+const { outputPath, copyExclusive } = require("./output_safety");
 const { TITLES, chapters } = require("./fcontent");
 
 const OUT_DIR = process.env.OUT_DIR || process.cwd();
@@ -21,6 +22,8 @@ const TOC_PAGES = Number(process.env.TOC_PAGES || 1);
 const SCRIPT_DIR = __dirname;
 const COMMAND_TIMEOUT_MS = 120000;
 const outName = process.argv[2] || "RHEL_운영매뉴얼.docx";
+if (!Number.isSafeInteger(TOC_PAGES) || TOC_PAGES < 1) throw new Error("TOC_PAGES must be a positive integer");
+const finalPath = outputPath(OUT_DIR, outName);
 
 function sectionProps() {
   return { page: { size: { width: m.STYLE.page.size.width, height: m.STYLE.page.size.height }, margin: m.STYLE.page.margin } };
@@ -45,12 +48,14 @@ function buildDoc(tocBlocks) {
     children.push(...tocBlocks, m.pageBreak());
   }
   children.push(...chapters());
-  return new Document({ sections: [{ properties: sectionProps(), children }] });
+  const footer = new Footer({ children: [new Paragraph({ alignment: AlignmentType.CENTER,
+    children: [new TextRun({ children: [PageNumber.CURRENT] })] })] });
+  return new Document({ sections: [{ properties: sectionProps(), footers: { default: footer }, children }] });
 }
 
 async function save(doc, file) {
   const buf = await Packer.toBuffer(doc);
-  fs.writeFileSync(file, buf);
+  fs.writeFileSync(file, buf, { flag: "wx" });
 }
 
 (async () => {
@@ -77,7 +82,15 @@ async function save(doc, file) {
 
   // Pass 2 (TOC가 차지하는 페이지만큼 본문이 밀리므로 TOC_PAGES 보정)
   const tocBlocks = toc.map((e) => tocEntry(e.title, e.page == null ? null : e.page + TOC_PAGES));
-  const finalPath = path.join(OUT_DIR, outName);
-  await save(buildDoc(tocBlocks), finalPath);
+  const candidate = path.join(tmp, "candidate.docx");
+  await save(buildDoc(tocBlocks), candidate);
+  execFileSync("soffice", [`-env:UserInstallation=${profile}`, "--headless", "--convert-to", "pdf", "--outdir", tmp, candidate], { stdio: "inherit", timeout: COMMAND_TIMEOUT_MS });
+  const finalToc = path.join(tmp, "final-toc.json");
+  execFileSync(process.env.PYTHON || "python3", [path.join(SCRIPT_DIR, "gen_toc.py"), path.join(tmp, "candidate.pdf"), titlesJson, finalToc, "--skip-pages", String(TOC_PAGES)], { stdio: "inherit", timeout: COMMAND_TIMEOUT_MS + 10000 });
+  const verified = JSON.parse(fs.readFileSync(finalToc, "utf-8"));
+  if (verified.length !== toc.length || verified.some((item, i) => item.title !== toc[i].title || item.page !== toc[i].page + TOC_PAGES)) {
+    throw new Error("final page locations differ from the table of contents");
+  }
+  copyExclusive(candidate, finalPath);
   console.error(`[4/4] 최종 빌드 완료 → ${finalPath}`);
 })().catch((e) => { console.error("BUILD FAILED:", e); process.exit(1); });

@@ -1,50 +1,51 @@
 #!/usr/bin/env python3
-"""gen_toc.py — Pass1 PDF에서 각 TITLE의 첫 등장 페이지를 찾아 toc.json 생성.
+"""Extract unambiguous exact title lines from a PDF, failing on missing matches."""
+import argparse
+import json
+import re
+import subprocess
 
-사용: python3 gen_toc.py <temp.pdf> <titles.json> <out_toc.json>
-  titles.json: ["1. 개요", "2. ...", ...]  (fcontent.js의 TITLES와 동일)
-  out_toc.json: [{"title": "...", "page": N}, ...]
 
-원리: pdftotext -layout 로 페이지 구분(\\x0c) 보존 → 페이지별로 제목 문자열
-      최초 출현 페이지를 기록. 공백 정규화로 매칭 안정성 확보.
-"""
-import sys, json, subprocess, re
+def norm(value):
+    return re.sub(r"\s+", "", value)
 
-def norm(s: str) -> str:
-    return re.sub(r"\s+", "", s)
 
-def main():
-    if len(sys.argv) != 4:
-        print("usage: gen_toc.py <pdf> <titles.json> <out.json>", file=sys.stderr)
-        sys.exit(2)
-    pdf, titles_path, out_path = sys.argv[1:4]
+def find_titles(text, titles, skip_pages=0):
+    if not isinstance(titles, list) or not titles or any(not isinstance(t, str) or not norm(t) for t in titles):
+        raise ValueError("titles must be a nonempty list of nonempty strings")
+    keys = [norm(title) for title in titles]
+    if len(set(keys)) != len(keys):
+        raise ValueError("duplicate normalized titles")
+    pages = text.split("\x0c")
+    if skip_pages < 0 or skip_pages >= len(pages):
+        raise ValueError("invalid page skip")
+    lines = [[norm(line) for line in page.splitlines() if norm(line)] for page in pages]
+    results = []
+    for title, key in zip(titles, keys):
+        matches = [i + 1 for i, page in enumerate(lines) if i >= skip_pages for line in page if line == key]
+        if len(matches) != 1:
+            raise ValueError(f"title match count is {len(matches)}; inspect the extracted PDF")
+        results.append({"title": title, "page": matches[0]})
+    return results
 
-    txt = subprocess.run(
-        ["pdftotext", "-layout", pdf, "-"],
-        capture_output=True, text=True, check=True, timeout=120,
-    ).stdout
-    pages = [norm(page) for page in txt.split("\x0c")]  # 정규화는 페이지당 한 번
 
-    with open(titles_path, encoding="utf-8") as f:
-        titles = json.load(f)
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("pdf")
+    parser.add_argument("titles_json")
+    parser.add_argument("out_json")
+    parser.add_argument("--skip-pages", type=int, default=0)
+    args = parser.parse_args(argv)
+    txt = subprocess.run(["pdftotext", "-layout", "-enc", "UTF-8", args.pdf, "-"],
+                         capture_output=True, text=True, encoding="utf-8", errors="strict",
+                         check=True, timeout=120).stdout
+    with open(args.titles_json, encoding="utf-8") as source:
+        titles = json.load(source)
+    toc = find_titles(txt, titles, args.skip_pages)
+    with open(args.out_json, "x", encoding="utf-8") as target:
+        json.dump(toc, target, ensure_ascii=False, indent=2)
+    print(f"[OK] extracted {len(toc)} unambiguous titles")
 
-    toc, missing = [], []
-    for t in titles:
-        key, found = norm(t), None
-        for i, pg in enumerate(pages, start=1):
-            if key in pg:
-                found = i
-                break
-        toc.append({"title": t, "page": found})
-        if found is None:
-            missing.append(t)
-
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(toc, f, ensure_ascii=False, indent=2)
-
-    if missing:
-        print(f"[WARN] 페이지 미발견 {len(missing)}건: {missing}", file=sys.stderr)
-    print(f"[OK] toc.json 생성: {len(toc)}개 제목", file=sys.stderr)
 
 if __name__ == "__main__":
     main()

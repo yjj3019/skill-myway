@@ -24,6 +24,26 @@ def skills():
 
 
 class PackageAllSkills(unittest.TestCase):
+    def test_package_excludes_hidden_directories(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = Path(tmp) / "example"
+            (skill / ".private").mkdir(parents=True)
+            (skill / "SKILL.md").write_text("example", encoding="utf-8")
+            (skill / ".private" / "not-for-package.txt").write_text("fixture", encoding="utf-8")
+            dest, _, _ = package_skill.build(skill, Path(tmp) / "out", VERSION)
+            with zipfile.ZipFile(dest) as archive:
+                self.assertNotIn("example/.private/not-for-package.txt", archive.namelist())
+
+    def test_package_does_not_overwrite_existing_archive(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "out"
+            out.mkdir()
+            target = out / f"myway-writing-{VERSION}.zip"
+            target.write_bytes(b"preserve me")
+            with self.assertRaises(FileExistsError):
+                package_skill.build(SKILLS_DIR / "writing", out, VERSION)
+            self.assertEqual(target.read_bytes(), b"preserve me")
+
     def test_skill_selection_rejects_linked_directory(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d) / "skills"

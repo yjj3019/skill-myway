@@ -71,6 +71,8 @@ python3 scripts/package_skill.py --skill writing
 
 `dist/myway-writing-<버전>.zip`이 생기고, ZIP 안에 `<스킬이름>/SKILL.md`, 라이선스 본문과 해당 스킬의 `references/`가 들어갑니다. 업로드 메뉴와 한도는 계정·앱 버전에 따라 다릅니다.
 
+같은 이름의 ZIP이 이미 있으면 덮어쓰지 않고 실패합니다. 새 출력 디렉터리를 지정해 생성하세요.
+
 ### 스킬 직접 설치
 
 ```sh

@@ -192,6 +192,7 @@ def main(argv=None):
     deadline = started + args.max_seconds
     workdir = None
     summary = {"schema_version": 1, "case": case["id"], "platform": args.platform,
+               "workspace_isolation": "NOT VERIFIED",
                "max_calls": args.max_calls, "max_seconds": args.max_seconds, "attempted_calls": 0,
                "input_manifest": input_manifest,
                "followup_request_sha256": hashlib.sha256(dialogue["followup"]["request"].encode("utf-8")).hexdigest(),

@@ -8,12 +8,10 @@
 import argparse
 import json
 import os
-import py_compile
 import re
 import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 MAX_SKILL_LINES = 500
@@ -56,14 +54,41 @@ def frontmatter(text):
     return out
 
 
-def iter_text_files(root):
+def untracked_workspace_dirs(root):
+    """Exclude generated root directories only when Git proves none is tracked."""
+    root = Path(root)
+    if not (root / ".git").exists():
+        return set()
+    candidates = {".manual-eval", ".test-tmp", ".test-deps", ".test-venv", ".myway-tmp"}
+    candidates.update(p.name for p in root.iterdir() if p.name.startswith("eval-results"))
+    try:
+        env = {key: value for key, value in os.environ.items()
+               if key not in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR")}
+        env["GIT_OPTIONAL_LOCKS"] = "0"
+        result = subprocess.run(["git", "-C", str(root), "ls-files", "-z"],
+                                capture_output=True, check=True, timeout=20,
+                                env=env)
+        tracked_roots = {name.split("/", 1)[0] for name in result.stdout.decode("utf-8").split("\0") if name}
+    except (OSError, UnicodeError, subprocess.SubprocessError):
+        return set()
+    return candidates - tracked_roots
+
+
+def iter_workspace_files(root):
+    root = Path(root)
+    root_skips = untracked_workspace_dirs(root)
     for dp, dns, fns in os.walk(root):
-        dns[:] = [d for d in dns if d not in SKIP_DIRS]
+        dns[:] = [d for d in dns if d not in SKIP_DIRS and not (Path(dp) == root and d in root_skips)]
         for fn in fns:
-            p = Path(dp) / fn
-            if fn in SKIP_NAMES or p.suffix not in TEXT_EXT:
-                continue
-            yield p
+            yield Path(dp) / fn
+
+
+def iter_text_files(root):
+    for p in iter_workspace_files(root):
+        fn = p.name
+        if fn in SKIP_NAMES or p.suffix not in TEXT_EXT:
+            continue
+        yield p
 
 
 def check_manifests(root, errors):
@@ -232,15 +257,12 @@ def check_skills(plugin_dirs, errors):
 
 def check_code(root, errors):
     node = shutil.which("node")
-    for p in root.rglob("*"):
-        if any(part in SKIP_DIRS for part in p.parts):
-            continue
+    for p in iter_workspace_files(root):
         if p.suffix == ".py":
             try:
-                with tempfile.TemporaryDirectory() as td:
-                    py_compile.compile(str(p), cfile=os.path.join(td, "x.pyc"), doraise=True)
-            except py_compile.PyCompileError as e:
-                errors.append(f"{p}: Python 문법 오류 {e.msg.strip()}")
+                compile(p.read_bytes(), str(p), "exec")
+            except (OSError, SyntaxError, ValueError) as e:
+                errors.append(f"{p}: Python 문법 오류 {e}")
         elif p.suffix == ".js" and node:
             r = subprocess.run([node, "--check", str(p)], capture_output=True, text=True)
             if r.returncode:

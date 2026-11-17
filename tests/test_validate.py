@@ -5,6 +5,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -19,7 +20,7 @@ class ValidateRepo(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.tmp, True)
-        ignored = {".git", "__pycache__", "tests", "eval-results*", "node_modules", ".manual-eval"}
+        ignored = {".git", "__pycache__", "tests", "eval-results*", "node_modules", ".manual-eval", ".myway-tmp"}
         # A project-local temporary directory must not copy itself recursively.
         for local in (Path(tempfile.gettempdir()), Path(sys.prefix)):
             try:
@@ -37,6 +38,26 @@ class ValidateRepo(unittest.TestCase):
 
     def test_clean_repo_passes(self):
         self.assertEqual(self.errs(), [])
+
+    def test_generated_directory_is_skipped_only_if_git_proves_untracked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".git").mkdir()
+            (root / ".manual-eval").mkdir()
+            (root / ".test-tmp").mkdir()
+            (root / ".manual-eval" / "tracked.txt").write_text("x", encoding="utf-8")
+            (root / ".test-tmp" / "generated.txt").write_text("x", encoding="utf-8")
+            with mock.patch.object(validate_repo.subprocess, "run", return_value=mock.Mock(stdout=b".manual-eval/tracked.txt\0")):
+                files = {p.relative_to(root).as_posix() for p in validate_repo.iter_workspace_files(root)}
+            self.assertIn(".manual-eval/tracked.txt", files)
+            self.assertNotIn(".test-tmp/generated.txt", files)
+
+    def test_without_git_evidence_generated_directory_is_not_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".manual-eval").mkdir()
+            (root / ".manual-eval" / "file.txt").write_text("x", encoding="utf-8")
+            self.assertIn(root / ".manual-eval" / "file.txt", list(validate_repo.iter_workspace_files(root)))
 
     def test_missing_plugin_license_fails(self):
         (self.r / "plugins/myway/LICENSE").unlink()

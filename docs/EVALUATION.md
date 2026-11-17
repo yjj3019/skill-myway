@@ -32,6 +32,8 @@ python scripts/review_evaluation.py OUTPUT.md RUBRIC.json REVIEW.json
 
 ## 격리 테스트 환경
 
+평가용 작업 디렉터리는 사용자 경로 제한을 위해 이 저장소의 `.myway-tmp` 아래에 만든다. 별도 디렉터리라는 사실은 상위 `AGENTS.md`·`CLAUDE.md` 탐색, 도구의 쓰기 범위, 네트워크 또는 OS 권한 격리를 보장하지 않는다. 각 플랫폼의 실제 적용 범위를 관찰하기 전에는 평가 환경 독립성과 보안 격리를 미검증으로 기록한다.
+
 일반 타깃 평가에서도 `artifact_policy`와 `expected_extensions`를 manifest에 보존한다. 파일 필수 케이스는 `--platform codex --cases FILE --inspect-artifacts`가 필요하며, 검사 설정이 없으면 모델 호출 전에 거부한다. 검사 모드에서 필수·금지 파일과 확장자를 확인한다. 파일 정책을 관측하지 않은 실행은 자동 통과로 집계하지 않는다. 파일이 조건부이고 보존·검사를 요청하지 않았다면 생성 금지 프롬프트를 사용한다. 프롬프트는 쓰기 차단 장치가 아니다.
 
 시간 초과는 `runs[].status: timeout`과 케이스별 `timed_out`으로 집계한다. `completed + execution_failed + timed_out + not_run = repeats`다. 종료 코드가 0이어도 Codex 실패 이벤트가 관측되면 실행 실패다.

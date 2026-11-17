@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import re
 import sys
 import zipfile
@@ -67,11 +68,22 @@ def skill_dirs(names):
 def skill_files(skill_dir):
     root = skill_dir.resolve()
     files = []
-    for path in skill_dir.rglob("*"):
-        if path.is_symlink() or not path.resolve().is_relative_to(root):
-            raise ValueError("linked or out-of-tree skill path is not supported")
-        if path.is_file() and "__pycache__" not in path.parts and not path.name.startswith("."):
-            files.append(path)
+    def fail(error):
+        raise error
+    for directory, dirs, names in os.walk(skill_dir, followlinks=False, onerror=fail):
+        dirs[:] = [name for name in dirs if not name.startswith(".") and name != "__pycache__"]
+        for name in dirs:
+            path = Path(directory) / name
+            if path.is_symlink() or (hasattr(path, "is_junction") and path.is_junction()) or not path.resolve().is_relative_to(root):
+                raise ValueError("linked or out-of-tree skill path is not supported")
+        for name in names:
+            if name.startswith("."):
+                continue
+            path = Path(directory) / name
+            if path.is_symlink() or not path.resolve().is_relative_to(root):
+                raise ValueError("linked or out-of-tree skill path is not supported")
+            if path.is_file():
+                files.append(path)
     return sorted(files)
 
 
@@ -112,7 +124,7 @@ def build(skill_dir, out_dir, version):
     files = [path for path in files if path not in (skill_dir / "LICENSE", skill_dir / "SKILL.md")]
     out_dir.mkdir(parents=True, exist_ok=True)
     dest = out_dir / f"myway-{skill_dir.name}-{version}.zip"
-    with zipfile.ZipFile(dest, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+    with zipfile.ZipFile(dest, "x", compression=zipfile.ZIP_DEFLATED) as archive:
         entries = [(path.relative_to(skill_dir).as_posix(), path) for path in files]
         entries.extend((("LICENSE", None), ("SKILL.md", None)))
         for relative, path in sorted(entries):

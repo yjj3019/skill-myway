@@ -61,6 +61,15 @@ class BlindReview(unittest.TestCase):
             with self.assertRaises(ValueError):
                 blind_review.load_cases(bad)
 
+    def test_repeated_candidate_and_nested_case_field_are_rejected_before_assignment(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "input.json"
+            for raw in (r'{"c1":"one","\u00631":"two"}',
+                        r'{"cases":[{"source":"one","\u0073ource":"two"}]}'):
+                with self.subTest(raw=raw), self.assertRaisesRegex(ValueError, "duplicate JSON key"):
+                    path.write_text(raw, encoding="utf-8")
+                    blind_review.read_json(path)
+
     def test_rejects_bad_candidates(self):
         ids = ["c1", "c2"]
         for bad in (

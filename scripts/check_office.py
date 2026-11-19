@@ -12,6 +12,8 @@
 """
 from __future__ import annotations
 
+from contextlib import ExitStack, closing
+
 import argparse
 import json
 import shutil
@@ -125,25 +127,26 @@ def inspect_office_file(path):
                         "external_relationships": external_links}
             if suffix == ".xlsx":
                 from openpyxl import load_workbook
-                formulas = load_workbook(path, data_only=False, read_only=True, keep_links=False)
-                cached = load_workbook(path, data_only=True, read_only=True, keep_links=False)
-                try:
+                with ExitStack() as stack:
+                    formulas = stack.enter_context(closing(load_workbook(
+                        path, data_only=False, read_only=True, keep_links=False)))
+                    cached = stack.enter_context(closing(load_workbook(
+                        path, data_only=True, read_only=True, keep_links=False)))
                     formula_cells = []
                     missing_cache = []
                     cached_errors = []
                     for formula_sheet in formulas.worksheets:
                         cached_sheet = cached[formula_sheet.title]
-                        for row in formula_sheet.iter_rows():
-                            for cell in row:
-                                if isinstance(cell.value, str) and cell.value.startswith("="):
-                                    formula_cells.append(f"{formula_sheet.title}!{cell.coordinate}")
-                                    cached_value = cached_sheet[cell.coordinate].value
-                                    address = f"{formula_sheet.title}!{cell.coordinate}"
-                                    if cached_value is None:
-                                        missing_cache.append(address)
-                                    elif isinstance(cached_value, str) and cached_value in {
-                                            "#REF!", "#DIV/0!", "#VALUE!", "#N/A", "#NAME?", "#NULL!", "#NUM!"}:
-                                        cached_errors.append({"cell": address, "error": cached_value})
+                        for row, cached_row in zip(formula_sheet.rows, cached_sheet.rows, strict=True):
+                            for cell, cached_cell in zip(row, cached_row, strict=True):
+                                if cell.data_type != "f":
+                                    continue
+                                address = f"{formula_sheet.title}!{cell.coordinate}"
+                                formula_cells.append(address)
+                                if cached_cell.value is None:
+                                    missing_cache.append(address)
+                                elif cached_cell.data_type == "e":
+                                    cached_errors.append({"cell": address, "error": cached_cell.value})
                     calc_status = ("FAIL" if cached_errors else
                                    "NOT VERIFIED" if missing_cache else
                                    "PASS" if formula_cells else "NOT APPLICABLE")
@@ -151,11 +154,9 @@ def inspect_office_file(path):
                             "formula_cells": formula_cells, "missing_formula_caches": missing_cache,
                             "cached_formula_errors": cached_errors,
                             "calculation_status": calc_status}
-                finally:
-                    formulas.close()
-                    cached.close()
             if suffix == ".pptx":
                 from pptx import Presentation
+                from pptx.enum.shapes import MSO_SHAPE_TYPE
                 presentation = Presentation(path)
                 titles = []
                 for slide in presentation.slides:
@@ -167,7 +168,8 @@ def inspect_office_file(path):
                             {"slide": slide_index, "shape": shape.name}
                             for slide_index, slide in enumerate(presentation.slides, 1)
                             for shape in slide.shapes
-                            if shape.shape_type == 13 and not getattr(shape, "descr", "").strip()
+                            if shape.shape_type == MSO_SHAPE_TYPE.PICTURE
+                            and not (shape._element.nvPicPr.cNvPr.get("descr") or "").strip()
                         ]}
             from docx import Document
             document = Document(path)
@@ -175,11 +177,10 @@ def inspect_office_file(path):
                     "tables": len(document.tables),
                     "headings": [p.text for p in document.paragraphs if p.style.name.startswith("Heading")],
                     "images_without_alt_text": [
-                        shape.name for shape in document.inline_shapes
+                        shape._inline.docPr.get("name") for shape in document.inline_shapes
+                        if shape._inline.xpath("./a:graphic/a:graphicData/pic:pic")
                         if not (shape._inline.docPr.get("descr") or "").strip()
                     ]}
-    except PermissionError as exc:
-        return {**result, "status": "NOT VERIFIED", "reason": f"file busy or permission denied: {exc}"}
     except PermissionError as exc:
         return {**result, "status": "NOT VERIFIED", "reason": f"file busy or permission denied: {exc}"}
     except ImportError as exc:

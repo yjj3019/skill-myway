@@ -6,13 +6,15 @@
 종료 코드: 0 통과, 1 실패.
 """
 import argparse
-import json
 import os
 import re
 import shutil
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+
+import contract_json
+import eval_inputs
 
 MAX_SKILL_LINES = 500
 MAX_DESC = 1024
@@ -35,8 +37,11 @@ SAFE_EMAIL = re.compile(r"@(example\.(com|org)|users\.noreply\.github\.com)$|^no
 
 def read_json(path, errors):
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as e:
+        data = contract_json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError("최상위 값은 JSON 객체여야 함")
+        return data
+    except (OSError, ValueError, RecursionError) as e:
         errors.append(f"{path}: JSON을 읽을 수 없음 ({e})")
         return None
 
@@ -91,6 +96,23 @@ def iter_text_files(root):
         yield p
 
 
+def plugin_entries(manifest, path, errors):
+    plugins = manifest.get("plugins")
+    entries = {}
+    if not isinstance(plugins, list) or not plugins:
+        errors.append(f"{path}: plugins는 비어 있지 않은 배열이어야 함")
+        return entries
+    for index, entry in enumerate(plugins):
+        name = entry.get("name") if isinstance(entry, dict) else None
+        if not isinstance(name, str) or not name.strip():
+            errors.append(f"{path}: plugins[{index}].name은 비어 있지 않은 문자열이어야 함")
+        elif name in entries:
+            errors.append(f"{path}: 중복 플러그인 이름 {name}")
+        else:
+            entries[name] = entry
+    return entries
+
+
 def check_manifests(root, errors):
     mp = root / ".claude-plugin" / "marketplace.json"
     if not mp.is_file():
@@ -106,16 +128,13 @@ def check_manifests(root, errors):
         errors.append("marketplace.json: owner.name 없음")
     version_file = root / "VERSION"
     version = version_file.read_text(encoding="utf-8").strip() if version_file.is_file() else None
-    if version is None:
-        errors.append("VERSION 파일 없음")
+    if not version:
+        errors.append("VERSION 파일 없음 또는 빈 버전")
     plugin_dirs = []
-    plugins = mk.get("plugins")
-    if not isinstance(plugins, list) or not plugins:
-        errors.append("marketplace.json: plugins가 비어 있음")
-        return []
-    for entry in plugins:
-        name, src = entry.get("name"), entry.get("source", "")
-        if not name or not str(src).startswith("./"):
+    plugins = plugin_entries(mk, mp, errors)
+    for name, entry in plugins.items():
+        src = entry.get("source")
+        if not isinstance(src, str) or not src.startswith("./"):
             errors.append(f"marketplace.json: 플러그인 항목 형식 오류 {entry}")
             continue
         if ".." in str(src):
@@ -142,7 +161,8 @@ def check_manifests(root, errors):
             if version and cm.get("version") != version:
                 errors.append(f"버전 불일치: codex plugin.json={cm.get('version')}, VERSION={version}")
             skills = cm.get("skills")
-            if not isinstance(skills, str) or not skills.strip().lstrip("./") or not (pdir / skills.lstrip("./")).is_dir():
+            if (not isinstance(skills, str) or PurePosixPath(skills) != PurePosixPath("skills")
+                    or not (pdir / "skills").is_dir()):
                 errors.append(f"{cx}: skills 경로 없음")
         # Codex canonical 포터블 매니페스트. 없거나 버전이 어긋나면 설치본이 갱신되지 않는다.
         rp = pdir / "plugin.json"
@@ -155,15 +175,19 @@ def check_manifests(root, errors):
             if version and rm.get("version") != version:
                 errors.append(f"버전 불일치: plugin.json={rm.get('version')}, VERSION={version}")
         plugin_dirs.append(pdir)
-    check_codex_marketplace(root, [e.get("name") for e in plugins], errors)
-    check_grok_marketplace(root, [e.get("name") for e in plugins], version, errors)
-    metadata_version = (mk.get("metadata") or {}).get("version")
-    if version and metadata_version and metadata_version != version:
+    check_codex_marketplace(root, plugins, errors)
+    check_grok_marketplace(root, plugins, version, errors)
+    metadata = mk.get("metadata", {})
+    if not isinstance(metadata, dict):
+        errors.append(f"{mp}: metadata는 객체여야 함")
+        metadata = {}
+    metadata_version = metadata.get("version")
+    if version and metadata_version != version:
         errors.append(f"버전 불일치: marketplace metadata={metadata_version}, VERSION={version}")
     return plugin_dirs
 
 
-def check_codex_marketplace(root, names, errors):
+def check_codex_marketplace(root, plugins, errors):
     mp = root / ".agents" / "plugins" / "marketplace.json"
     if not mp.is_file():
         errors.append("Codex 마켓플레이스 없음: .agents/plugins/marketplace.json")
@@ -171,8 +195,8 @@ def check_codex_marketplace(root, names, errors):
     mk = read_json(mp, errors)
     if not isinstance(mk, dict):
         return
-    entries = {e.get("name"): e for e in mk.get("plugins", [])}
-    for n in names:
+    entries = plugin_entries(mk, mp, errors)
+    for n, plugin in plugins.items():
         e = entries.get(n)
         if not e:
             errors.append(f"Codex 마켓플레이스에 '{n}' 없음")
@@ -183,12 +207,14 @@ def check_codex_marketplace(root, names, errors):
             errors.append(f"Codex 마켓플레이스: '{n}' source에 '..' 사용 불가 {path}")
         elif not str(path).startswith("./") or not (root / str(path)[2:]).is_dir():
             errors.append(f"Codex 마켓플레이스: '{n}' source 경로 오류 {path}")
+        elif PurePosixPath(path) != PurePosixPath(str(plugin.get("source"))):
+            errors.append(f"Codex 마켓플레이스: '{n}' source가 Claude 플러그인 경로와 다름")
         pol = e.get("policy") or {}
-        if not (pol.get("installation") and pol.get("authentication") and e.get("category")):
+        if not (isinstance(pol, dict) and pol.get("installation") and pol.get("authentication") and e.get("category")):
             errors.append(f"Codex 마켓플레이스: '{n}' policy/category 누락")
 
 
-def check_grok_marketplace(root, names, version, errors):
+def check_grok_marketplace(root, plugins, version, errors):
     mp = root / ".grok-plugin" / "marketplace.json"
     if not mp.is_file():
         errors.append("Grok 마켓플레이스 없음: .grok-plugin/marketplace.json")
@@ -199,18 +225,23 @@ def check_grok_marketplace(root, names, version, errors):
     for key in ("name", "description", "owner", "plugins"):
         if key not in mk:
             errors.append(f"Grok 마켓플레이스: '{key}' 없음")
-    entries = {e.get("name"): e for e in mk.get("plugins", [])}
-    for n in names:
+    entries = plugin_entries(mk, mp, errors)
+    for n, plugin in plugins.items():
         e = entries.get(n)
         if not e:
             errors.append(f"Grok 마켓플레이스에 '{n}' 없음")
             continue
-        src = e.get("source") or {}
+        src = e.get("source")
+        if not isinstance(src, dict):
+            errors.append(f"Grok 마켓플레이스: '{n}' source는 객체여야 함")
+            continue
         path = src.get("path", "")
         if ".." in str(path):
             errors.append(f"Grok 마켓플레이스: '{n}' source에 '..' 사용 불가 {path}")
         elif src.get("type") != "local" or not str(path).startswith("./") or not (root / str(path)[2:]).is_dir():
             errors.append(f"Grok 마켓플레이스: '{n}' source 오류 {src}")
+        elif PurePosixPath(path) != PurePosixPath(str(plugin.get("source"))):
+            errors.append(f"Grok 마켓플레이스: '{n}' source가 Claude 플러그인 경로와 다름")
         if version and e.get("version") != version:
             errors.append(f"버전 불일치: grok marketplace={e.get('version')}, VERSION={version}")
 
@@ -317,6 +348,17 @@ def check_license_copies(root, plugin_dirs, errors):
 def validate(root, extra_terms=()):
     root = Path(root)
     errors = []
+    pins = read_json(root / "tests/eval_inputs.sha256.json", errors)
+    if isinstance(pins, dict):
+        try:
+            actual = eval_inputs.inventory(root / "tests/eval_cases")
+            for name in sorted(actual.keys() | pins.keys()):
+                if name not in actual or pins.get(name) != actual[name]:
+                    errors.append(f"평가 입력 기준 불일치: {name}")
+        except (OSError, ValueError) as exc:
+            errors.append(f"평가 입력을 확인할 수 없음: {exc}")
+    else:
+        errors.append("평가 입력 기준표가 필요합니다")
     plugin_dirs = check_manifests(root, errors)
     check_license_copies(root, plugin_dirs, errors)
     check_skills(plugin_dirs, errors)

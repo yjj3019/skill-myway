@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "artifacts": {
+    "weekly-review": {
+      "source_sha256": "d3c991fe567933c083b07d335f5c220b5a10c40920b26e83a4efe5acfa254455",
+      "surfaces": {
+        "compact.png": [
+          800,
+          600
+        ],
+        "wide.png": [
+          1280,
+          720
+        ]
+      }
+    }
+  }
+}

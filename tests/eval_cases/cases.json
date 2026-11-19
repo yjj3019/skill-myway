@@ -826,6 +826,24 @@
       "required": [["브랜드", "기존"], ["확인", "검토"]],
       "forbidden": [],
       "max_chars": 6000
+    },
+    {
+      "skill": "evidence-first",
+      "id": "evidence-first-ci-rerun",
+      "request": "가상 PR의 현재 커밋에서 필수 검증의 첫 시도는 성공했고 같은 워크플로의 최신 재실행은 진행 중이다. 다른 커밋의 동명 작업도 성공했다. 현재 커밋의 첫 시도와 최신 시도 상태(first, latest: success/failure/in_progress), 현재 판정(verdict: pass/fail/pending), 다른 커밋을 근거에 포함할지(use_other_commit: 불리언)를 JSON 객체 한 개로만 답해.",
+      "expected_json": {"first": "success", "latest": "in_progress", "verdict": "pending", "use_other_commit": false},
+      "required": [],
+      "forbidden": [],
+      "max_chars": 4000
+    },
+    {
+      "skill": "visual-design",
+      "id": "visual-design-measured-zero",
+      "request": "가상 첫 화면의 너비는 360 CSS px이고 상단 제목의 잘린 요소를 세니 0개였다. 배경색 자료가 없어 본문 대비는 측정할 수 없다. 너비(width_css_px)와 잘린 상단 제목 수(clipped_titles)는 정수로, 본문 대비비(contrast_ratio)는 숫자나 미측정인 경우 null로 적어. JSON 객체 한 개로만 답해.",
+      "expected_json": {"width_css_px": 360, "clipped_titles": 0, "contrast_ratio": null},
+      "required": [],
+      "forbidden": [],
+      "max_chars": 4000
     }
   ]
 }

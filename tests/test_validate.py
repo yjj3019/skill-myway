@@ -1,5 +1,4 @@
 import importlib.util
-import importlib.util
 import json
 import shutil
 import sys
@@ -29,6 +28,8 @@ class ValidateRepo(unittest.TestCase):
                 pass
         shutil.copytree(ROOT, self.tmp / "r", ignore=shutil.ignore_patterns(*ignored))
         self.r = self.tmp / "r"
+        shutil.copytree(ROOT / "tests/eval_cases", self.r / "tests/eval_cases")
+        shutil.copy2(ROOT / "tests/eval_inputs.sha256.json", self.r / "tests")
 
     def errs(self, terms=()):
         return validate_repo.validate(self.r, terms)
@@ -38,6 +39,48 @@ class ValidateRepo(unittest.TestCase):
 
     def test_clean_repo_passes(self):
         self.assertEqual(self.errs(), [])
+
+    def test_eval_baseline_tracks_changed_added_and_missing_text(self):
+        corpus = self.r / "tests/eval_cases"
+        changed = corpus / "cases.json"
+        changed.write_bytes(changed.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+        self.assertEqual(self.errs(), [])
+        changed.write_bytes(changed.read_bytes() + b" ")
+        (corpus / "new.md").write_text("additional rubric", encoding="utf-8")
+        (corpus / "review-rubric.json").unlink()
+        mismatches = {err.split(": ")[-1] for err in self.errs() if "평가 입력 기준 불일치" in err}
+        self.assertEqual(mismatches, {"cases.json", "new.md", "review-rubric.json"})
+
+    def test_malformed_manifest_shapes_return_diagnostics(self):
+        for relative, transform in (
+            (".claude-plugin/marketplace.json", lambda m: []),
+            (".agents/plugins/marketplace.json", lambda m: None),
+            (".grok-plugin/marketplace.json", lambda m: "grok"),
+            ("plugins/myway/plugin.json", lambda m: [1]),
+            (".claude-plugin/marketplace.json", lambda m: dict(m, metadata=[])),
+            (".claude-plugin/marketplace.json", lambda m: dict(m, metadata={})),
+            (".agents/plugins/marketplace.json", lambda m: dict(m, plugins=[dict(m["plugins"][0], source="./docs")])),
+            (".grok-plugin/marketplace.json", lambda m: dict(m, plugins=[
+                dict(m["plugins"][0], source={"type": "local", "path": "./docs"})])),
+            (".claude-plugin/marketplace.json", lambda m: dict(m, plugins=[None])),
+            (".agents/plugins/marketplace.json", lambda m: dict(m, plugins=m["plugins"] * 2)),
+            (".agents/plugins/marketplace.json", lambda m: dict(m, plugins=[dict(m["plugins"][0], policy="on")])),
+            (".grok-plugin/marketplace.json", lambda m: dict(m, plugins=[dict(m["plugins"][0], source="local")])),
+        ):
+            path = self.r / relative
+            original = path.read_bytes()
+            with self.subTest(relative=relative):
+                path.write_text(json.dumps(transform(json.loads(original))), encoding="utf-8")
+                errors = []
+                validate_repo.check_manifests(self.r, errors)
+                self.assertTrue(errors)
+            path.write_bytes(original)
+
+    def test_escaped_duplicate_manifest_version_is_rejected(self):
+        path = self.r / "plugins/myway/plugin.json"
+        raw = path.read_text(encoding="utf-8")
+        path.write_text(raw.replace('"version":', r'"versi\u006fn":"wrong","version":'), encoding="utf-8")
+        self.assertTrue(any("duplicate JSON key" in err for err in self.errs()))
 
     def test_generated_directory_is_skipped_only_if_git_proves_untracked(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -135,7 +178,7 @@ class ValidateRepo(unittest.TestCase):
     def test_codex_plugin_skills_path_invalid(self):
         p = self.r / "plugins/myway/.codex-plugin/plugin.json"
         meta = json.loads(p.read_text(encoding="utf-8"))
-        for skills in (None, "", [], "./missing"):
+        for skills in (None, "", [], "./missing", "../skills", ".claude-plugin"):
             with self.subTest(skills=skills):
                 meta["skills"] = skills
                 p.write_text(json.dumps(meta), encoding="utf-8")

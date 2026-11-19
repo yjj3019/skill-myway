@@ -16,6 +16,7 @@ import re
 import sys
 import zipfile
 from pathlib import Path
+from atomic_output import new_output
 from validate_repo import frontmatter
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -124,17 +125,21 @@ def build(skill_dir, out_dir, version):
     files = [path for path in files if path not in (skill_dir / "LICENSE", skill_dir / "SKILL.md")]
     out_dir.mkdir(parents=True, exist_ok=True)
     dest = out_dir / f"myway-{skill_dir.name}-{version}.zip"
-    with zipfile.ZipFile(dest, "x", compression=zipfile.ZIP_DEFLATED) as archive:
-        entries = [(path.relative_to(skill_dir).as_posix(), path) for path in files]
-        entries.extend((("LICENSE", None), ("SKILL.md", None)))
-        for relative, path in sorted(entries):
-            arcname = Path(skill_dir.name) / relative
-            info = zipfile.ZipInfo(arcname.as_posix(), date_time=FIXED_TIME)
-            info.compress_type = zipfile.ZIP_DEFLATED
-            info.external_attr = 0o644 << 16
-            data = content if relative == "LICENSE" else skill_body if relative == "SKILL.md" else path.read_bytes()
-            archive.writestr(info, data)
-    digest = hashlib.sha256(dest.read_bytes()).hexdigest()
+    if dest.exists():
+        raise FileExistsError(f"이미 존재하는 ZIP: {dest}")
+    entries = [(path.relative_to(skill_dir).as_posix(), path) for path in files]
+    entries.extend((("LICENSE", None), ("SKILL.md", None)))
+    with new_output(dest) as stream:
+        with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for relative, path in sorted(entries):
+                arcname = Path(skill_dir.name) / relative
+                info = zipfile.ZipInfo(arcname.as_posix(), date_time=FIXED_TIME)
+                info.compress_type = zipfile.ZIP_DEFLATED
+                info.external_attr = 0o644 << 16
+                data = content if relative == "LICENSE" else skill_body if relative == "SKILL.md" else path.read_bytes()
+                archive.writestr(info, data)
+        stream.seek(0)
+        digest = hashlib.file_digest(stream, "sha256").hexdigest()
     return dest, len(entries), digest
 
 

@@ -8,8 +8,12 @@
 같은 이름의 기존 스킬이 있으면 건드리지 않고 건너뛴다. 덮어쓰려면 --force.
 """
 import argparse
+import ctypes
+import errno
+import os
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 from package_skill import local_skill_directories, skill_files, skill_license
 
@@ -18,15 +22,88 @@ SRC = Path(__file__).resolve().parent.parent / "plugins" / "myway" / "skills"
 LICENSE = Path(__file__).resolve().parent.parent / "LICENSE"
 
 
+def publish_without_replacing(staged, target):
+    """Atomically publish a directory only if the target name is still free."""
+    if os.name == "nt":
+        staged.rename(target)
+        return
+    libc = ctypes.CDLL(None, use_errno=True)
+    if sys.platform.startswith("linux"):
+        rename = getattr(libc, "renameat2", None)
+        args = (-100, os.fsencode(staged), -100, os.fsencode(target), 1)
+    elif sys.platform == "darwin":
+        rename = getattr(libc, "renamex_np", None)
+        args = (os.fsencode(staged), os.fsencode(target), 4)
+    else:
+        rename = None
+    if rename is None:
+        raise OSError(errno.ENOTSUP, "exclusive directory rename unavailable")
+    rename.restype = ctypes.c_int
+    if rename(*args) != 0:
+        error = ctypes.get_errno()
+        raise OSError(error, os.strerror(error), str(target))
+
+
+def install_one(skill, target, link, force, checked_files):
+    if not force and (target.exists() or target.is_symlink()):
+        return False
+    work = Path(tempfile.mkdtemp(prefix=".myway-install-", dir=target.parent))
+    staged = work / "new"
+    backup = work / "previous"
+    keep_backup = False
+    try:
+        if link:
+            staged.symlink_to(skill, target_is_directory=True)
+        else:
+            shutil.copytree(skill, staged, ignore=shutil.ignore_patterns("__pycache__", ".*"))
+            license_content, skill_body = checked_files
+            (staged / "LICENSE").write_bytes(license_content)
+            (staged / "SKILL.md").write_bytes(skill_body)
+        if target.exists() or target.is_symlink():
+            if not force:
+                return False
+            target.rename(backup)
+        try:
+            if force:
+                staged.rename(target)
+            else:
+                try:
+                    publish_without_replacing(staged, target)
+                except FileExistsError:
+                    return False
+        except BaseException:
+            if backup.exists() or backup.is_symlink():
+                try:
+                    if target.exists() or target.is_symlink():
+                        raise FileExistsError(target)
+                    backup.rename(target)
+                except OSError as exc:
+                    keep_backup = True
+                    raise OSError(f"기존 설치 복구 필요: {backup}") from exc
+            raise
+        return True
+    finally:
+        if not keep_backup:
+            shutil.rmtree(work)
+
+
 def install(dest, link=False, force=False):
     dest = Path(dest).expanduser()
     skills = local_skill_directories(SRC)
+    destination = dest.resolve()
+    source = SRC.resolve()
+    if destination.is_relative_to(source):
+        raise ValueError("설치 대상과 스킬 원본 경로가 겹침")
     license_contents = {}
+    already_present = set()
     # Validate every selected license before changing any destination.
     for skill in skills:
         target = dest / skill.name
         if not force and (target.exists() or target.is_symlink()):
+            already_present.add(skill.name)
             continue
+        if source.is_relative_to(destination / skill.name):
+            raise ValueError("설치 대상과 스킬 원본 경로가 겹침")
         skill_files(skill)
         if not link:
             _, license_content, skill_body = skill_license(skill, LICENSE)
@@ -35,19 +112,13 @@ def install(dest, link=False, force=False):
     done, skipped = [], []
     for skill in skills:
         target = dest / skill.name
-        if target.exists() or target.is_symlink():
-            if not force:
-                skipped.append(skill.name)
-                continue
-            shutil.rmtree(target) if target.is_dir() and not target.is_symlink() else target.unlink()
-        if link:
-            target.symlink_to(skill, target_is_directory=True)
+        if skill.name in already_present:
+            skipped.append(skill.name)
+            continue
+        if install_one(skill, target, link, force, license_contents.get(skill.name)):
+            done.append(skill.name)
         else:
-            shutil.copytree(skill, target, ignore=shutil.ignore_patterns("__pycache__", ".*"))
-            license_content, skill_body = license_contents[skill.name]
-            (target / "LICENSE").write_bytes(license_content)
-            (target / "SKILL.md").write_bytes(skill_body)
-        done.append(skill.name)
+            skipped.append(skill.name)
     return done, skipped
 
 

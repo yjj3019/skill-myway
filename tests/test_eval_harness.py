@@ -42,7 +42,8 @@ class SimulateEval(unittest.TestCase):
                 case_id = f"{skill}-audit-{kind}"
                 self.assertIn(case_id, cases)
                 self.assertTrue(cases[case_id]["required"])
-        self.assertTrue(all(case.get("required") or case.get("ends_with") for case in doc["cases"]))
+        self.assertTrue(all(case.get("required") or case.get("ends_with") or case.get("expected_json")
+                            for case in doc["cases"]))
 
     def test_rhel_missing_identifier_case_checks_response_mode(self):
         doc = simulate_eval.load_cases(simulate_eval.DEFAULT_CASES)
@@ -52,6 +53,53 @@ class SimulateEval(unittest.TestCase):
         self.assertEqual(good["missing_required"], [])
         self.assertEqual(good["forbidden_found"], [])
         self.assertTrue(bad["forbidden_found"])
+
+    def test_structured_cases_reject_wrong_conclusions_and_ambiguous_json(self):
+        cases = simulate_eval.load_cases(simulate_eval.DEFAULT_CASES)["cases"]
+        by_id = {case["id"]: case for case in cases}
+        for ident, incorrect in (
+            ("evidence-first-ci-rerun", (
+                "현재 커밋은 재실행이 진행 중이지만 첫 시도가 성공했으므로 최종 통과입니다.",
+                {"verdict": "pass"}, {"use_other_commit": 0}, {"latest": "success"})),
+            ("visual-design-measured-zero", (
+                "상단 제목은 10개가 잘렸고, 배경색을 모르지만 본문 대비는 합격입니다.",
+                {"clipped_titles": 10}, {"clipped_titles": False}, {"contrast_ratio": 0},
+                {"width_css_px": 1280}, {"contrast_ratio": "null"})),
+        ):
+            case = by_id[ident]
+            expected = case["expected_json"]
+            good = json.dumps(expected, indent=2, sort_keys=True)
+            self.assertTrue(run_eval.evaluate_output(good, case)["json_answer_ok"])
+            bad_outputs = [json.dumps({**expected, **bad}) if isinstance(bad, dict) else bad
+                           for bad in incorrect]
+            key = next(iter(expected))
+            bad_outputs.extend([good + " contradictory note", "{}", json.dumps(dict(expected, note="pass")),
+                                '{"' + key + '":null,' + good[1:]])
+            for output in bad_outputs:
+                with self.subTest(ident=ident, output=output):
+                    self.assertFalse(run_eval.evaluate_output(output, case)["json_answer_ok"])
+            self.assertEqual(simulate_eval.manifest({"cases": [case]})["cases"][0]["expected_json"], expected)
+
+    def test_structured_check_controls_targeted_and_dialogue_verdicts(self):
+        import dialogue_eval
+        doc = sample_cases()
+        doc["schema_version"] = 2
+        case = doc["cases"][0]
+        case.update(required=[], expected_json={"count": 0})
+        for answer, expected_pass in (({"count": 10}, False), ({"count": 0}, True)):
+            output = json.dumps(answer)
+            output = output.replace('"count"', r'"\u0063ount"')
+            self.assertEqual(dialogue_eval.auto_check(output, case)[1], expected_pass)
+            with tempfile.TemporaryDirectory() as tmp:
+                source, out = Path(tmp) / "cases.json", Path(tmp) / "out"
+                source.write_text(json.dumps(doc), encoding="utf-8")
+                with mock.patch.object(run_eval, "run_case", return_value={
+                    "output": output, "exit_code": 0, "seconds": 0, "stderr_tail": ""}):
+                    status = run_eval.main(["--cases", str(source), "--out", str(out), "--only",
+                                            case["skill"], "--max-calls", "1"])
+                self.assertEqual(status, 0 if expected_pass else 1)
+                entry = json.loads((out / "summary.json").read_text(encoding="utf-8"))["cases"][0]
+                self.assertEqual(entry["auto_checks_passed"], expected_pass)
 
     def test_missing_coverage_fails(self):
         doc = sample_cases()
@@ -569,16 +617,48 @@ class RunEval(unittest.TestCase):
             run_eval.main(["--cases", str(simulate_eval.DEFAULT_CASES), "--inspect-artifacts",
                            "--platform", "claude", "--dry-run"])
 
+    def test_office_inspector_reads_picture_descriptions_from_saved_documents(self):
+        from docx import Document
+        from pptx import Presentation
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            image = folder / "example.png"
+            Image.new("RGB", (8, 8)).save(image)
+            doc = Document()
+            described = doc.add_picture(str(image))
+            described._inline.docPr.set("descr", "Example image")
+            missing = doc.add_picture(str(image))
+            missing._inline.docPr.attrib.pop("descr", None)
+            doc.save(folder / "document.docx")
+            report = check_office.inspect_office_file(folder / "document.docx")
+            self.assertEqual(report["status"], "PASS", report)
+            self.assertEqual(report["images_without_alt_text"], [missing._inline.docPr.get("name")])
+
+            deck = Presentation()
+            slide = deck.slides.add_slide(deck.slide_layouts[6])
+            described = slide.shapes.add_picture(str(image), 0, 0)
+            described._element.nvPicPr.cNvPr.set("descr", "Example image")
+            missing = slide.shapes.add_picture(str(image), 0, 0)
+            missing._element.nvPicPr.cNvPr.attrib.pop("descr", None)
+            deck.save(folder / "slides.pptx")
+            report = check_office.inspect_office_file(folder / "slides.pptx")
+            self.assertEqual(report["status"], "PASS", report)
+            self.assertEqual(report["images_without_alt_text"], [{"slide": 1, "shape": missing.name}])
+
     def test_office_inspector_checks_generated_xlsx_and_cache_scope(self):
         from openpyxl import Workbook
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             path = Path(tmp) / "sample.xlsx"
             wb = Workbook()
             wb.active["A1"] = "=SUM(1,2)"
+            wb.active["B3"] = "=literal"
+            wb.active["B3"].data_type = "s"
             wb.save(path)
             report = check_office.inspect_office_file(path)
         self.assertEqual(report["status"], "PASS")
-        self.assertIn("Sheet!A1", report["formula_cells"])
+        self.assertEqual(report["formula_cells"], ["Sheet!A1"])
         self.assertIn("Sheet!A1", report["missing_formula_caches"])
         self.assertEqual(report["calculation_status"], "NOT VERIFIED")
 

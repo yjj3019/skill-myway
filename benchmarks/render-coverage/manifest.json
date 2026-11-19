@@ -1,0 +1,59 @@
+{
+  "schema_version": 3,
+  "artifacts": [
+    {
+      "id": "weekly-review",
+      "kind": "html",
+      "source": {
+        "path": "sample.html",
+        "sha256": "d3c991fe567933c083b07d335f5c220b5a10c40920b26e83a4efe5acfa254455"
+      },
+      "surfaces": [
+        {
+          "index": 1,
+          "render": {
+            "path": "compact.png",
+            "sha256": "3c85916302ca2605b17a64e123faa57efd0c3a2ce88660e2b9324427be8a0a36"
+          },
+          "measurements": [
+            {
+              "name": "capture width",
+              "value": 800,
+              "unit": "px",
+              "location": "entire PNG"
+            }
+          ],
+          "review": {
+            "source_sha256": "d3c991fe567933c083b07d335f5c220b5a10c40920b26e83a4efe5acfa254455",
+            "render_sha256": "3c85916302ca2605b17a64e123faa57efd0c3a2ce88660e2b9324427be8a0a36",
+            "status": "NOT VERIFIED",
+            "open_critical": 0,
+            "open_major": 0
+          }
+        },
+        {
+          "index": 2,
+          "render": {
+            "path": "wide.png",
+            "sha256": "78ecbbd00cfdfba212b23ca5fe4bc33bdeae664633f24ba876b5bdaadf84f21d"
+          },
+          "measurements": [
+            {
+              "name": "capture width",
+              "value": 1280,
+              "unit": "px",
+              "location": "entire PNG"
+            }
+          ],
+          "review": {
+            "source_sha256": "d3c991fe567933c083b07d335f5c220b5a10c40920b26e83a4efe5acfa254455",
+            "render_sha256": "78ecbbd00cfdfba212b23ca5fe4bc33bdeae664633f24ba876b5bdaadf84f21d",
+            "status": "NOT VERIFIED",
+            "open_critical": 0,
+            "open_major": 0
+          }
+        }
+      ]
+    }
+  ]
+}

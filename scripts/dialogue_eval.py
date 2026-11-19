@@ -14,6 +14,7 @@ from pathlib import Path
 import process_control
 import run_eval
 import simulate_eval
+from summary_io import save_summary
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DIALOGUES = ROOT / "tests" / "eval_cases" / "dialogue_cases.json"
@@ -159,7 +160,7 @@ def auto_check(output, case):
     checks = run_eval.evaluate_output(output, case)
     passed = (checks["nonempty"] and checks["has_content_checks"] and not checks["missing_required"]
               and not checks["forbidden_found"] and checks["within_limit"] and checks["ends_with_ok"]
-              and not checks["unexpected_advisory_count"])
+              and checks["json_answer_ok"] and not checks["unexpected_advisory_count"])
     return checks, bool(passed)
 
 
@@ -247,7 +248,15 @@ def main(argv=None):
         if workdir is not None:
             shutil.rmtree(workdir, ignore_errors=True)
         summary["elapsed_seconds"] = round(time.monotonic() - started, 3)
-        (out / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        try:
+            save_summary(out / "summary.json", summary)
+        except OSError as exc:
+            print(f"Could not save dialogue summary: {exc}", file=sys.stderr)
+            save_failed = True
+        else:
+            save_failed = False
+    if save_failed:
+        return 1
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return 0 if summary["followup_status"] == "AUTO PASS" else 1
 

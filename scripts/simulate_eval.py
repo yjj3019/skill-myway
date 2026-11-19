@@ -64,7 +64,7 @@ def validate(cases):
             continue
         required_fields = {"id", "skill", "request", "required", "forbidden", "max_chars"}
         allowed_fields = required_fields | {"ends_with", "forbid_unprovided_advisories", "requires_followup",
-                                            "artifact_policy", "expected_extensions"}
+                                            "artifact_policy", "expected_extensions", "expected_json"}
         if not required_fields.issubset(item) or set(item) - allowed_fields:
             errors.append("케이스 필드 누락 또는 알 수 없는 필드")
         case_id = item.get("id")
@@ -106,6 +106,12 @@ def validate(cases):
                     continue
                 errors.append(f"{case_id}: {key} 항목은 문자열 또는 문자열 배열이어야 합니다")
                 break
+        if "expected_json" in item:
+            expected = item["expected_json"]
+            if (cases["schema_version"] != 2 or type(expected) is not dict or not expected
+                    or any(type(name) is not str or not name.strip() or type(value) not in (str, int, bool, type(None))
+                           for name, value in expected.items())):
+                errors.append(f"{case_id}: expected_json requires a nonempty flat JSON answer in schema 2")
         if "ends_with" in item and (cases["schema_version"] != 2 or not isinstance(item["ends_with"], str) or not item["ends_with"]):
             errors.append(f"{case_id}: ends_with는 schema_version 2의 비어 있지 않은 문자열이어야 합니다")
         max_chars = item.get("max_chars", 8000)
@@ -176,6 +182,7 @@ def manifest(cases):
             "skill_files_sha256": files,
             "skill_tree_sha256": hashlib.sha256(json.dumps(files, ensure_ascii=True, sort_keys=True,
                                                             separators=(",", ":")).encode("utf-8")).hexdigest(),
+            **({"expected_json": item["expected_json"]} if "expected_json" in item else {}),
             "required": item.get("required", []),
             "forbidden": item.get("forbidden", []),
             "max_chars": item.get("max_chars", 8000),

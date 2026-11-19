@@ -20,6 +20,8 @@ import secrets
 import sys
 from pathlib import Path
 
+import contract_json
+
 MAX_BYTES = 16 * 1024 * 1024
 ALGORITHM = "hmac-sha256-case-id-v1"
 DOMAIN = b"blind-review:allocation:v1\x00"
@@ -30,12 +32,13 @@ PRIVACY = (
 
 
 def read_json(path):
-    raw = Path(path).read_bytes()
+    with Path(path).open("rb") as source:
+        raw = source.read(MAX_BYTES + 1)
     if len(raw) > MAX_BYTES:
         raise ValueError(f"JSON 입력이 16 MiB를 넘습니다: {path}")
     try:
-        return raw, json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, ValueError) as exc:
+        return raw, contract_json.loads(raw.decode("utf-8"))
+    except (ValueError, RecursionError) as exc:
         raise ValueError(f"JSON을 읽을 수 없습니다: {path} ({exc})") from exc
 
 

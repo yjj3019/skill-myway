@@ -22,6 +22,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import contract_json
+from summary_io import save_summary
 import workspace_tmp
 import time
 import zipfile
@@ -255,6 +257,16 @@ def requirement_met(requirement, lowered):
     return False
 
 
+def matches_json_answer(output, expected):
+    try:
+        answer = contract_json.loads(output)
+    except (ValueError, RecursionError):
+        return False
+    return (type(answer) is dict and answer.keys() == expected.keys()
+            and all(type(answer[key]) is type(value) and answer[key] == value
+                    for key, value in expected.items()))
+
+
 def evaluate_output(output, case):
     lowered = output.lower()
     missing = [item for item in case.get("required", []) if not requirement_met(item, lowered)]
@@ -263,14 +275,19 @@ def evaluate_output(output, case):
     pattern = next(pattern for kind, pattern in simulate_eval.validate_repo.SENSITIVE if kind == "real-advisory-id")
     expected_ids = set(pattern.findall(case.get("request", "")))
     unexpected_ids = set(pattern.findall(output)) - expected_ids if case.get("forbid_unprovided_advisories") else set()
+    within_limit = len(output) <= max_chars
+    json_answer_ok = True
+    if "expected_json" in case:
+        json_answer_ok = within_limit and matches_json_answer(output, case["expected_json"])
     return {
         "missing_required": missing,
         "forbidden_found": forbidden,
         "chars": len(output),
         "nonempty": bool(output.strip()),
-        "has_content_checks": bool(case.get("required") or case.get("ends_with")),
+        "json_answer_ok": json_answer_ok,
+        "has_content_checks": bool(case.get("required") or case.get("ends_with") or case.get("expected_json")),
         "ends_with_ok": output.rstrip().endswith(case["ends_with"]) if "ends_with" in case else True,
-        "within_limit": len(output) <= max_chars,
+        "within_limit": within_limit,
         "unexpected_advisory_count": len(unexpected_ids),
     }
 
@@ -694,6 +711,7 @@ def main(argv=None):
 
     # Include output and manifest preparation in the model-start budget.
     started = time.monotonic()
+    started_at = time.strftime("%Y-%m-%dT%H:%M:%S%z")
     out_dir = Path(args.out)
     repeats = max(1, args.repeat)
     filenames = [f"{output_stem(case['id'])}{f'-r{i + 1}' if repeats > 1 else ''}.md"
@@ -773,7 +791,7 @@ def main(argv=None):
             checks = evaluate_output(run["output"], case) if run["exit_code"] == 0 and not limited else None
             passed = bool(checks and checks["nonempty"] and not checks["missing_required"]
                           and not checks["forbidden_found"] and checks["within_limit"] and checks["ends_with_ok"]
-                          and not checks["unexpected_advisory_count"])
+                          and checks["json_answer_ok"] and not checks["unexpected_advisory_count"])
             artifact_expectation = None
             office_inspection = []
             if auto_select or args.inspect_artifacts:
@@ -930,7 +948,7 @@ def main(argv=None):
         "platform": args.platform,
         "repeat": repeats,
         "timeout": args.timeout,
-        "started_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "started_at": started_at,
         "stop_reason": stop_reason,
         "budget": {"max_calls": args.max_calls, "max_seconds": args.max_seconds,
                    "attempted_calls": attempted_calls,
@@ -940,8 +958,7 @@ def main(argv=None):
         "note": "자동 검사는 형식·필수 요소만 본다. 문장 품질과 사실 정확성은 사람이 판정해야 한다. 저장소 내부 작업 공간에서 상위 지침 탐색과 쓰기 격리는 별도 검증이 필요하다.",
     }
     try:
-        with (out_dir / "summary.json").open("x", encoding="utf-8") as summary_file:
-            summary_file.write(json.dumps(summary_doc, ensure_ascii=False, indent=2) + "\n")
+        save_summary(out_dir / "summary.json", summary_doc)
     except OSError as exc:
         print(f"오류: 요약 저장 실패: {exc}", file=sys.stderr)
         return 1

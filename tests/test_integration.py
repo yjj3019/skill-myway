@@ -24,6 +24,22 @@ def skills():
 
 
 class PackageAllSkills(unittest.TestCase):
+    def test_interrupted_zip_write_can_be_retried(self):
+        write = zipfile.ZipFile.writestr
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            skill = SKILLS_DIR / "writing"
+            def fail_after_header(archive, info, data):
+                write(archive, info, data)
+                raise OSError("write interrupted")
+            with mock.patch.object(zipfile.ZipFile, "writestr", fail_after_header):
+                with self.assertRaisesRegex(OSError, "write interrupted"):
+                    package_skill.build(skill, out, VERSION)
+            self.assertEqual(list(out.iterdir()), [])
+            archive, _, _ = package_skill.build(skill, out, VERSION)
+            with zipfile.ZipFile(archive) as result:
+                self.assertIsNone(result.testzip())
+
     def test_package_excludes_hidden_directories(self):
         with tempfile.TemporaryDirectory() as tmp:
             skill = Path(tmp) / "example"
@@ -297,6 +313,101 @@ class PackageAllSkills(unittest.TestCase):
 
 
 class InstallTargets(unittest.TestCase):
+    def test_concurrent_empty_target_at_publication_is_preserved(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "source"
+            skill = source / "sample"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text("new", encoding="utf-8")
+            dest = Path(tmp) / "dest"
+            publish = install_skills.publish_without_replacing
+
+            def publish_after_competitor(staged, target):
+                target.mkdir()
+                return publish(staged, target)
+
+            with mock.patch.object(install_skills, "SRC", source), \
+                    mock.patch.object(install_skills, "publish_without_replacing", publish_after_competitor):
+                done, skipped = install_skills.install(dest)
+            self.assertEqual(done, [])
+            self.assertEqual(skipped, ["sample"])
+            self.assertEqual(list((dest / "sample").iterdir()), [])
+
+    def test_target_created_after_preflight_is_preserved(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "source"
+            skill = source / "sample"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text("new", encoding="utf-8")
+            dest = Path(tmp) / "dest"
+            mkdir = Path.mkdir
+
+            def create_target_after_preflight(path, *args, **kwargs):
+                result = mkdir(path, *args, **kwargs)
+                if path == dest:
+                    target = dest / "sample"
+                    mkdir(target)
+                    (target / "SKILL.md").write_text("other writer", encoding="utf-8")
+                return result
+
+            with mock.patch.object(install_skills, "SRC", source), \
+                    mock.patch.object(Path, "mkdir", create_target_after_preflight):
+                done, skipped = install_skills.install(dest)
+            self.assertEqual(done, [])
+            self.assertEqual(skipped, ["sample"])
+            self.assertEqual((dest / "sample/SKILL.md").read_text(encoding="utf-8"), "other writer")
+
+    def test_existing_target_removed_after_preflight_is_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "source"
+            skill = source / "sample"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text("new", encoding="utf-8")
+            dest = Path(tmp) / "dest"
+            target = dest / "sample"
+            target.mkdir(parents=True)
+            mkdir = Path.mkdir
+
+            def remove_target_after_preflight(path, *args, **kwargs):
+                if path == dest:
+                    target.rmdir()
+                return mkdir(path, *args, **kwargs)
+
+            with mock.patch.object(install_skills, "SRC", source), \
+                    mock.patch.object(Path, "mkdir", remove_target_after_preflight):
+                done, skipped = install_skills.install(dest)
+            self.assertEqual(done, [])
+            self.assertEqual(skipped, ["sample"])
+            self.assertFalse(target.exists())
+
+    def test_install_failures_keep_previous_copy_and_allow_retry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "skills"
+            skill = source / "sample"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text("new")
+            dest = Path(tmp) / "installed"
+            target = dest / skill.name
+            target.mkdir(parents=True)
+            (target / "SKILL.md").write_text("original")
+            rename = Path.rename
+            def fail_publish(path, new):
+                if path.name == "new":
+                    raise OSError("publish interrupted")
+                return rename(path, new)
+            with mock.patch.object(install_skills, "SRC", source):
+                for failure in (mock.patch.object(install_skills.shutil, "copytree", side_effect=OSError),
+                                mock.patch.object(Path, "rename", fail_publish)):
+                    with failure, self.assertRaises(OSError):
+                        install_skills.install(dest, force=True)
+                    self.assertEqual(list(dest.iterdir()), [target])
+                    self.assertEqual((target / "SKILL.md").read_text(), "original")
+                install_skills.install(dest, force=True)
+                self.assertEqual((target / "SKILL.md").read_text(), "new")
+                with self.assertRaises(ValueError):
+                    install_skills.install(source, force=True)
+                self.assertEqual((skill / "SKILL.md").read_text(), "new")
+
     def test_linked_source_does_not_replace_existing_skill(self):
         with tempfile.TemporaryDirectory() as d:
             skill = Path(d) / "source/example"

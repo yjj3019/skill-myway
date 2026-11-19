@@ -1,5 +1,12 @@
 # 라이선스·출처 검토
 
+## 배포 범위와 의존성 점검 (2026-11-19)
+
+- 기본 라이선스는 루트 및 플러그인의 Apache-2.0이다. `document-authoring`과 `visual-design`은 자체 MIT 본문을 사용하며 `visual-design/scripts`의 검사기에는 그 하위 Apache-2.0 본문이 적용된다. 두 README에도 이 예외를 명시한다.
+- `requirements-test.txt`의 Python 패키지는 별도 설치하는 테스트 의존성이다. 장문 Office 작업의 Node `docx`, LibreOffice 및 Poppler도 별도 설치한다. 저장소의 스킬 ZIP에 이 패키지 자체를 포함하지 않는다는 것과, 이를 묶어 재배포할 때 적용될 조건은 별개다.
+- 실제 설치 환경에서 `python -m pip list`, `python -m pip show <패키지명>`, `npm ls --all` 및 각 패키지의 라이선스·고지를 확인한다. 버전이 고정되지 않은 패키지와 전이 의존성은 설치 시점에 달라질 수 있으므로 선언 파일만으로 목록이나 조건을 확정하지 않는다. 외부 바이너리를 함께 배포한다면 해당 버전과 배포물의 별도 고지도 확인한다.
+- RHEL 자료의 현재 파일은 과거에 재작성했지만, 원본 미러·선행 권리와 공개된 과거 이력의 이용 허락은 여전히 확인되지 않았다. 권리자와 기여자, 원본 및 허락 범위를 확인하기 전까지 권리 문제가 해소됐다고 표시하지 않는다. 공개 이력이나 이미 전달된 복사본은 현재 파일을 바꿔도 바뀌지 않는다.
+
 ## 디자인 검토 도구 배포 (1.20.0)
 
 저장소의 Apache-2.0 디자인 검사기를 visual-design의 scripts 폴더로 옮겨 PNG 계획 대조를 추가했다. 단독 스킬 ZIP에는 스킬 문서의 MIT LICENSE와 검사기에 적용되는 scripts/LICENSE(Apache-2.0 전문)를 함께 담는다.
@@ -299,3 +306,22 @@ MIT 고지는 원문의 복제물에 붙이는 의무다. 이번 추가는 복�
 - [blader/humanizer](https://github.com/blader/humanizer/tree/0ef9fe5) (MIT, © 2025 Siqi Chen): AI 글의 구조적 말투 패턴 분류와 "단독 발견은 수정 사유가 아님" 판정 원칙의 개념만 참고했다. `writing/references/editing-checklist.md`의 "AI 말투 단서 판정" 표는 한국어 편집 기준으로 새로 작성했다.
 - 원문 SKILL.md 문장·예시·영어 단어 목록은 옮기지 않았다. 영어 고유 현상(하이픈 붙임, 영문 서수, be동사 대체)은 판정 기준에서 제외했다. 기존의 사실 보존·무발명 규칙과 겹치는 부분은 이미 있던 항목을 유지하고 중복을 새로 붙이지 않았다.
 - 40자 연속 문자열 대조에서 새로 추가한 문단과 원본 간 일치 0건을 확인했다. 이 대조는 문자열 한정이며 번역·의미 유사성과 실제 모델의 편집 품질은 판정하지 않는다.
+
+## 제안된 글쓰기·디자인·리뷰 자료 대조 (2026-11-19)
+
+- [anti-slop](https://github.com/miqdadbadjuber/anti-slop/tree/1969b459f843603ba2efbbb24e8e1bf963c889b3)은 루트 MIT이며 영문 문장 및 UI 지침을 확인했다. 원문의 표현 목록과 예시는 반입하지 않았다.
+- [jakubkrehel/skills](https://github.com/jakubkrehel/skills/tree/547d415dc10a23e66088eba5aa6664e6e772432c)는 루트 MIT이며 변경분 UI 리뷰와 통합 리뷰의 진입 문서를 확인했다. 같은 폴더의 상세 기준 전체는 검토하지 않았다.
+- [pbakaus/impeccable](https://github.com/pbakaus/impeccable/tree/b49177d32788f2dc585c42831d845dacf1ebed2c)은 루트 Apache-2.0이다. 별도 [NOTICE](https://github.com/pbakaus/impeccable/blob/b49177d32788f2dc585c42831d845dacf1ebed2c/NOTICE.md)는 제3자 플랫폼 지침, 폰트와 MPL-2.0 자산을 명시한다. README 및 루트 라이선스와 NOTICE를 확인했다. 개별 참조·에셋 전체의 권리 확인은 하지 않았다.
+- [mattpocock/skills](https://github.com/mattpocock/skills/tree/5863806dd4e15c63174bee4e7515a4256792ecfa)는 루트 MIT이며 코드 리뷰 진입 문서를 확인했다. [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills/tree/8c99fa36d90068c82d547f7c12a9d67a3e95f4ee)의 루트 MIT와 과거 반영 기록을 확인했다.
+- cstack은 소유자 URL이 명시되지 않았다. [goodnight000/cstack](https://github.com/goodnight000/cstack/tree/72c4a9be18c1a7d455ecc3f5a4d4547725970a10)의 루트 MIT와 현재 목록에는 제안된 코드 리뷰 스킬이 없다. 별도 [irg1008/cstack](https://github.com/irg1008/cstack/tree/b7e1933fa7485bb9bf937922862a7fc1fa43b738)은 루트 MIT이며 README에 다중 리뷰와 자동화를 명시한다. 후자는 제안 설명과 유사하지만 원래 보고서의 대상인지는 미확인이다. 두 저장소의 상세 참조 파일 전체는 읽지 않았다.
+- [Remotion](https://github.com/remotion-dev/remotion/blob/3fcd5ae3eb8b30f40037983410217183ce3ddb81/LICENSE.md)은 이용자의 조직 유형·규모에 따른 자체 조건을 둔다. 영상 코드나 자산은 반입하지 않았다. [Anthropic skills](https://github.com/anthropics/skills/tree/e4bb5d960d87126ff3b3a8af1a104b7db67560ba)에서 canvas-design, web-artifacts-builder, frontend-design, docx의 각 LICENSE.txt와 선언을 확인했으며 네 파일은 Apache-2.0이다. 이 확인은 앞선 과거 조사 시점의 기록을 현재 전체 저장소 조건으로 확대하지 않는다. 글꼴·스크립트와 다른 스킬의 개별 조건은 미검토이며 이번 구현에 사용하지 않았다.
+
+- 제안에 적힌 diagram-design과 motion-design-skill은 소유자가 없는 이름이며 동명 후보가 여러 개여서 특정 원본의 라이선스로 간주하지 않았다. markdown-viewer와 taste-skill의 상세 배포 조건 및 실행 경로는 이번에 전체 검토하지 않았다. 외부 패키지는 설치하지 않았다.
+
+변경된 지침은 기존 스킬의 요구와 위 자료에서 관찰한 기능 공백을 바탕으로 새로 작성했다. 외부 문장·예시·실행 코드·폰트·이미지를 복제하지 않았다. 재작성과 출처 기록만으로 저작권 적합성이나 제3자 권리를 보증할 수는 없다. 나중에 자료를 직접 복제·변형할 경우 대상 파일별 조건과 고지, 배포 범위를 다시 확인한다.
+
+## 제품 관리 제안 대조 (2026-11-19)
+
+- [hah23255/pm-claude-skills](https://github.com/hah23255/pm-claude-skills/tree/0ee3c267163d096314b7d5c10520eb5b1a1f4ba7)은 루트 MIT, [product-on-purpose/pm-skills](https://github.com/product-on-purpose/pm-skills/tree/3456e5e309f38ac2a66943f20d4aaf8031268dfb)는 루트 Apache-2.0, [menkesu/awesome-pm-skills](https://github.com/menkesu/awesome-pm-skills/tree/c1b6e2da2f524237e1b24ae958b3b9da579e132d)는 루트 MIT와 별도 출처 고지가 있다. 대표 PRD·명세 진입 문서와 루트 라이선스를 확인했다.
+- [coderblackcat/Product-Manager-Skills](https://github.com/coderblackcat/Product-Manager-Skills/tree/cfcb697f14b8891d8b3ec43c16c3547df3e70e13)는 CC BY-NC-SA 4.0이다. 해당 자료의 문장·템플릿·코드를 복제하거나 번역해 배포하지 않았다.
+- PM 스킬은 사용자 요청의 문제·근거·요구사항·검증 연결을 기준으로 새로 설계했다. 외부 저장소의 개별 파일·제3자 자산 전체는 검토하지 않았으며, 재작성만으로 법적 적합성이 보장되는 것은 아니다.

@@ -1,8 +1,8 @@
 {
-  "all-skill-measurement-cases.json": "9892037be04b42809311f638ea62ff29f29741e1157d73dd0260b554626455af",
-  "all-skill-paired-template.json": "b7d248438ed898849bd54eca36deb3c6b90d844fbc96743c746910570c019eef",
+  "all-skill-measurement-cases.json": "9f39eb6a56b60dc2667a8fcc486536a750c9d60742e0c955311db49b01c20c20",
+  "all-skill-paired-template.json": "f8fac71d8be97796a68bdb4fcfdbaed8467715f4147351f40d7d43330ff66650",
   "auto_select_cases.json": "f143ca7a10cc2dcba5fdd47adafb07a01d1b81b342cbcf1ba9a74b1c1bcb0c4e",
-  "cases.json": "a62724280e9b2eefd57f9c8823dd7e320c6981ebd7b7651d63f691c03e1ab79e",
+  "cases.json": "08f8d64a557cd1f52433d609651a7e04bb25486a8be8ab8d9dbe236d28fcc89c",
   "critical-cases-extra.json": "e8bd7bede615679e6b56dc02a522641fcb0304848c0237d6f1cda37da2ff2094",
   "critical-regression-cases.json": "1ce0ab6b1f31047f400c005f8ffd05e1bb829ee8c696bb10adb2f3ed1b8a8169",
   "critical-review-rubric.md": "6e346898cf92ae60f61eb4e726271fd9be143239171ff8c5a44ff60cc3853a93",

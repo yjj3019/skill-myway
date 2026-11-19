@@ -1,11 +1,11 @@
 # 전체 스킬 실측·개선 실행 계약
 
-기준일 2026-11-14. 상태: **개발용 사례와 미실행 집계표 준비, 실제 측정은 미실행**. `tests/eval_cases/all-skill-measurement-cases.json`은 현재 11개 스킬마다 정상·입력 누락·경계·지시 주입 각 1건, 총 44건이다. 기존 공개 사례를 선별했으므로 결과는 개발·회귀 측정이며 미노출 최종 평가가 아니다.
+기준일 2026-11-14, PM 사례 추가 2026-11-19. 상태: **개발용 사례와 미실행 집계표 준비, 실제 측정은 미실행**. `tests/eval_cases/all-skill-measurement-cases.json`은 12개 스킬마다 정상·입력 누락·경계·지시 주입 각 1건, 총 48건이다. 기존 공개 사례와 새 PM 사례로 구성했으므로 결과는 개발·회귀 측정이며 미노출 최종 평가가 아니다.
 
 ## 1. 바로 사용할 파일과 계산
 
 - 평가 입력: `tests/eval_cases/all-skill-measurement-cases.json`.
-- 사람 판정용 쌍별 빈 장부: `tests/eval_cases/all-skill-paired-template.json`. 모든 88쌍은 `NOT_RUN`이며 동일 조건도 미확인으로 기록한다.
+- 사람 판정용 쌍별 빈 장부: `tests/eval_cases/all-skill-paired-template.json`. 모든 96쌍은 `NOT_RUN`이며 동일 조건도 미확인으로 기록한다.
 - 검증: `python scripts/simulate_eval.py --cases tests/eval_cases/all-skill-measurement-cases.json`.
 - 장부 검사: `python scripts/compare_evaluations.py tests/eval_cases/all-skill-paired-template.json`.
 
@@ -13,7 +13,7 @@
 
 ## 2. 각 스킬의 관찰과 개선 연결
 
-각 스킬의 `*-audit-missing`, `*-audit-boundary`, `*-audit-injection`은 아래 정상 사례와 함께 4종 세트다. 이 사례에서 필요한 답변의 사실·조건은 입력과 함께 고정돼 있다. 자동 문자열 검사는 단서일 뿐 사람 판정의 대체물이 아니다.
+기존 스킬은 `*-audit-missing`, `*-audit-boundary`, `*-audit-injection`을 정상 사례와 묶는다. product-management는 normal·missing·conflict·injection 네 사례를 쓴다. 이 사례에서 필요한 답변의 사실·조건은 입력과 함께 고정돼 있다. 자동 문자열 검사는 단서일 뿐 사람 판정의 대체물이 아니다.
 
 | 스킬과 정상 사례 | 의미 판정에서 확인할 핵심 | 결함 시 개선 후보 |
 |---|---|---|
@@ -23,6 +23,7 @@
 | evidence-first / `evidence-first-01` | 통과 12, skip 1, 수동 미실행 2를 보존하고 완료로 오인하지 않는가 | 완료 증거·미검증 판정 |
 | incident-rca / `incident-rca-01` | 시각과 완화 사실을 유지하고 원인 후보를 확정하지 않는가 | 사실·가설·검증 계획 분리 |
 | office-docs / `office-docs-01` | 3장 구조·가상 20%를 유지하고 파일을 만들었다고 주장하지 않는가 | 요청 범위·수치 출처·파일별 검증 |
+| product-management / `product-management-normal` | 제공된 요구와 검증 기준을 연결하고 확인되지 않은 수치를 만들지 않는가 | 근거·가정·수용 조건 구분 |
 | prompt-engineering / `prompt-engineering-01` | JSON 필드·세 분류·애매한 입력 처리를 담는가 | 입력·출력·오류 계약과 평가 사례 |
 | research-brief / `research-brief-01` | 제공된 주장·출처 등급·불확실성을 분리하고 원문 열람을 지어내지 않는가 | 출처 확인과 관측 범위 기록 |
 | rhel-cve / `rhel-cve-01` | 주어진 가상 값만 쓰고 제품 상태와 출처 미확인을 구별하는가 | 제품별 상태·원문·버전 판정 |

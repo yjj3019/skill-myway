@@ -14,6 +14,7 @@ import os
 import shutil
 import sys
 import tempfile
+import time
 from pathlib import Path
 from package_skill import local_skill_directories, skill_files, skill_license
 
@@ -25,7 +26,14 @@ LICENSE = Path(__file__).resolve().parent.parent / "LICENSE"
 def publish_without_replacing(staged, target):
     """Atomically publish a directory only if the target name is still free."""
     if os.name == "nt":
-        staged.rename(target)
+        for attempt in range(3):
+            try:
+                staged.rename(target)
+                return
+            except PermissionError:
+                if attempt == 2:
+                    raise
+                time.sleep(0.2 * (attempt + 1))
         return
     libc = ctypes.CDLL(None, use_errno=True)
     if sys.platform.startswith("linux"):

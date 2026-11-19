@@ -67,4 +67,5 @@ description: 작업·지침·스킬·절차를 검토하거나 개선할 때 근
 ## 7. 참고 파일
 
 - `references/verification-gate.md`: 완료 주장 전 검증 게이트, 주장별 필요 증거, 환경 명시, 금지 패턴
+- `references/external-skill-review.md`: 외부 스킬 도입·감사 시 실행 경로, 권한, 라이선스와 확인 범위 점검
 

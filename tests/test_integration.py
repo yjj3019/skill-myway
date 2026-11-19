@@ -313,6 +313,33 @@ class PackageAllSkills(unittest.TestCase):
 
 
 class InstallTargets(unittest.TestCase):
+    def test_windows_transient_publish_denial_is_retried_without_overwriting(self):
+        staged = mock.Mock()
+        staged.rename.side_effect = [PermissionError("busy"), None]
+        with mock.patch.object(install_skills.os, "name", "nt"), \
+                mock.patch.object(install_skills.time, "sleep") as pause:
+            install_skills.publish_without_replacing(staged, "target")
+        self.assertEqual(staged.rename.call_count, 2)
+        pause.assert_called_once_with(0.2)
+
+        staged.rename.reset_mock(side_effect=True)
+        staged.rename.side_effect = FileExistsError("occupied")
+        with mock.patch.object(install_skills.os, "name", "nt"), \
+                mock.patch.object(install_skills.time, "sleep") as pause:
+            with self.assertRaises(FileExistsError):
+                install_skills.publish_without_replacing(staged, "target")
+        self.assertEqual(staged.rename.call_count, 1)
+        pause.assert_not_called()
+
+        staged.rename.reset_mock(side_effect=True)
+        staged.rename.side_effect = PermissionError("still denied")
+        with mock.patch.object(install_skills.os, "name", "nt"), \
+                mock.patch.object(install_skills.time, "sleep") as pause:
+            with self.assertRaises(PermissionError):
+                install_skills.publish_without_replacing(staged, "target")
+        self.assertEqual(staged.rename.call_count, 3)
+        self.assertEqual(pause.call_count, 2)
+
     def test_concurrent_empty_target_at_publication_is_preserved(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "source"

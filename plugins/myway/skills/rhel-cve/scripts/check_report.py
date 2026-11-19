@@ -10,6 +10,12 @@ CHAPTERS = (
     "### 4. 추가 정보", "### 5. 결론",
 )
 TABLE_COLUMNS = ("RHEL", "Lifecycle", "Components", "Fixed Package", "RHSA", "Release Date", "비고")
+SUMMARY_STATES = {
+    "Fixed", "Affected", "Not affected", "Fixed 표시(RHSA 미확인)",
+    "Out of support scope", "Under investigation", "미확인",
+    "Affected (Fix deferred)", "Affected (Will not fix)",
+}
+SUMMARY_ACTIONS = {"수정 미발행, 임시 완화", "RHSA 미확인, 포털 확인", "조치 없음", "미확인"}
 PACKAGE_LINE = re.compile(r"영향을 받는 패키지 및 발행된 레드햇 보안 공지\s*\(\s*(?:\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{2})\s*기준\s*\)")
 SINGLE_TITLE = re.compile(r"# (CVE-\d{4}-\d{4,})\s+-\s+\S.+")
 BATCH_TITLE = re.compile(r"# RHEL CVE 통합 리포트 - 접수 (\d+)건 → 고유 (\d+)건")
@@ -83,6 +89,56 @@ def package_table(lines, start, end, cves, issues):
             issues.append("패키지 표의 CVE ID와 상세 목록이 일치하지 않음")
 
 
+def check_body(lines, label, issues):
+    """Check common, mechanically verifiable fields in one CVE's chapters."""
+    positions = [one_position(lines, lambda line, chapter=chapter: line == chapter,
+                              f"{label} {chapter}", issues) for chapter in CHAPTERS]
+    if any(position is None for position in positions) or positions != sorted(positions):
+        return
+    overview = lines[positions[0] + 1:positions[1]]
+    prefixes = (">", "번역:", "**문제**", "**해결**", "**분석 대상 제품**")
+    field_positions = []
+    for prefix in prefixes:
+        matches = [i for i, line in enumerate(overview)
+                   if line.startswith(prefix) and (line[len(prefix):].strip() or prefix == "**분석 대상 제품**")]
+        if not matches:
+            issues.append(f"{label}: 1장 {prefix} 항목 필요")
+        field_positions.append(matches[0] if matches else None)
+    if all(position is not None for position in field_positions) and field_positions != sorted(field_positions):
+        issues.append(f"{label}: 1장 원문·번역·문제·해결·제품 순서 오류")
+    header = ("RHEL", "패키지", "상태", "조치")
+    indexes = [i for i, line in enumerate(overview) if line.startswith("|") and table_cells(line) == header]
+    if len(indexes) != 1:
+        issues.append(f"{label}: 1장 제품 요약 4열 표 필요")
+    else:
+        index = indexes[0]
+        separator = table_cells(overview[index + 1]) if index + 1 < len(overview) else ()
+        row = overview[index + 2] if index + 2 < len(overview) else ""
+        if (len(separator) != 4 or not all(RULE_CELL.fullmatch(cell) for cell in separator)
+                or not row.startswith("|") or len(table_cells(row)) != 4):
+            issues.append(f"{label}: 제품 요약 표 구분선과 데이터 행 필요")
+        else:
+            for line in overview[index + 2:]:
+                if not line.startswith("|"):
+                    break
+                cells = table_cells(line)
+                if len(cells) != 4 or not all(cells):
+                    issues.append(f"{label}: 제품 요약 표 행 오류")
+                    continue
+                if cells[2] not in SUMMARY_STATES:
+                    issues.append(f"{label}: 제품 요약 상태 오류")
+                if cells[3] not in SUMMARY_ACTIONS and not re.fullmatch(r"RHSA 적용\(RHSA-\d{4}:\d+\)", cells[3]):
+                    issues.append(f"{label}: 제품 요약 조치 오류")
+    conclusion = lines[positions[4] + 1:]
+    conclusion = conclusion[:next((i for i, line in enumerate(conclusion)
+                                    if PACKAGE_LINE.fullmatch(line)), len(conclusion))]
+    numbered = [line for line in conclusion if re.match(r"^\d+\.\s+", line)]
+    bullets = [line for line in conclusion if re.match(r"^[*+-]\s+", line)]
+    if (bullets or not 1 <= len(numbered) <= 4
+            or any(not re.match(r"^\d+\.\s+\*\*.+?\*\*", line) for line in numbered)):
+        issues.append(f"{label}: 5장에 굵은 대상·결론을 가진 번호 항목 1~4개 필요")
+
+
 def single_report(path, lines, title, issues):
     match = SINGLE_TITLE.fullmatch(title)
     if match is None:
@@ -115,7 +171,10 @@ def single_report(path, lines, title, issues):
     if chapters[0] is not None and chapters[1] is not None:
         if not any("분석 대상 제품" in line for line in lines[chapters[0] + 1:chapters[1]]):
             issues.append("1장에 분석 대상 제품 필요")
+    check_body(lines, "단건", issues)
     package_table(lines, package, sources, None, issues)
+    if package is not None and sources is not None and SCOPE_NOTE not in lines[package:sources]:
+        issues.append("패키지 표 아래 범위 고정 문구 필요")
     if sources is not None and not any(re.match(r"^[*+-] ", line) for line in lines[sources + 1:]):
         issues.append("참고문서에 자료 또는 미확인 사유 필요")
 
@@ -142,7 +201,21 @@ def batch_report(path, lines, title, issues):
     if package is not None and sources is not None and package >= sources:
         issues.append("패키지 표가 참고문서보다 먼저 와야 함")
     underlined(lines, package, "패키지 제목", issues)
+    environment = one_position(lines, lambda x: x == "Environment", "Environment", issues)
+    underlined(lines, environment, "Environment", issues)
+    underlined(lines, sources, "참고문서", issues)
     package_table(lines, package, sources, cves, issues)
+    if package is not None and sources is not None and SCOPE_NOTE not in lines[package:sources]:
+        issues.append("패키지 표 아래 범위 고정 문구 필요")
+    indexes = [i for i, line in enumerate(lines) if CVE_HEADING.fullmatch(line)]
+    for index, start in enumerate(indexes):
+        end = indexes[index + 1] if index + 1 < len(indexes) else package
+        if end is not None:
+            section = lines[start:end]
+            for item in ("보안등급", "Impact :", "CVSS v3 Base Score :", "기준일 :"):
+                if not any(item in line for line in section):
+                    issues.append(f"{lines[start]}: {item} 없음")
+            check_body(section, lines[start], issues)
 
 
 def check(path):
@@ -154,10 +227,10 @@ def check(path):
         batch_report(path, lines, title, issues)
     else:
         single_report(path, lines, title, issues)
-        if any(HTML_TAG.search(line) for line in lines):
-            issues.append("HTML 태그는 허용하지 않음")
-        if any(NVR_EPOCH.search(NON_PACKAGE_IDS.sub("", line)) for line in lines):
-            issues.append("표시용 패키지 버전에 epoch가 남아 있음")
+    if any(NVR_EPOCH.search(NON_PACKAGE_IDS.sub("", line)) for line in lines):
+        issues.append("표시용 패키지 버전에 epoch가 남아 있음")
+    if any(HTML_TAG.search(line) for line in lines):
+        issues.append("HTML 태그는 허용하지 않음")
     return issues
 
 

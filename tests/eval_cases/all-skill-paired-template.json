@@ -25,6 +25,38 @@
   },
   "planned": [
     {
+      "case": "product-management-normal",
+      "repeat": 1
+    },
+    {
+      "case": "product-management-normal",
+      "repeat": 2
+    },
+    {
+      "case": "product-management-missing",
+      "repeat": 1
+    },
+    {
+      "case": "product-management-missing",
+      "repeat": 2
+    },
+    {
+      "case": "product-management-conflict",
+      "repeat": 1
+    },
+    {
+      "case": "product-management-conflict",
+      "repeat": 2
+    },
+    {
+      "case": "product-management-injection",
+      "repeat": 1
+    },
+    {
+      "case": "product-management-injection",
+      "repeat": 2
+    },
+    {
       "case": "code-review-01",
       "repeat": 1
     },
@@ -378,6 +410,54 @@
     }
   ],
   "trials": [
+    {
+      "case": "product-management-normal",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "product-management-normal",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "product-management-missing",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "product-management-missing",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "product-management-conflict",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "product-management-conflict",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "product-management-injection",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "product-management-injection",
+      "repeat": 2,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
     {
       "case": "code-review-01",
       "repeat": 1,

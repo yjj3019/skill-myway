@@ -17,6 +17,7 @@ A personal collection of skills for Korean writing, office documents, security a
 | `incident-rca` | Incident and error RCA: separates timeline, hypotheses, and evidence, then regression-prevention actions |
 | `code-review` | Code change review: severity, evidence, Validation Gap, weakening tests |
 | `prompt-engineering` | Prompt structuring, review, and evaluation-case design |
+| `product-management` | Product problem framing, requirements, prioritization, assumptions, and verification |
 | `research-brief` | Research briefs that state source grades and reference dates |
 | `evidence-first` | Evidence-first review: completion evidence, stale/conflicting guidance, independent verification |
 
@@ -136,6 +137,6 @@ When changing a skill, bump `VERSION` and the version in every platform manifest
 
 ## License and Sources
 
-Repository content is licensed under [Apache License 2.0](LICENSE) unless otherwise marked. The `document-authoring` and `visual-design` skills are licensed under their included MIT licenses. See the [license and source review](docs/LICENSES.md) for provenance and unresolved historical rights questions.
+Repository content is licensed under [Apache License 2.0](LICENSE) unless otherwise marked. The `document-authoring` and `visual-design` skills are licensed under their included MIT licenses, except that the checker in `visual-design/scripts` is Apache-2.0 as stated in that directory. Prior rights and public history for historical RHEL-derived material remain unverified; see the [license and source review](docs/LICENSES.md) for provenance and dependency conditions.
 
 Criteria live in `docs/DECISIONS.md` and regression-prevention lessons in `docs/compound-log.md`.

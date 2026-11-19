@@ -17,6 +17,7 @@
 | `incident-rca` | 장애·오류 원인 분석, 타임라인·가설·근거 분리, 재발 방지 대책 정리 |
 | `code-review` | 코드 변경 리뷰: 심각도·근거·Validation Gap, 테스트 약화 확인 |
 | `prompt-engineering` | 프롬프트 구조화·검토·평가 케이스 설계 |
+| `product-management` | 제품 문제 정의, PRD 수용 기준, 우선순위와 가정·검증 근거 |
 | `research-brief` | 출처 등급과 기준일을 밝힌 조사·리서치 브리프 |
 | `evidence-first` | 근거 우선 검토: 완료 증거, 지침 충돌·노후 판정, 독립 확인 |
 
@@ -136,6 +137,6 @@ python3 scripts/package_skill.py --skill all            # 업로드용 ZIP 생�
 
 ## 라이선스와 출처
 
-별도 표시가 없는 저장소 콘텐츠는 [Apache License 2.0](LICENSE)을 따릅니다. `document-authoring`과 `visual-design`은 각 스킬에 포함된 MIT 라이선스를 따릅니다. 과거 유래 자료의 권리 확인 상태와 배포 이력은 [라이선스·출처 검토](docs/LICENSES.md)에 기록합니다.
+별도 표시가 없는 저장소 콘텐츠는 [Apache License 2.0](LICENSE)을 따릅니다. `document-authoring`과 `visual-design`은 각 스킬에 포함된 MIT 라이선스를 따릅니다. 다만 `visual-design/scripts`의 검사기는 해당 디렉터리에 포함된 Apache-2.0을 따릅니다. 과거 RHEL 유래 자료의 선행 권리와 공개 이력은 확인되지 않았으며, 의존성의 조건과 함께 [라이선스·출처 검토](docs/LICENSES.md)에서 확인할 수 있습니다.
 
 기준은 `docs/DECISIONS.md`에, 재발 방지 교훈은 `docs/compound-log.md`에 남깁니다.

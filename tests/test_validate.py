@@ -244,6 +244,22 @@ class RhelCveExample(unittest.TestCase):
             r = subprocess.run([sys.executable, str(d / "scripts/check_report.py"), str(f)], capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout)
 
+    def test_concise_body_contract_and_batch_html(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "CVE-2099-00001_리포트.md"
+            for old, new in (
+                ("번역: 네트워크", "요약: 네트워크"),
+                ("**문제**", "**원인**"),
+                ("| RHEL | 패키지 | 상태 | 조치 |", "| RHEL | 상태 |"),
+                ("| parserx | Out of support scope | 미확인 |", "| parserx | 정상 | 조치 없음 |"),
+                ("| parserx | 미확인 | 미확인 |", "| parserx | 미확인 | 임의 조치 |"),
+                ("1. **RHEL 9", "* **RHEL 9"),
+                (self.checker.SCOPE_NOTE, "범위 미확인"),
+            ):
+                with self.subTest(old=old):
+                    path.write_text(self.body.replace(old, new, 1), encoding="utf-8")
+                    self.assertTrue(self.checker.check(path))
+
     def test_report_filename_must_match_cve_in_title(self):
         with tempfile.TemporaryDirectory() as td:
             report = Path(td) / "CVE-2099-00002_리포트.md"
@@ -297,11 +313,33 @@ class RhelCveExample(unittest.TestCase):
             "| CVE-2099-00002 | RHEL 9 | 기본 | pkg-b | 미발행 (Affected) | - | - | 가상 |",
             "", self.checker.SCOPE_NOTE, "", "참고문서", "----", "* 가상 자료로 외부 조회 없음"
         ]
-        valid = "\n".join(lines)
+        overview = [
+            "> 가상 설명", "번역: 가상 설명", "**문제** 가상 문제입니다.",
+            "**해결** 자료를 확인합니다.", "**분석 대상 제품**",
+            "| RHEL | 패키지 | 상태 | 조치 |", "| --- | --- | --- | --- |",
+            "| RHEL 9 | pkg-a | Affected | 미확인 |",
+        ]
+        expanded = []
+        for line in lines:
+            expanded.append(line)
+            if line == "### 1. 취약점 개요":
+                expanded.extend(overview)
+            elif line == "### 5. 결론":
+                expanded.append("1. **상태 미확인.** 자료를 확인합니다.")
+        valid = "\n".join(expanded)
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "RHEL_CVE_리포트_20990810.md"
             path.write_text(valid, encoding="utf-8")
             self.assertEqual(self.checker.check(path), [])
+            with_html = valid.replace("가상 시험 자료.", "<strong>가상 시험 자료.</strong>", 1)
+            path.write_text(with_html, encoding="utf-8")
+            self.assertTrue(any("HTML" in error for error in self.checker.check(path)))
+            missing_second_translation = valid.rsplit("번역: 가상 설명", 1)
+            path.write_text("누락".join(missing_second_translation), encoding="utf-8")
+            self.assertTrue(any("번역" in error for error in self.checker.check(path)))
+            missing_second_grade = valid.rsplit("CVSS v3 Base Score : 미확인", 1)
+            path.write_text("점수 누락".join(missing_second_grade), encoding="utf-8")
+            self.assertTrue(any("CVSS v3 Base Score" in error for error in self.checker.check(path)))
             path.write_text(valid.replace("| CVE-2099-00002 |", "| CVE-2099-00003 |"), encoding="utf-8")
             self.assertTrue(self.checker.check(path))
             path.write_text(valid.replace("| CVE ID | RHEL | Lifecycle | Components | Fixed Package | RHSA | Release Date | 비고 |",

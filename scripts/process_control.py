@@ -21,17 +21,17 @@ def _drain_after_kill(process, original_timeout):
             exc.stderr if exc.stderr is not None else original_timeout.stderr
 
 
-def run(command, *, cwd, stdin, capture_output, text, encoding, errors, timeout):
+def run(command, *, cwd, stdin, capture_output, text, encoding, errors, timeout, env=None):
     if sys.platform == "win32":
         import windows_job
         return windows_job.run(command, cwd=cwd, stdin=stdin, capture_output=capture_output,
-                               text=text, encoding=encoding, errors=errors, timeout=timeout)
+                               text=text, encoding=encoding, errors=errors, timeout=timeout, env=env)
     if os.name != "posix":
         raise OSError("process containment is not supported on this platform")
     process = subprocess.Popen(command, cwd=cwd, stdin=stdin,
                                stdout=subprocess.PIPE if capture_output else None,
                                stderr=subprocess.PIPE if capture_output else None,
-                               text=text, encoding=encoding, errors=errors, start_new_session=True)
+                               text=text, encoding=encoding, errors=errors, start_new_session=True, env=env)
     try:
         try:
             stdout, stderr = process.communicate(timeout=timeout)

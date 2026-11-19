@@ -136,9 +136,12 @@ def validate_dialogue(doc, cases):
 def execute(command, workdir, timeout, platform, skill):
     started = time.monotonic()
     try:
+        environment = run_eval.evaluation_environment(platform)
+        if environment is not None and command:
+            command = [shutil.which(command[0]) or command[0], *command[1:]]
         result = process_control.run(command, cwd=str(workdir), stdin=subprocess.DEVNULL,
                                      capture_output=True, text=True, encoding="utf-8",
-                                     errors="replace", timeout=timeout)
+                                     errors="replace", timeout=timeout, env=environment)
         raw = result.stdout or ""
         observed = (run_eval.codex_jsonl_observation(raw) if platform == "codex" else
                     run_eval.claude_jsonl_observation(raw, skill))
@@ -218,7 +221,8 @@ def main(argv=None):
             result = execute(command, workdir, min(args.timeout, remaining), args.platform, case["skill"])
             raw, output = result.pop("raw"), result.pop("output")
             observed_session = session_id(raw, args.platform)
-            checks, passed = auto_check(output, request) if result["status"] == "completed" else (None, False)
+            checks, passed = (auto_check(output, request) if result["status"] == "completed" else
+                              (None, None if result["status"] == "timeout" else False))
             result["checks"] = checks
             result["passed_auto_checks"] = passed
             result["session_status"] = ("matched" if index and observed_session and observed_session == session else

@@ -40,7 +40,7 @@ def bootstrap_python():
     return str(base) if base.is_file() else sys.executable
 
 
-def run(command, *, cwd, stdin, capture_output, text, encoding, errors, timeout):
+def run(command, *, cwd, stdin, capture_output, text, encoding, errors, timeout, env=None):
     if sys.platform != "win32" or not command:
         raise RuntimeError("Windows and a command are required")
     if stdin != subprocess.DEVNULL:
@@ -79,7 +79,7 @@ def run(command, *, cwd, stdin, capture_output, text, encoding, errors, timeout)
         process = subprocess.Popen([bootstrap_python(), "-I", "-S", "-B", "-c", BOOTSTRAP, *command], cwd=cwd,
                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE if capture_output else None,
                                    stderr=subprocess.PIPE if capture_output else None,
-                                   text=text, encoding=encoding, errors=errors)
+                                   text=text, encoding=encoding, errors=errors, env=env)
         if not kernel.AssignProcessToJobObject(job, wintypes.HANDLE(int(process._handle))):
             raise ctypes.WinError(ctypes.get_last_error())
 

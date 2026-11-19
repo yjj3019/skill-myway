@@ -54,9 +54,9 @@ def build_prompt(case, auto_select=False, platform=None):
         directory = ".agents" if platform == "codex" else ".grok"
         instruction = f"먼저 {directory}/skills/{skill}/SKILL.md를 읽고 해당 지침을 적용해."
         if platform == "codex":
-            instruction += (f" 파일을 UTF-8로 온전히 읽어 출력해. 예: python -X utf8 -c "
+            instruction += (f" 파일을 UTF-8로 온전히 읽어 도구 출력으로 남겨. 예: python -X utf8 -c "
                             f"\"from pathlib import Path; print(Path('{directory}/skills/{skill}/SKILL.md').read_text(encoding='utf-8'))\". "
-                            "출력 인코딩이 깨지면 로드된 것으로 가정하지 마.")
+                            "출력 인코딩이 깨지면 로드된 것으로 가정하지 마. 도구 출력의 지침 원문은 최종 답변에 반복하지 마.")
     else:
         instruction = f"다음 작업에 '{skill}' 스킬 지침을 적용해 수행해."
     file_instruction = ("요청된 파일은 현재 작업 디렉터리 안에만 저장해. 저장소나 그 밖의 경로는 수정하지 마."
@@ -122,6 +122,7 @@ def codex_jsonl_observation(jsonl_text):
     event_types = []
     usage = None
     result_error = False
+    permission_denials = []
     for line in jsonl_text.splitlines():
         stripped = line.strip()
         if not stripped.startswith("{"):
@@ -137,6 +138,11 @@ def codex_jsonl_observation(jsonl_text):
         if kind == "turn.completed":
             usage = cli_usage(event, "codex")
         item = event.get("item")
+        if (kind == "item.completed" and isinstance(item, dict)
+                and item.get("type") == "command_execution" and item.get("exit_code") not in (None, 0)
+                and any(marker in str(item.get("aggregated_output", "")) for marker in
+                        ("CreateProcessAsUserW failed: 5", "PermissionError: [Errno 13]", "PermissionError: [WinError 5]"))):
+            permission_denials.append("command_execution")
         if isinstance(item, dict) and str(item.get("type", "")).lower() == "agent_message":
             text = item.get("text")
             if isinstance(text, str):
@@ -146,7 +152,8 @@ def codex_jsonl_observation(jsonl_text):
     final_text = messages[-1] if messages else ""
     trace = skill_load_any_evidence(jsonl_text)
     trace["event_types"] = event_types
-    return {"final_text": final_text, "trace": trace, "usage": usage, "result_error": result_error}
+    return {"final_text": final_text, "trace": trace, "usage": usage, "result_error": result_error,
+            "permission_denials": permission_denials}
 
 
 def claude_jsonl_observation(jsonl_text, skill):
@@ -255,6 +262,18 @@ def platform_command(platform, prompt):
     raise ValueError(f"지원하지 않는 플랫폼: {platform}")
 
 
+def evaluation_environment(platform):
+    if platform != "codex" or sys.platform != "win32":
+        return None
+    pwsh = shutil.which("pwsh")
+    if not pwsh or "windowsapps" not in pwsh.lower():
+        return None
+    env = os.environ.copy()
+    env["PATH"] = os.pathsep.join(part for part in env.get("PATH", "").split(os.pathsep)
+                                 if "windowsapps" not in part.lower())
+    return env
+
+
 def requirement_met(requirement, lowered):
     if isinstance(requirement, str):
         return requirement.lower() in lowered
@@ -306,6 +325,13 @@ def prepare_workdir(platform):
     """
     workdir = Path(tempfile.mkdtemp(prefix="myway-eval-", dir=workspace_tmp.temp_root()))
     try:
+        if platform == "codex" and sys.platform == "win32":
+            # The restricted token needs both the current user and its sandbox group.
+            icacls = Path(os.environ["SystemRoot"]) / "System32" / "icacls.exe"
+            result = subprocess.run([str(icacls), str(workdir), "/grant", f"{os.getlogin()}:(OI)(CI)M",
+                                     "CodexSandboxUsers:(OI)(CI)M"], capture_output=True)
+            if result.returncode:
+                raise OSError("Could not grant access to the Codex evaluation workspace")
         if platform in ("codex", "grok"):
             base = workdir / (".agents/skills" if platform == "codex" else ".grok/skills")
             base.mkdir(parents=True)
@@ -493,6 +519,9 @@ def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, time
     prompt_case = case if artifact_dir else {**case, "artifact_policy": "forbidden"}
     prompt = build_prompt(prompt_case, auto_select=auto_select, platform=platform)
     command = platform_command(platform, prompt)
+    environment = evaluation_environment(platform)
+    if environment is not None:
+        command[0] = shutil.which(command[0]) or command[0]
     started = time.perf_counter()
     workdir = None
     prepared = started
@@ -516,6 +545,7 @@ def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, time
             encoding="utf-8",
             errors="replace",
             timeout=timeout,
+            env=environment,
         )
         process_seconds = time.perf_counter() - process_started
         raw_events = result.stdout if platform in ("codex", "claude") else ""
@@ -532,6 +562,7 @@ def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, time
             event_types = trace.get("event_types", [])
             usage = observed.get("usage")
             provider_error = observed.get("result_error", False)
+            permission_denials = observed.get("permission_denials", [])
         elif platform == "claude":
             observed = claude_jsonl_observation(result.stdout, case["skill"])
             output = observed["final_text"].strip()
@@ -749,6 +780,7 @@ def main(argv=None):
     failed = 0
     stop_reason = None
     attempted_calls = 0
+    print(f"평가기 PID: {os.getpid()} / 결과 경로: {out_dir}", flush=True)
     for case in cases:
         label = case.get("skill", "auto-select")
         print(f"실행: {case['id']} ({label}) x{repeats}")
@@ -798,7 +830,7 @@ def main(argv=None):
             if limited:
                 stop_reason = "claude_usage_limit"
             elif run.get("permission_denials"):
-                stop_reason = "claude_permission_denied"
+                stop_reason = f"{args.platform}_permission_denied"
             checks = evaluate_output(run["output"], case) if run["exit_code"] == 0 and not limited else None
             passed = bool(checks and checks["nonempty"] and not checks["missing_required"]
                           and not checks["forbidden_found"] and checks["within_limit"] and checks["ends_with_ok"]
@@ -855,6 +887,14 @@ def main(argv=None):
             if passed and not auto_select and not checks["has_content_checks"]:
                 passed = None
             if passed and run.get("permission_denials"):
+                passed = None
+            if (passed and not auto_select and args.platform in ("codex", "claude")
+                    and run.get("selection_trace") is not None
+                    and (run["selection_trace"].get("status") != "loaded"
+                         or case["skill"] not in run["selection_trace"].get("skills", []))):
+                passed = None
+            if (run.get("timed_out") and not run.get("artifact_error")
+                    and not (case.get("artifact_policy") == "forbidden" and artifact_expectation is False)):
                 passed = None
             suffix = f"-r{index + 1}" if repeats > 1 else ""
             try:
@@ -947,7 +987,7 @@ def main(argv=None):
             "not_run": sum(run["status"] == "not_run" for run in runs),
             "passed_count": passed_count,
             "auto_check_pass_rate": (round(passed_count / repeats, 2)
-                                     if auto_passed is not None and not any(run["status"] == "not_run" for run in runs)
+                                     if auto_passed is not None and all(run["passed_auto_checks"] is not None for run in runs)
                                      else None),
             "auto_checks_passed": auto_passed,
             "passed": False if auto_passed is False else None,

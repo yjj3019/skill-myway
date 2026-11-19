@@ -106,6 +106,8 @@ class DialogueEvaluation(unittest.TestCase):
         status, summary, _ = self.run_case([first, subprocess.TimeoutExpired("codex", 1)])
         self.assertEqual(status, 1)
         self.assertEqual(summary["turns"][1]["status"], "timeout")
+        self.assertIsNone(summary["turns"][1]["checks"])
+        self.assertIsNone(summary["turns"][1]["passed_auto_checks"])
         self.assertEqual(summary["followup_status"], "NOT VERIFIED")
 
     def test_local_artifact_blocks_followup(self):

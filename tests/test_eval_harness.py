@@ -1,5 +1,6 @@
 import json
 import io
+import os
 import subprocess
 import sys
 import tempfile
@@ -307,6 +308,7 @@ class RunEval(unittest.TestCase):
             self.assertTrue(result["runs"][0]["passed_auto_checks"])
             self.assertEqual(result["runs"][0]["followup_status"], "NOT VERIFIED")
             self.assertIsNone(result["passed"])
+            self.assertIsNone(result["auto_check_pass_rate"])
 
     def test_unprovided_advisory_fails_execution_checks(self):
         doc = sample_cases()
@@ -430,6 +432,7 @@ class RunEval(unittest.TestCase):
         case = {"skill": "rhel-cve", "request": "가상 요청입니다"}
         self.assertIn("Skill tool to load myway:rhel-cve", run_eval.build_prompt(case, platform="claude"))
         self.assertIn(".agents/skills/rhel-cve/SKILL.md", run_eval.build_prompt(case, platform="codex"))
+        self.assertIn("지침 원문은 최종 답변에 반복하지 마", run_eval.build_prompt(case, platform="codex"))
         self.assertIn(".grok/skills/rhel-cve/SKILL.md", run_eval.build_prompt(case, platform="grok"))
 
     def test_claude_load_trace_requires_tool_success_and_matching_body(self):
@@ -977,6 +980,16 @@ class RunEval(unittest.TestCase):
         bad = run_eval.evaluate_output("상태는 확인됨입니다.", case)
         self.assertEqual(len(bad["missing_required"]), 2)
 
+    def test_evidence_case_accepts_unrun_wording_in_each_corpus(self):
+        for name in ("cases.json", "all-skill-measurement-cases.json",
+                     "critical-regression-cases.json", "duration-regression-cases.json"):
+            doc = json.loads((ROOT / "tests/eval_cases" / name).read_text(encoding="utf-8"))
+            case = next(item for item in doc["cases"] if item["id"] == "evidence-first-01")
+            with self.subTest(corpus=name):
+                self.assertFalse(run_eval.evaluate_output("완료 보류. 12건 통과, 1건 skip, 수동 확인 2건 미실행.", case)["missing_required"])
+                self.assertTrue(run_eval.evaluate_output("테스트 1건 skip.", case)["missing_required"])
+                self.assertTrue(run_eval.evaluate_output("전체 완료. 12건 통과, 1건 skip, 수동 확인 2건 미실행.", case)["missing_required"])
+
     def test_forbidden_alternatives(self):
         case = {"forbidden": [["금지", "blocked"]]}
         self.assertEqual(run_eval.evaluate_output("BLOCKED", case)["forbidden_found"], [["금지", "blocked"]])
@@ -1005,6 +1018,29 @@ class RunEval(unittest.TestCase):
             self.assertFalse(results[2]["checks"]["nonempty"])
             self.assertTrue(all(not item["passed_auto_checks"] for item in results))
             self.assertEqual(summary["input_manifest"]["cases"][0]["id"], case["id"])
+
+    def test_timeout_with_failed_check_keeps_failure_and_unverified_rate(self):
+        doc = sample_cases()
+        case = doc["cases"][0]
+        case["required"] = ["expected"]
+        runs = [
+            {"exit_code": 0, "output": "wrong", "stderr_tail": "", "seconds": 0},
+            {"exit_code": None, "output": "expected", "stderr_tail": "timeout", "seconds": 1, "timed_out": True},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            source, out = Path(tmp) / "cases.json", Path(tmp) / "out"
+            source.write_text(json.dumps(doc), encoding="utf-8")
+            log = io.StringIO()
+            with mock.patch.object(run_eval, "run_case", side_effect=runs), redirect_stdout(log):
+                self.assertEqual(run_eval.main(["--cases", str(source), "--out", str(out),
+                                                "--only", case["skill"], "--repeat", "2", "--max-calls", "2"]), 1)
+            self.assertIn(f"평가기 PID: {os.getpid()}", log.getvalue())
+            entry = json.loads((out / "summary.json").read_text(encoding="utf-8"))["cases"][0]
+            self.assertFalse(entry["runs"][0]["passed_auto_checks"])
+            self.assertIsNone(entry["runs"][1]["passed_auto_checks"])
+            self.assertFalse(entry["auto_checks_passed"])
+            self.assertEqual(entry["overall_status"], "FAIL")
+            self.assertIsNone(entry["auto_check_pass_rate"])
 
     def test_usage_limit_stops_remaining_cases_without_grading(self):
         doc = sample_cases()
@@ -1051,6 +1087,61 @@ class RunEval(unittest.TestCase):
             self.assertEqual(summary["cases"][0]["runs"][0]["permission_denials"], ["Read"])
             self.assertIsNone(summary["cases"][0]["runs"][0]["passed_auto_checks"])
             self.assertEqual(summary["cases"][0]["runs"][1]["status"], "not_run")
+
+    def test_codex_process_denial_stops_without_grading(self):
+        doc = sample_cases()
+        case = doc["cases"][0]
+        case["required"] = ["확인"]
+        events = [
+            {"type": "item.completed", "item": {"type": "command_execution", "exit_code": -1,
+             "aggregated_output": "Failed to create unified exec process: CreateProcessAsUserW failed: 5"}},
+            {"type": "item.completed", "item": {"type": "agent_message", "text": "확인"}},
+        ]
+        raw = "\n".join(json.dumps(event) for event in events)
+        process = mock.Mock(returncode=0, stdout=raw, stderr="")
+        with mock.patch.object(run_eval.process_control, "run", return_value=process):
+            run = run_eval.run_case(case, "codex", 5)
+        self.assertEqual(run["permission_denials"], ["command_execution"])
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "cases.json"
+            source.write_text(json.dumps(doc), encoding="utf-8")
+            out = Path(tmp) / "out"
+            with mock.patch.object(run_eval, "run_case", return_value=run) as call:
+                self.assertEqual(run_eval.main(["--cases", str(source), "--platform", "codex",
+                                                "--out", str(out), "--repeat", "2", "--max-calls", "2"]), 1)
+                self.assertEqual(call.call_count, 1)
+            summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["stop_reason"], "codex_permission_denied")
+            self.assertIsNone(summary["cases"][0]["runs"][0]["passed_auto_checks"])
+            self.assertEqual(summary["cases"][0]["runs"][1]["status"], "not_run")
+
+        events[0]["item"]["exit_code"] = 0
+        self.assertEqual(run_eval.codex_jsonl_observation("\n".join(map(json.dumps, events)))["permission_denials"], [])
+
+    def test_windowsapps_shell_is_excluded_only_from_codex_child_path(self):
+        original = os.pathsep.join([r"C:\Windows\System32", r"C:\Fake\WindowsApps"])
+        with mock.patch.object(run_eval.sys, "platform", "win32"), \
+             mock.patch.object(run_eval.shutil, "which", return_value=r"C:\Fake\WindowsApps\pwsh.exe"), \
+             mock.patch.dict(os.environ, {"PATH": original}):
+            self.assertEqual(run_eval.evaluation_environment("codex")["PATH"], r"C:\Windows\System32")
+            self.assertEqual(os.environ["PATH"], original)
+            self.assertIsNone(run_eval.evaluation_environment("claude"))
+
+    def test_unverified_skill_load_cannot_pass_targeted_evaluation(self):
+        doc = sample_cases()
+        case = doc["cases"][0]
+        case["required"] = ["확인"]
+        run = {"exit_code": 0, "output": "확인", "stderr_tail": "", "seconds": 0,
+               "selection_trace": {"status": "unverified"}}
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "cases.json"
+            source.write_text(json.dumps(doc), encoding="utf-8")
+            out = Path(tmp) / "out"
+            with mock.patch.object(run_eval, "run_case", return_value=run):
+                self.assertEqual(run_eval.main(["--cases", str(source), "--platform", "codex",
+                                                "--out", str(out), "--max-calls", "1"]), 1)
+            summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+            self.assertIsNone(summary["cases"][0]["runs"][0]["passed_auto_checks"])
 
     def test_limit_in_diagnostics_detected_before_tail_truncation(self):
         msg = "You've hit your 5-hour limit · resets 3:50am (Asia/Seoul)"
@@ -1127,6 +1218,17 @@ class RunEval(unittest.TestCase):
                     self.assertEqual(names, set(simulate_eval.skill_names()))
             finally:
                 shutil.rmtree(workdir, ignore_errors=True)
+
+    def test_codex_workspace_acl_failure_stops_before_copying_skills(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(run_eval.sys, "platform", "win32"), \
+             mock.patch.dict(os.environ, {"SystemRoot": r"C:\Windows"}), \
+             mock.patch.object(run_eval.os, "getlogin", return_value="sample"), \
+             mock.patch.object(run_eval.workspace_tmp, "temp_root", return_value=Path(tmp)), \
+             mock.patch.object(run_eval.subprocess, "run", return_value=mock.Mock(returncode=1)):
+            with self.assertRaises(OSError):
+                run_eval.prepare_workdir("codex")
+            self.assertEqual(list(Path(tmp).iterdir()), [])
 
 
 if __name__ == "__main__":

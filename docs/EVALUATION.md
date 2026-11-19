@@ -36,9 +36,11 @@ python scripts/review_evaluation.py OUTPUT.md RUBRIC.json REVIEW.json
 
 일반 타깃 평가에서도 `artifact_policy`와 `expected_extensions`를 manifest에 보존한다. 파일 필수 케이스는 `--platform codex --cases FILE --inspect-artifacts`가 필요하며, 검사 설정이 없으면 모델 호출 전에 거부한다. 검사 모드에서 필수·금지 파일과 확장자를 확인한다. 파일 정책을 관측하지 않은 실행은 자동 통과로 집계하지 않는다. 파일이 조건부이고 보존·검사를 요청하지 않았다면 생성 금지 프롬프트를 사용한다. 프롬프트는 쓰기 차단 장치가 아니다.
 
-시간 초과는 `runs[].status: timeout`과 케이스별 `timed_out`으로 집계한다. `completed + execution_failed + timed_out + not_run = repeats`다. 종료 코드가 0이어도 Codex 실패 이벤트가 관측되면 실행 실패다.
+시간 초과는 `runs[].status: timeout`과 케이스별 `timed_out`으로 집계한다. 검사하지 못한 응답의 자동 검사 결과와 전체 판정은 `NOT VERIFIED`로 두고, 일부 반복만 채점됐다면 전체 자동 통과율은 `null`이다. 시간 초과 전 금지 파일 생성이나 산출물 검사 실패가 실제로 관측됐다면 그 실패는 유지한다. 다른 반복에서 확인된 자동 검사 실패도 숨기지 않는다. `completed + execution_failed + timed_out + not_run = repeats`다. 종료 코드가 0이어도 Codex 실패 이벤트가 관측되면 실행 실패다.
 
 오프라인 고장 주입 절차는 `docs/WORKFLOW-SIMULATION-2026-11-14.md`를 따른다. 외부 경로 쓰기가 허용되지 않은 세션에서는 `TEMP`·`TMP`를 승인된 프로젝트 내부 임시 경로로 지정하고 기존 Python 환경을 사용한다. 아래 환경 생성 예시는 해당 경로 사용이 허용될 때만 적용한다.
+
+실행기는 모델 호출 전에 평가기 PID와 결과 경로를 출력한다. 실행을 중단하거나 병렬 실험으로 전환할 때는 터미널의 중단 표시만으로 평가 프로세스가 종료됐다고 가정하지 않는다. 실행별 PID와 결과 경로를 대조해 해당 평가기와 자식의 종료 여부를 확인한 뒤 후속 호출을 시작한다. Windows에서는 확인한 해당 PID만 종료할 수 있으며 평가기가 종료되면 소유한 Job의 자식도 종료하도록 구성돼 있다. 터미널 제어 신호가 실제 평가기에 전달되는지와 Job 밖 프로세스 종료는 별도 확인이 필요하다. 병렬 실행의 각 호출·시간 상한은 프로세스별이며 전체 공통 상한이 아니다.
 
 저장소 밖 가상 환경을 만들고 `requirements-test.txt`를 설치한 Python으로 검증한다. 예를 들어 Windows PowerShell에서는 다음과 같다. `soffice`의 PATH와 버전은 별도 확인한다.
 
@@ -193,6 +195,8 @@ python3 scripts/blind_review.py --cases cases.json \
 2. **실제 테스트** — `python3 scripts/run_eval.py --platform claude [--max-calls N] [--max-seconds N]`
 
    - Claude 결과 이벤트에 도구 권한 거부가 있으면 `claude_permission_denied`로 남은 실행을 중단하고 거부된 도구 이름을 요약에 기록한다. 해당 응답의 자동 조건이 충족됐더라도 자동 통과는 미검증으로 둔다. 권한은 실행 환경에서 별도로 정하며 이 실행기는 자동 부여하거나 우회하지 않는다. 외부 원문 추적에는 도구 입력 등 민감 정보가 포함될 수 있으므로 보호한다.
+   - Codex의 실패한 명령 이벤트에서 관측된 Windows 프로세스 생성 접근 거부 또는 Python 권한 거부를 감지하면 `codex_permission_denied`로 중단한다. 대상 스킬의 로드가 확인되지 않은 일반 평가의 자동 통과는 미검증이다. 다른 형식의 거부는 자동 감지하지 못할 수 있다.
+   - Windows Codex 평가에 한해 새 임시 작업 폴더에 현재 사용자와 `CodexSandboxUsers`의 수정 권한을 부여한다. 해당 그룹은 임시 폴더의 내용에 접근할 수 있으므로 민감정보를 넣지 않는다. 권한 설정이 실패하면 실행하지 않는다. WindowsApps `pwsh` 별칭이 선택된 경우 자식 프로세스의 PATH에서 WindowsApps 항목을 제외하므로 그 경로에만 있는 다른 실행 파일은 사용할 수 없다. 전역 PATH와 샌드박스 모드는 바꾸지 않는다.
    - 각 케이스에 스킬 지침을 적용해 모델을 실행하고 출력을 저장한다.
    - 필수 요소·금지 패턴·최대 길이를 자동 검사한다. `eval-results/summary.json`에 기록한다. Codex/Grok에서 Office 산출물 검사도 요청하면 `--inspect-artifacts`를 사용한다. 파일 구조·압축 경로·매크로 흔적·외부 관계를 확인하고 XLSX 계산 캐시 상태는 별도 표시한다. Claude 플러그인은 평가 작업 폴더 밖에서 로드되므로 이 옵션과 함께 사용할 수 없다.
    - 빈 출력은 자동 검사에서 실패하며, 실행 오류·시간 초과는 검사를 수행하지 않고 `checks: null`로 남긴다. 자동 검사는 형식과 필수 요소만 본다. 문장 품질·사실 정확성은 사람이 판정한다. 회귀 사례별 수동 기준은 `tests/eval_cases/visual-review-rubric.md`를 참고한다.

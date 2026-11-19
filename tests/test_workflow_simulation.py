@@ -84,6 +84,23 @@ class WorkflowSimulation(unittest.TestCase):
         status, summary = self.simulate(exit_code=None, timed_out=True)
         self.assertEqual(status, 1)
         self.assertTrue(all(x["timed_out"] == 1 and x["execution_failed"] == 0 for x in summary["cases"]))
+        for entry in summary["cases"]:
+            self.assertIsNone(entry["runs"][0]["checks"])
+            self.assertIsNone(entry["runs"][0]["passed_auto_checks"])
+            self.assertIsNone(entry["auto_checks_passed"])
+            self.assertIsNone(entry["auto_check_pass_rate"])
+            self.assertEqual(entry["overall_status"], "NOT VERIFIED")
+
+    def test_timeout_does_not_hide_observed_forbidden_artifact(self):
+        status, summary = self.simulate(exit_code=None, timed_out=True, policy="forbidden",
+                                        artifacts=[{"path": "sample.html", "bytes": 1, "sha256": "a" * 64}])
+        self.assertEqual(status, 1)
+        self.assertTrue(all(entry["runs"][0]["passed_auto_checks"] is False for entry in summary["cases"]))
+
+    def test_timeout_before_required_artifact_is_not_a_content_failure(self):
+        status, summary = self.simulate(exit_code=None, timed_out=True, policy="required")
+        self.assertEqual(status, 1)
+        self.assertTrue(all(entry["runs"][0]["passed_auto_checks"] is None for entry in summary["cases"]))
 
     def test_08_required_artifact_missing(self):
         self.assert_all_rejected(policy="required")

@@ -1027,6 +1027,31 @@ class RunEval(unittest.TestCase):
             self.assertEqual(sum(c["not_run"] for c in summary["cases"]), len(doc["cases"]) * 2 - 1)
             self.assertTrue(all(c["attempted"] + c["not_run"] == c["repeats"] for c in summary["cases"]))
 
+    def test_permission_denial_is_recorded_and_stops_evaluation(self):
+        doc = sample_cases()
+        case = doc["cases"][0]
+        case["required"] = ["확인"]
+        raw = json.dumps({"type": "result", "result": "확인", "is_error": False,
+                          "permission_denials": [{"tool_name": "Read", "tool_input": {"file_path": "private"}}]})
+        observed = run_eval.claude_jsonl_observation(raw, case["skill"])
+        self.assertEqual(observed["permission_denials"], ["Read"])
+        process = mock.Mock(returncode=0, stdout=raw, stderr="")
+        with mock.patch.object(run_eval.process_control, "run", return_value=process):
+            run = run_eval.run_case(case, "claude", 5)
+        self.assertEqual(run["permission_denials"], ["Read"])
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "cases.json"
+            source.write_text(json.dumps(doc), encoding="utf-8")
+            out = Path(tmp) / "out"
+            with mock.patch.object(run_eval, "run_case", return_value=run) as call:
+                self.assertEqual(run_eval.main(["--cases", str(source), "--out", str(out), "--repeat", "2", "--max-calls", "2"]), 1)
+                self.assertEqual(call.call_count, 1)
+            summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["stop_reason"], "claude_permission_denied")
+            self.assertEqual(summary["cases"][0]["runs"][0]["permission_denials"], ["Read"])
+            self.assertIsNone(summary["cases"][0]["runs"][0]["passed_auto_checks"])
+            self.assertEqual(summary["cases"][0]["runs"][1]["status"], "not_run")
+
     def test_limit_in_diagnostics_detected_before_tail_truncation(self):
         msg = "You've hit your 5-hour limit · resets 3:50am (Asia/Seoul)"
         process = mock.Mock(returncode=1, stdout="warning\n" + msg, stderr="x" * 900)

@@ -164,6 +164,7 @@ def claude_jsonl_observation(jsonl_text, skill):
     result_error = False
     usage = None
     event_types = []
+    permission_denials = []
     skill_path = simulate_eval.SKILLS / skill / "SKILL.md"
     skill_body = skill_path.read_text(encoding="utf-8").split("---", 2)[-1].strip()
     for event in events:
@@ -191,12 +192,17 @@ def claude_jsonl_observation(jsonl_text, skill):
         if event.get("type") == "result":
             result_error = event.get("is_error") is True
             usage = cli_usage(event, "claude")
+            denied = event.get("permission_denials")
+            if isinstance(denied, list):
+                permission_denials.extend(item.get("tool_name", "unknown") for item in denied
+                                          if isinstance(item, dict))
             if isinstance(event.get("result"), str):
                 final_text = event["result"]
     trace = {"status": "loaded" if loaded else "unverified",
              "reason": "successful Skill call and matching local body" if loaded else "no successful Skill call with matching local body",
              "skills": [skill] if loaded else [], "event_types": event_types}
-    return {"final_text": final_text, "trace": trace, "result_error": result_error, "usage": usage}
+    return {"final_text": final_text, "trace": trace, "result_error": result_error, "usage": usage,
+            "permission_denials": permission_denials}
 
 
 def skill_load_any_evidence(jsonl_text):
@@ -518,6 +524,7 @@ def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, time
         output = result.stdout.strip()
         provider_error = False
         usage = None
+        permission_denials = []
         if platform == "codex":
             observed = codex_jsonl_observation(result.stdout)
             output = observed["final_text"].strip()
@@ -532,6 +539,7 @@ def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, time
             event_types = trace.get("event_types", [])
             provider_error = observed.get("result_error", False)
             usage = observed.get("usage")
+            permission_denials = observed.get("permission_denials", [])
         # 오류 종료의 진단에만 적용한다. 정상 응답은 동일 문구를 인용할 수 있다.
         limit_line = next((line.strip() for line in (output + "\n" + result.stdout + "\n" + result.stderr).splitlines()
                            if claude_usage_limit(line)), None) if platform == "claude" and (result.returncode != 0 or provider_error) else None
@@ -552,6 +560,7 @@ def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, time
             "selection_trace": trace,
             "event_types": event_types,
             "usage": usage,
+            "permission_denials": permission_denials,
             "stderr_tail": (result.stderr.strip() + (f"\n산출물 보존 실패: {artifact_error}" if artifact_error else ""))[-500:],
             "usage_limit": bool(limit_line),
             "usage_limit_message": limit_line,
@@ -788,6 +797,8 @@ def main(argv=None):
                 claude_usage_limit(line) for line in (run["output"] + "\n" + run["stderr_tail"]).splitlines()))
             if limited:
                 stop_reason = "claude_usage_limit"
+            elif run.get("permission_denials"):
+                stop_reason = "claude_permission_denied"
             checks = evaluate_output(run["output"], case) if run["exit_code"] == 0 and not limited else None
             passed = bool(checks and checks["nonempty"] and not checks["missing_required"]
                           and not checks["forbidden_found"] and checks["within_limit"] and checks["ends_with_ok"]
@@ -843,6 +854,8 @@ def main(argv=None):
                 passed = None if passed else False
             if passed and not auto_select and not checks["has_content_checks"]:
                 passed = None
+            if passed and run.get("permission_denials"):
+                passed = None
             suffix = f"-r{index + 1}" if repeats > 1 else ""
             try:
                 with (out_dir / f"{output_stem(case['id'])}{suffix}.md").open("x", encoding="utf-8") as output_file:
@@ -896,6 +909,7 @@ def main(argv=None):
                     else "NOT APPLICABLE" if not (auto_select or args.inspect_artifacts) else None
                 ),
                 "usage_limit_message": run.get("usage_limit_message"),
+                "permission_denials": run.get("permission_denials", []),
                 "artifacts": run.get("artifacts", []),
                 "actual_artifacts": run.get("artifacts", []),
                 "artifact_error": run.get("artifact_error"),

@@ -249,6 +249,9 @@ class RhelCveExample(unittest.TestCase):
             path = Path(tmp) / "CVE-2099-00001_리포트.md"
             for old, new in (
                 ("번역: 네트워크", "요약: 네트워크"),
+                ("번역: 네트워크", "다른 설명\n번역: 네트워크"),
+                ("**문제**", "**문제** 중복입니다.\n**문제**"),
+                ("번역: 네트워크", "> 두 번째 인용\n번역: 네트워크"),
                 ("**문제**", "**원인**"),
                 ("| RHEL | 패키지 | 상태 | 조치 |", "| RHEL | 상태 |"),
                 ("| parserx | Out of support scope | 미확인 |", "| parserx | 정상 | 조치 없음 |"),

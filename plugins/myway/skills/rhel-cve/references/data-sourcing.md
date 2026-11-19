@@ -6,8 +6,8 @@
 
 1. 입력이 RHSB라면 공지에서 CVE와 연관 공지를 식별한다. CVE가 입력이면 연결된 RHSB가 있는지 살핀다.
 2. 단일 CVE에서는 Red Hat 취약점 안내 페이지에서 설명, CVSS, 공개 시점, 대응 안내를 확인한다.
-3. 제품별 상태 판단은 Hydra 레코드에서 한다. 수정 공지가 있으면 해당 errata에서 날짜와 패키지를 확인한다.
-4. 점수, 악용 카탈로그 등재 여부, CVE 설명은 각 출처의 독립된 주장으로 기록한다.
+3. 제품별 상태 판단은 Hydra 레코드에서 한다. RHSA RSS에서 관련 공지를 살피고, 수정 공지가 있으면 해당 errata에서 날짜와 패키지를 확인한다.
+4. FIRST EPSS, CISA KEV, NVD를 각각 조회한다. 점수, 악용 카탈로그 등재 여부, CVE 설명은 각 출처의 독립된 주장으로 기록한다.
 5. 결과 문서에는 성공적으로 확인한 주소만 나열한다. 실패와 확인 범위 제한은 별도로 설명한다.
 
 기술적 접근성만 확인하려는 요청은 본 조회와 분리한다. 같은 endpoint를 단순히 도구만 바꾸어 반복 호출하지 않는다. 응답 상태가 성공이 아니면 본문을 정상 자료로 파싱하지 않는다.
@@ -27,6 +27,8 @@
 | JS 안내 페이지만 관측 | 이 본문만으로 제품 상태를 정하지 않음 |
 
 ## Red Hat 보안 페이지
+
+CVE별 주소는 `https://access.redhat.com/security/cve/{CVE-ID}`이다.
 
 CVE 페이지는 설명, 보안 의견, CVSS, CWE, 공개 날짜, 완화 설명, 연결된 공지의 존재를 확인하는 출처다. 동적으로 채워지는 제품 표가 페이지 출력에서 보이지 않더라도 제품 영향이 없다는 뜻은 아니다.
 
@@ -48,6 +50,8 @@ https://access.redhat.com/hydra/rest/securitydata/cve/{CVE-ID}.xml
 ## 제품 공지와 패키지 버전
 
 패치 레코드가 있을 때 `https://access.redhat.com/errata/{RHSA-ID}`에서 공지 날짜와 대상 제품, 패키지 버전을 찾는다. 광범위한 패키지 공지를 전수 대조하지 못한 경우는 확인 범위를 줄여 적는다. 라이브 패치 공지와 일반 패키지 공지는 별도 항목이다.
+
+`https://security.access.redhat.com/data/meta/v1/rhsa.rss`는 최근 RHSA 공지를 찾는 보조 색인이다. RSS에 공지가 없다는 사실만으로 해당 RHSA가 없거나 패치가 없다고 결론내리지 않는다. 식별한 RHSA의 상세 내용은 해당 errata 원문에서 확인한다. Red Hat Security Data API 사용법은 `https://docs.redhat.com/ko/documentation/red_hat_security_data_api/1.0/html-single/red_hat_security_data_api/index`를 참고한다. API 설명서는 개별 CVE의 제품 상태 근거가 아니다.
 
 아키텍처별 정확한 패키지 문자열이 필요하면 Red Hat의 보안 권고 JSON 자료를 확인한다. 버전 비교 전 원본 EVR을 보존하고 RPM 규칙으로 비교한다. 도구가 없을 때는 단순 정렬 대신 판단을 보류한다.
 
@@ -75,6 +79,12 @@ https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.j
 카탈로그 자체를 읽지 못했거나 구조가 예상과 다르면 등재 여부는 `unknown`이다. 읽기에 성공한 카탈로그에 항목이 없을 때만 미등재로 표현한다. 등재 자료가 있으면 등록일, 기한, 이름 등 확인 가능한 필드와 카탈로그 개정일을 보존한다.
 
 KEV 기록은 알려진 악용 목록에 존재한다는 근거다. 그것만으로 Red Hat 제품이 영향을 받는다고 결론내리지 않는다. KEV 항목의 공급자·제품이 다른 경우에는 Red Hat 패키지와 구현체가 연결되는지 확인한다.
+
+## NVD와 Red Hat MCP
+
+NVD 상세 페이지 `https://nvd.nist.gov/vuln/detail/{CVE-ID}`에서 CVE 설명, 공개된 점수와 평가 버전 등 확인 가능한 정보를 살핀다. NVD와 Red Hat의 점수가 다르면 기관과 CVSS 버전을 구분해 병기한다. NVD의 일반 취약점 정보만으로 RHEL의 패키지별 상태나 수정 여부를 확정하지 않는다. 페이지를 읽지 못하면 NVD 정보는 미확인으로 남긴다.
+
+Red Hat MCP가 연결되어 있고 적절한 읽기 도구가 있다면 관련 문서나 보안 정보를 보조 근거로 조회한다. 실제 제공되는 도구의 범위를 먼저 확인하고 없는 CVE 조회 기능을 가정하지 않는다. MCP 결과의 출처 URL과 확인 범위를 기록하고 가능한 경우 원문을 대조한다. MCP 결과만으로 지정 출처를 확인했다고 쓰지 않으며, 원문과 차이가 있으면 양쪽과 미해결 사항을 표시한다. MCP 미연결이나 조회 실패는 지정 출처 조회를 중단하는 이유가 아니다.
 
 ## 대체 출처와 기록
 

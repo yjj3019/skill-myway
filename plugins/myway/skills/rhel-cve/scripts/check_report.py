@@ -106,6 +106,15 @@ def check_body(lines, label, issues):
         field_positions.append(matches[0] if matches else None)
     if all(position is not None for position in field_positions) and field_positions != sorted(field_positions):
         issues.append(f"{label}: 1장 원문·번역·문제·해결·제품 순서 오류")
+    quotes = [i for i, line in enumerate(overview) if line.startswith(">")]
+    quote_blocks = [i for i in quotes if i == 0 or not overview[i - 1].startswith(">")]
+    translations = [i for i, line in enumerate(overview) if line.startswith("번역:")]
+    if len(quote_blocks) != 1 or len(translations) != 1 or (
+            quotes and translations and any(overview[i] for i in range(quotes[-1] + 1, translations[0]))):
+        issues.append(f"{label}: 원문 인용 한 블록 바로 다음에 번역 한 줄 필요")
+    for prefix in ("**문제**", "**해결**"):
+        if sum(line.startswith(prefix) for line in overview) != 1:
+            issues.append(f"{label}: 1장 {prefix} 한 줄 필요")
     header = ("RHEL", "패키지", "상태", "조치")
     indexes = [i for i, line in enumerate(overview) if line.startswith("|") and table_cells(line) == header]
     if len(indexes) != 1:

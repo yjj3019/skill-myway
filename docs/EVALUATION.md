@@ -191,6 +191,8 @@ python3 scripts/blind_review.py --cases cases.json \
    - `tests/eval_cases/cases.json`의 케이스 스키마·id 중복·스킬 커버리지·민감 패턴을 검사한다.
    - 케이스별 요청과 스킬 트리의 파일별 해시 및 목록을 담은 manifest 버전 2를 만든다. `__pycache__`는 제외하고 링크·정규 파일이 아닌 경로는 거부한다. 본문 해시 `skill_sha256`은 호환을 위해 유지한다. 모델은 호출하지 않는다.
 2. **실제 테스트** — `python3 scripts/run_eval.py --platform claude [--max-calls N] [--max-seconds N]`
+
+   - Claude 결과 이벤트에 도구 권한 거부가 있으면 `claude_permission_denied`로 남은 실행을 중단하고 거부된 도구 이름을 요약에 기록한다. 해당 응답의 자동 조건이 충족됐더라도 자동 통과는 미검증으로 둔다. 권한은 실행 환경에서 별도로 정하며 이 실행기는 자동 부여하거나 우회하지 않는다. 외부 원문 추적에는 도구 입력 등 민감 정보가 포함될 수 있으므로 보호한다.
    - 각 케이스에 스킬 지침을 적용해 모델을 실행하고 출력을 저장한다.
    - 필수 요소·금지 패턴·최대 길이를 자동 검사한다. `eval-results/summary.json`에 기록한다. Codex/Grok에서 Office 산출물 검사도 요청하면 `--inspect-artifacts`를 사용한다. 파일 구조·압축 경로·매크로 흔적·외부 관계를 확인하고 XLSX 계산 캐시 상태는 별도 표시한다. Claude 플러그인은 평가 작업 폴더 밖에서 로드되므로 이 옵션과 함께 사용할 수 없다.
    - 빈 출력은 자동 검사에서 실패하며, 실행 오류·시간 초과는 검사를 수행하지 않고 `checks: null`로 남긴다. 자동 검사는 형식과 필수 요소만 본다. 문장 품질·사실 정확성은 사람이 판정한다. 회귀 사례별 수동 기준은 `tests/eval_cases/visual-review-rubric.md`를 참고한다.

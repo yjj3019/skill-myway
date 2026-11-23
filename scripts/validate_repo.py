@@ -65,6 +65,38 @@ def frontmatter(text):
     return out
 
 
+def frontmatter_issues(text):
+    """줄 단위 파싱으로 잡는 frontmatter 문제(중복 키·여러 줄 값·비문자열 의심 값)를 돌려준다."""
+    m = re.match(r"^---\r?\n(.*?)\r?\n---\r?\n", text.lstrip("\ufeff"), re.S)
+    if not m:
+        return []
+    issues = []
+    seen = {}
+    for line in m.group(1).splitlines():
+        if not line.strip():
+            continue
+        if line[:1] in (" ", "\t"):
+            issues.append("여러 줄 값(들여쓰기 연속 줄)은 지원하지 않음")
+            continue
+        key, sep, value = line.partition(":")
+        if not sep:
+            issues.append(f"필드 구분 ':' 없음: {line.strip()[:40]}")
+            continue
+        key = key.strip()
+        seen[key] = seen.get(key, 0) + 1
+        value = value.strip()
+        if value[:1] in "[{&*|>!@`":
+            issues.append(f"'{key}' 값이 비문자열 스칼라 시작 문자로 시작함: {value[:1]}")
+        elif value[:1] in ('"', "'") and len(value) > 1 and value[-1] != value[:1]:
+            issues.append(f"'{key}' 값의 따옴표가 닫히지 않음")
+        elif value.lower() in ("null", "~", "true", "false"):
+            issues.append(f"'{key}' 값이 비문자열 스칼라로 보임: {value}")
+    for key, count in seen.items():
+        if count > 1:
+            issues.append(f"중복 키: {key} x{count}")
+    return issues
+
+
 def strip_code_fences(text):
     """코드 펜스(```) 바깥 줄만 남긴다. 링크·제목 검사는 본문에만 적용한다."""
     lines, in_fence = [], False
@@ -322,9 +354,13 @@ def check_skills(plugin_dirs, errors):
                 continue
             if fm.get("name") != skill.name:
                 errors.append(f"{md}: name '{fm.get('name')}' != 디렉터리 '{skill.name}'")
+            if fm.get("name") and (len(fm["name"]) > 64 or not re.fullmatch(r"[a-z0-9-]+", fm["name"])):
+                errors.append(f"{md}: name은 소문자·숫자·하이픈만(최대 64자): {fm['name']}")
             unexpected_keys = [k for k in fm if not k.startswith("_raw_") and k not in FRONTMATTER_KEYS]
             if unexpected_keys:
                 errors.append(f"{md}: 허용되지 않은 frontmatter 키: {', '.join(sorted(unexpected_keys))}")
+            for issue in frontmatter_issues(text):
+                errors.append(f"{md}: {issue}")
             desc = fm.get("description", "")
             # 엄격한 YAML 파서(Codex 등)에서 깨지는 비인용 스칼라를 막는다.
             raw = fm.get("_raw_description", "")

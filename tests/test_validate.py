@@ -465,5 +465,55 @@ class PackageSkill(unittest.TestCase):
             package_skill.skill_dirs(["no-such-skill"])
 
 
+class FrontmatterRules(unittest.TestCase):
+    def issues(self, text):
+        return validate_repo.frontmatter_issues(text)
+
+    def test_duplicate_key_is_flagged(self):
+        found = self.issues("---\nname: a\ndescription: \"x\"\nname: b\n---\n")
+        self.assertTrue(any("중복 키: name x2" in item for item in found))
+
+    def test_indented_continuation_is_multiline_value(self):
+        self.assertTrue(any("여러 줄 값" in item
+                           for item in self.issues("---\nname: a\ndescription: \"x\"\n  계속\n---\n")))
+
+    def test_list_and_bool_values_are_suspected(self):
+        found = self.issues("---\nname: a\nitems: [x]\nflag: true\n---\n")
+        self.assertTrue(any("비문자열" in item for item in found))
+        self.assertTrue(any("true" in item for item in found))
+
+    def test_unclosed_quote_is_flagged(self):
+        self.assertTrue(any("따옴표가 닫히지 않음" in item
+                           for item in self.issues("---\nname: a\ndescription: \"x\n---\n")))
+
+    def test_clean_frontmatter_has_no_issues(self):
+        self.assertEqual(self.issues("---\nname: a\ndescription: \"글을 검토한다\"\n---\n"), [])
+
+    def test_no_frontmatter_has_no_issues(self):
+        self.assertEqual(self.issues("본문만 있음"), [])
+
+    def test_check_skills_reports_duplicate_keys(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plugin = Path(tmp) / "plugin"
+            skill = plugin / "skills" / "demo"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text(
+                "---\nname: demo\ndescription: \"검토한다\"\nname: demo\n---\n본문\n", encoding="utf-8")
+            errors = []
+            validate_repo.check_skills([plugin], errors)
+            self.assertTrue(any("중복 키: name x2" in error for error in errors))
+
+    def test_name_rule_is_enforced(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plugin = Path(tmp) / "plugin"
+            skill = plugin / "skills" / "Bad_Name"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text(
+                "---\nname: Bad_Name\ndescription: \"검토한다\"\n---\n본문\n", encoding="utf-8")
+            errors = []
+            validate_repo.check_skills([plugin], errors)
+            self.assertTrue(any("소문자·숫자·하이픈만" in error for error in errors))
+
+
 if __name__ == "__main__":
     unittest.main()

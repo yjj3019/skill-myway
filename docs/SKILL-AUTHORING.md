@@ -7,6 +7,7 @@
 - 해결할 문제와 사용자가 말할 요청을 한 문장으로 적는다.
 - 기존 스킬과 트리거가 겹치지 않는지 확인한다. 겹치면 새 스킬 대신 기존 스킬의 references로 넣는다.
 - 범위 밖 요청(부정 트리거)을 description에 명시한다.
+- 제안을 기각·보류하거나 스킬을 거두면 `docs/REJECTED-SKILLS.md`에 제안 이유, 판정 근거, 대체 처리를 남긴다. 다시 제안이 오면 그 기록부터 확인한다.
 
 ## 2. 파일
 
@@ -45,9 +46,11 @@
 ```sh
 python3 scripts/validate_repo.py
 python3 scripts/run_tests.py
+python3 scripts/reproduce_check.py
 ```
 
 - 실패 0, skip 0이어야 한다.
+- `reproduce_check.py`는 검사·테스트 실행 후 추적 파일이 바뀌지 않아야 통과한다. 검증 명령이 추적 파일을 바꾸면 재현 가능한 기준이 아니므로 실패로 본다.
 - 플랫폼 배포 전 `claude plugin validate .`, `grok plugin validate ./plugins/myway`를 확인한다.
 
 ## 트리거 설계 요령

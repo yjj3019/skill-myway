@@ -1,3 +1,5 @@
+import argparse
+import hashlib
 import json
 import io
 import os
@@ -261,6 +263,51 @@ class SimulateEval(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     simulate_eval.load_cases("case.json")
 
+    def test_route_checks_reports_case_gate_errors_for_corpus(self):
+        doc = simulate_eval.load_cases(simulate_eval.DEFAULT_CASES)
+        errors, warnings = simulate_eval.route_checks(doc)
+        # 95% 이상이 선언 스킬로 라우팅되어야 하고(신호 약한 케이스는 제외),
+        # 스킬별 긍정 3건·부정 2건 이상이어야 한다.
+        self.assertEqual(errors, [])
+
+    def test_route_checks_low_signal_cases_are_excluded_from_gate(self):
+        doc = simulate_eval.load_cases(simulate_eval.DEFAULT_CASES)
+        errors, _ = simulate_eval.route_checks(doc)
+        self.assertEqual([e for e in errors if "라우팅" in e], [])
+
+    def test_route_checks_counts_positive_and_negative_minimums(self):
+        doc = simulate_eval.load_cases(simulate_eval.DEFAULT_CASES)
+        errors, _ = simulate_eval.route_checks(doc)
+        self.assertEqual([e for e in errors if e.startswith("rhel-cve: ")], [])
+
+    def test_route_checks_reports_too_few_positive_cases(self):
+        doc = simulate_eval.load_cases(simulate_eval.DEFAULT_CASES)
+        rhel = [c for c in doc["cases"] if c["skill"] == "rhel-cve"]
+        if sum(1 for c in rhel if c.get("required") or "ends_with" in c or "expected_json" in c) <= 3:
+            self.skipTest("기준 코퍼스가 이미 긍정 케이스 3건 이하")
+        kept = []
+        kept_positives = 0
+        for c in rhel:
+            if c.get("required") or "ends_with" in c or "expected_json" in c:
+                kept_positives += 1
+                if kept_positives > 2:
+                    continue
+            kept.append(c)
+        errors, _ = simulate_eval.route_checks({"schema_version": 2, "cases": kept})
+        self.assertTrue(any("긍정 케이스" in e and "최소" in e for e in errors))
+
+    def test_route_checks_reports_negative_floor_for_low_signal_skill(self):
+        # 부정 케이스가 최소 2건 미만이면 스킬별 오류가 난다.
+        doc = simulate_eval.load_cases(simulate_eval.DEFAULT_CASES)
+        cases = [c for c in doc["cases"] if c["skill"] != "rhel-cve"]
+        errors, _ = simulate_eval.route_checks({"schema_version": 2, "cases": cases})
+        self.assertTrue(any(e.startswith("rhel-cve: ") and "케이스" in e for e in errors))
+
+    def test_route_checks_verify_replay_must_be_nonempty_for_schema_2(self):
+        doc = sample_cases()
+        doc["cases"][0]["verify_replay"] = ""
+        self.assertTrue(any("verify_replay" in error for error in simulate_eval.validate(doc)))
+
 
 class RunEval(unittest.TestCase):
     def test_misleading_auto_pass_never_becomes_verified_success(self):
@@ -377,6 +424,46 @@ class RunEval(unittest.TestCase):
                                        artifact_dir=Path(tmp) / "artifacts")
         self.assertEqual(result["exit_code"], 1)
         self.assertIn("capture unavailable", result["artifact_error"])
+
+    def test_verify_replay_failure_sets_artifact_error_after_capture(self):
+        case = dict(sample_cases()["cases"][0], verify_replay="exit 3")
+        process = subprocess.CompletedProcess([], 0, stdout="", stderr="")
+        replay_failed = subprocess.CompletedProcess([], 3, stdout="", stderr="")
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(run_eval.process_control, "run", return_value=process), \
+             mock.patch.object(run_eval.subprocess, "run", return_value=replay_failed), \
+             mock.patch.object(run_eval, "prepare_workdir",
+                               return_value=Path(tmp) / "work"):
+            result = run_eval.run_case(case, "grok", 5, artifact_dir=Path(tmp) / "artifacts")
+        self.assertIn("verify_replay oracle failed with exit code 3", result["artifact_error"])
+        self.assertEqual(result["verify_replay_output"], "")
+
+    def test_verify_replay_success_records_output_without_error(self):
+        case = dict(sample_cases()["cases"][0], verify_replay="echo replay-ok")
+        process = subprocess.CompletedProcess([], 0, stdout="", stderr="")
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(run_eval.process_control, "run", return_value=process), \
+             mock.patch.object(run_eval.subprocess, "run",
+                               return_value=subprocess.CompletedProcess([], 0, stdout="replay-ok", stderr="")), \
+             mock.patch.object(run_eval, "prepare_workdir",
+                               return_value=Path(tmp) / "work"):
+            result = run_eval.run_case(case, "grok", 5, artifact_dir=Path(tmp) / "artifacts")
+        self.assertIsNone(result["artifact_error"])
+        self.assertEqual(result["verify_replay_output"], "replay-ok")
+
+    def test_verify_replay_success_ignored_without_artifact_dir(self):
+        case = dict(sample_cases()["cases"][0], verify_replay="exit 3")
+        process = subprocess.CompletedProcess([], 0, stdout="", stderr="")
+        with mock.patch.object(run_eval.process_control, "run", return_value=process):
+            result = run_eval.run_case(case, "grok", 5)
+        self.assertIsNone(result["artifact_error"])
+
+    def test_verify_replay_is_not_filled_into_manifest(self):
+        doc = sample_cases()
+        doc["cases"][0]["verify_replay"] = "exit 0"
+        for item in simulate_eval.manifest(doc)["cases"]:
+            self.assertNotIn("verify_replay", item)
+
 
     def test_real_process_timeout_stops_direct_child(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1054,7 +1141,7 @@ class RunEval(unittest.TestCase):
                 self.assertEqual(run_eval.main(["--cases", str(source), "--out", str(out), "--repeat", "2", "--max-calls", "2"]), 1)
                 self.assertEqual(call.call_count, 1)
             summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
-            self.assertEqual(summary["schema_version"], 4)
+            self.assertEqual(summary["schema_version"], 5)
             self.assertEqual(summary["stop_reason"], "claude_usage_limit")
             self.assertIsNone(summary["cases"][0]["auto_check_pass_rate"])
             self.assertIsNone(summary["cases"][0]["runs"][1]["passed_auto_checks"])
@@ -1193,7 +1280,8 @@ class RunEval(unittest.TestCase):
         self.assertEqual(code, 0)
 
     def test_platform_commands(self):
-        claude = run_eval.platform_command("claude", "hi")
+        with mock.patch.dict(os.environ, {"MYWAY_SKILLS_DISABLE": ""}):
+            claude = run_eval.platform_command("claude", "hi")
         self.assertEqual(claude[:2], ["claude", "--plugin-dir"])
         codex = run_eval.platform_command("codex", "hi")
         self.assertEqual(codex[:2], ["codex", "exec"])
@@ -1229,6 +1317,154 @@ class RunEval(unittest.TestCase):
             with self.assertRaises(OSError):
                 run_eval.prepare_workdir("codex")
             self.assertEqual(list(Path(tmp).iterdir()), [])
+
+    def test_skills_disabled_parses_kill_switch_values(self):
+        for value in ("1", "true", "TRUE", "Yes", " 1 "):
+            with self.subTest(value=value):
+                with mock.patch.dict(os.environ, {"MYWAY_SKILLS_DISABLE": value}, clear=True):
+                    self.assertTrue(run_eval.skills_disabled())
+        for value in ("0", "false", "no", "disabled", ""):
+            with self.subTest(value=value):
+                with mock.patch.dict(os.environ, {"MYWAY_SKILLS_DISABLE": value}, clear=True):
+                    self.assertFalse(run_eval.skills_disabled())
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(run_eval.skills_disabled())
+        self.assertFalse(run_eval.skills_disabled({"SKILLS": "hello"}))
+
+    def test_platform_command_drops_plugin_dir_when_disabled(self):
+        with mock.patch.object(run_eval, "skills_disabled", return_value=True):
+            claude = run_eval.platform_command("claude", "hi")
+        self.assertEqual(claude, ["claude", "-p", "hi", "--output-format", "stream-json", "--verbose"])
+        self.assertNotIn("--plugin-dir", claude)
+        with mock.patch.object(run_eval, "skills_disabled", return_value=True):
+            codex = run_eval.platform_command("codex", "hi")
+        self.assertEqual(codex[:2], ["codex", "exec"])
+
+    def test_prepare_workdir_skips_skill_copies_when_disabled(self):
+        import shutil
+        with mock.patch.object(run_eval, "skills_disabled", return_value=True), \
+             mock.patch.object(run_eval.subprocess, "run", return_value=mock.Mock(returncode=0)):
+            for platform_name in ("codex", "grok"):
+                with self.subTest(platform=platform_name):
+                    workdir = run_eval.prepare_workdir(platform_name)
+                    try:
+                        self.assertFalse((workdir / ".agents").exists())
+                        self.assertFalse((workdir / ".grok").exists())
+                        self.assertEqual(list(workdir.iterdir()), [])
+                    finally:
+                        shutil.rmtree(workdir, ignore_errors=True)
+
+    def test_run_case_trace_disabled_when_kill_switch_active(self):
+        process = subprocess.CompletedProcess([], 0, stdout="결과", stderr="")
+        for platform_name in ("claude", "grok"):
+            with self.subTest(platform=platform_name), tempfile.TemporaryDirectory() as tmp, \
+                 mock.patch.object(run_eval.process_control, "run", return_value=process), \
+                 mock.patch.object(run_eval, "prepare_workdir", return_value=Path(tmp) / "work"), \
+                 mock.patch.object(run_eval, "skills_disabled", return_value=True):
+                result = run_eval.run_case(sample_cases()["cases"][0], platform_name, 5)
+            self.assertEqual(result["selection_trace"]["status"], "disabled")
+            self.assertEqual(result["selection_trace"]["reason"], "MYWAY_SKILLS_DISABLE 활성화로 스킬 로드 생략")
+
+    def test_loaded_requirement_is_skipped_when_kill_switch_active(self):
+        doc = sample_cases()
+        case = next(c for c in doc["cases"] if c["skill"] == "rhel-cve")
+        case.update({"required": ["CVE"]})
+        run = {"exit_code": 0, "output": "CVE 결과입니다.", "stderr_tail": "", "seconds": 0,
+               "artifacts": [], "artifact_error": None,
+               "selection_trace": {"status": "disabled",
+                                  "reason": "MYWAY_SKILLS_DISABLE 활성화로 스킬 로드 생략"}}
+        with tempfile.TemporaryDirectory() as tmp:
+            source, out = Path(tmp) / "cases.json", Path(tmp) / "out"
+            source.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+            with mock.patch.object(run_eval, "run_case", return_value=run), \
+                 mock.patch.object(run_eval, "skills_disabled", return_value=True):
+                status = run_eval.main(["--cases", str(source), "--only", "rhel-cve",
+                                        "--platform", "codex", "--max-calls", "1", "--out", str(out)])
+            summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+            recorded = summary["cases"][0]["runs"][0]
+            self.assertEqual(status, 0)
+            self.assertTrue(summary["skills_disabled"])
+            self.assertTrue(recorded["passed_auto_checks"])
+            self.assertEqual(recorded["load_trace_status"], "disabled")
+
+    def test_rerun_command_from_args_is_deterministic(self):
+        args = argparse.Namespace(cases="cases.json", auto_select=False, platform="codex",
+                                 only=["writing"], out="eval-results", timeout=300, repeat=1,
+                                 max_calls=5, max_seconds=None, dry_run=False, inspect_artifacts=False)
+        command = run_eval.rerun_command(args)
+        self.assertEqual(command[:2], ["python3", "scripts/run_eval.py"])
+        self.assertEqual(command[command.index("--cases") + 1], "cases.json")
+        self.assertEqual(command[command.index("--only") + 1], "writing")
+        self.assertEqual(command[command.index("--max-calls") + 1], "5")
+        self.assertNotIn("--dry-run", command)
+        same = argparse.Namespace(cases="cases.json", auto_select=False, platform="codex",
+                                  only=["writing"], out="eval-results", timeout=300, repeat=1,
+                                  max_calls=5, max_seconds=None, dry_run=False, inspect_artifacts=False)
+        self.assertEqual(run_eval.rerun_command(same), command)
+
+    def test_summary_md_records_table_stderr_tail_and_rerun_command(self):
+        doc = sample_cases()
+        run = {"exit_code": 1, "output": "결과", "stderr_tail": "진단: 오류 발생", "seconds": 0,
+               "artifacts": [], "artifact_error": None}
+        with tempfile.TemporaryDirectory() as tmp:
+            source, out = Path(tmp) / "cases.json", Path(tmp) / "out"
+            source.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+            with mock.patch.object(run_eval, "run_case", return_value=run):
+                status = run_eval.main(["--cases", str(source), "--only", "writing",
+                                        "--platform", "grok", "--max-calls", "1", "--out", str(out)])
+            text = (out / "summary.md").read_text(encoding="utf-8")
+            summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(status, 1)
+            self.assertIn("| writing-x | writing |", text)
+            self.assertIn("진단: 오류 발생", text)
+            self.assertIn("--max-calls 1", text)
+            self.assertEqual(summary["rerun_command"][-2:], ["--max-calls", "1"])
+            self.assertIn("--platform grok", text)
+
+    def test_existing_summary_md_is_a_conflict(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source, out = Path(tmp) / "cases.json", Path(tmp) / "out"
+            source.write_text(json.dumps(sample_cases()), encoding="utf-8")
+            out.mkdir()
+            (out / "summary.md").write_text("이전 요약", encoding="utf-8")
+            code = run_eval.main(["--cases", str(source), "--only", "writing",
+                                  "--platform", "claude", "--max-calls", "1", "--out", str(out)])
+            self.assertEqual(code, 1)
+
+    def test_installed_skill_record_tracks_source_and_workdir_copies(self):
+        skill = "writing"
+        source = run_eval.ROOT / "plugins" / "myway" / "skills" / skill / "SKILL.md"
+        expected = hashlib.sha256(source.read_bytes()).hexdigest()
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp) / "work"
+            agent_copy = workdir / ".agents" / "skills" / skill
+            agent_copy.mkdir(parents=True)
+            (agent_copy / "SKILL.md").write_text("복사본", encoding="utf-8")
+            grok_copy = workdir / ".grok" / "skills" / skill
+            grok_copy.mkdir(parents=True)
+            (grok_copy / "SKILL.md").write_bytes(source.read_bytes())
+            self.assertEqual(run_eval.installed_skill_record("claude", workdir, skill), (expected, False))
+            self.assertEqual(run_eval.installed_skill_record("codex", workdir, skill),
+                             (hashlib.sha256("복사본".encode("utf-8")).hexdigest(), True))
+            self.assertEqual(run_eval.installed_skill_record("grok", workdir, skill), (expected, False))
+            self.assertEqual(run_eval.installed_skill_record("grok", workdir, "missing-skill"), (None, True))
+
+    def test_installed_skill_mismatch_downgrades_pass_to_not_verified(self):
+        doc = sample_cases()
+        run = {"exit_code": 0, "output": "결과", "stderr_tail": "", "seconds": 0,
+               "artifacts": [], "artifact_error": None, "installed_skill_mismatch": True}
+        with tempfile.TemporaryDirectory() as tmp:
+            source, out = Path(tmp) / "cases.json", Path(tmp) / "out"
+            source.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+            with mock.patch.object(run_eval, "run_case", return_value=run):
+                status = run_eval.main(["--cases", str(source), "--only", "writing",
+                                        "--platform", "grok", "--max-calls", "1", "--out", str(out)])
+            summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+            recorded = summary["cases"][0]["runs"][0]
+            self.assertEqual(status, 1)
+            self.assertIsNone(recorded["passed_auto_checks"])
+            self.assertTrue(recorded["installed_skill_mismatch"])
+            self.assertEqual(summary["schema_version"], 5)
 
 
 if __name__ == "__main__":

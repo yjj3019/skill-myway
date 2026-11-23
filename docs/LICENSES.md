@@ -1,5 +1,11 @@
 # 라이선스·출처 검토
 
+## 2026-11-23 첨부 저장소 개념 대조
+
+- 사용자가 첨부한 [mankidev/antialgorithm](https://github.com/mankidev/antialgorithm)과 [EL4CTEO/fast-anything](https://github.com/EL4CTEO/fast-anything), 기존 기록의 [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills/tree/8c99fa36d90068c82d547f7c12a9d67a3e95f4ee)를 개념 검토했다. 세 저장소는 저장소 수준 MIT 표시다. 원문 문장·코드·예제는 복사하지 않고 이 저장소의 요구와 기존 구현에 맞게 재작성했다.
+- 반영: 기각 기록 장부(`docs/REJECTED-SKILLS.md`)의 개념, 라우팅 신호·검증 방식의 일부 개념(항목별 반영 기록은 해당 문서와 `docs/DECISIONS.md` 참조). 반입하지 않은 항목은 `docs/REJECTED-SKILLS.md`에 이유를 남겼다.
+- NOT VERIFIED — antialgorithm·fast-anything의 확인 커밋 고정과 파일별 라이선스 조건, 웹 문서 기반 주장의 재현. 저장소 수준 표시는 특정 파일의 권리나 재배포 허가를 확정하지 않는다.
+
 ## 배포 범위와 의존성 점검 (2026-11-19)
 
 - 기본 라이선스는 루트 및 플러그인의 Apache-2.0이다. `document-authoring`과 `visual-design`은 자체 MIT 본문을 사용하며 `visual-design/scripts`의 검사기에는 그 하위 Apache-2.0 본문이 적용된다. 두 README에도 이 예외를 명시한다.

@@ -22,6 +22,12 @@ TEXT_EXT = {".md", ".json", ".py", ".js", ".yml", ".yaml", ".txt", ".toml", ""}
 SKIP_NAMES = {"LICENSE"}
 SKIP_DIRS = {".git", "node_modules", "__pycache__"}
 
+# description은 "언제 쓰는지"를 알리는 긍정 트리거를 담아야 한다(자동 선택 신호).
+DESCRIPTION_TRIGGER = re.compile(
+    r"사용한다|적용한다|검토한다|작성한다|만든다|누적한다|리뷰한다|점검한다|확인한다|분석한다")
+# 플랫폼 로더가 인식하는 frontmatter 키만 허용한다.
+FRONTMATTER_KEYS = {"name", "description", "license", "compatibility", "metadata", "allowed-tools"}
+
 # 문서용 예약 주소와 로컬 주소는 허용한다.
 SAFE_IP = re.compile(r"^(127\.|0\.0\.0\.0|192\.0\.2\.|198\.51\.100\.|203\.0\.113\.)")
 SENSITIVE = [
@@ -57,6 +63,58 @@ def frontmatter(text):
             out[k.strip()] = v.strip().strip('"')
             out["_raw_" + k.strip()] = v.strip()
     return out
+
+
+def strip_code_fences(text):
+    """코드 펜스(```) 바깥 줄만 남긴다. 링크·제목 검사는 본문에만 적용한다."""
+    lines, in_fence = [], False
+    for line in text.splitlines():
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if not in_fence:
+            lines.append(line)
+    return "\n".join(lines)
+
+
+def github_heading_slug(heading):
+    """GitHub 스타일 앵커 슬러그: 소문자화, 문장 부호 제거, 공백을 하이픈으로(한글 유지)."""
+    slug = re.sub(r"[^\w\s-]", "", heading.strip().lower())
+    return re.sub(r"\s+", "-", slug)
+
+
+def heading_slugs(text):
+    """문서의 제목에서 앵커 슬러그 집합을 만든다. 중복 제목은 GitHub처럼 -1, -2를 붙인다."""
+    slugs, seen = set(), {}
+    for line in text.splitlines():
+        m = re.match(r"^ {0,3}#{1,6}\s+(.*?)\s*#*\s*$", line)
+        if not m:
+            continue
+        slug = github_heading_slug(m.group(1))
+        seen[slug] = seen.get(slug, 0) + 1
+        slugs.add(slug if seen[slug] == 1 else f"{slug}-{seen[slug] - 1}")
+    return slugs
+
+
+def check_skill_markdown_links(skill, errors):
+    """마크다운 앵커 링크(경로.md#슬러그)가 대상 파일의 실제 제목과 맞는지 검사한다.
+    코드 펜스 안 링크와 스킬 밖 대상은 검사하지 않는다."""
+    mds = [p for p in skill.rglob("*.md") if p.is_file()]
+    headings = {p: heading_slugs(strip_code_fences(p.read_text(encoding="utf-8"))) for p in mds}
+    for p in mds:
+        prose = strip_code_fences(p.read_text(encoding="utf-8"))
+        for match in re.finditer(r"\]\(([^()\s]+\.md#[^()\s]+)\)", prose):
+            target, anchor = match.group(1).rsplit("#", 1)
+            resolved = (p.parent / target).resolve()
+            try:
+                resolved.relative_to(skill.resolve())
+            except ValueError:
+                continue
+            if not resolved.is_file():
+                errors.append(f"{p}: 앵커 링크 대상 파일 없음 {match.group(1)}")
+                continue
+            if anchor not in headings.get(resolved, set()):
+                errors.append(f"{p}: 앵커가 대상 제목과 다름 {match.group(1)}")
 
 
 def untracked_workspace_dirs(root):
@@ -264,6 +322,9 @@ def check_skills(plugin_dirs, errors):
                 continue
             if fm.get("name") != skill.name:
                 errors.append(f"{md}: name '{fm.get('name')}' != 디렉터리 '{skill.name}'")
+            unexpected_keys = [k for k in fm if not k.startswith("_raw_") and k not in FRONTMATTER_KEYS]
+            if unexpected_keys:
+                errors.append(f"{md}: 허용되지 않은 frontmatter 키: {', '.join(sorted(unexpected_keys))}")
             desc = fm.get("description", "")
             # 엄격한 YAML 파서(Codex 등)에서 깨지는 비인용 스칼라를 막는다.
             raw = fm.get("_raw_description", "")
@@ -273,6 +334,8 @@ def check_skills(plugin_dirs, errors):
                 errors.append(f"{md}: description 없음")
             elif len(desc) > MAX_DESC:
                 errors.append(f"{md}: description {len(desc)}자 (최대 {MAX_DESC})")
+            if desc and not DESCRIPTION_TRIGGER.search(desc):
+                errors.append(f"{md}: description에 사용 시점을 알리는 긍정 트리거가 없음 (사용한다·적용한다·검토한다·작성한다·만든다 등)")
             if text.count("\n") + 1 > MAX_SKILL_LINES:
                 errors.append(f"{md}: {MAX_SKILL_LINES}줄 초과")
             for ref in set(re.findall(r"`((?:references|scripts)/[^`\s*]+\.\w+)`", text)):
@@ -284,6 +347,7 @@ def check_skills(plugin_dirs, errors):
             for pat in set(re.findall(r"`(references/[^`\s]*\*[^`\s]*)`", text)):
                 if not list(skill.glob(pat)):
                     errors.append(f"{md}: 패턴과 일치하는 파일 없음 {pat}")
+            check_skill_markdown_links(skill, errors)
 
 
 def check_code(root, errors):

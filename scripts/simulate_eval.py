@@ -64,7 +64,8 @@ def validate(cases):
             continue
         required_fields = {"id", "skill", "request", "required", "forbidden", "max_chars"}
         allowed_fields = required_fields | {"ends_with", "forbid_unprovided_advisories", "requires_followup",
-                                            "artifact_policy", "expected_extensions", "expected_json"}
+                                            "artifact_policy", "expected_extensions", "expected_json",
+                                            "verify_replay"}
         if not required_fields.issubset(item) or set(item) - allowed_fields:
             errors.append("케이스 필드 누락 또는 알 수 없는 필드")
         case_id = item.get("id")
@@ -127,12 +128,91 @@ def validate(cases):
                 not item["expected_extensions"] or any(type(ext) is not str or not re.fullmatch(r"\.[a-z0-9]{1,8}", ext)
                                                        for ext in item["expected_extensions"])):
             errors.append(f"{case_id}: expected_extensions가 잘못됐습니다")
+        if "verify_replay" in item and (cases["schema_version"] != 2 or not isinstance(item["verify_replay"], str)
+                                       or not item["verify_replay"].strip()):
+            errors.append(f"{case_id}: verify_replay는 schema_version 2의 비어 있지 않은 문자열이어야 합니다")
     covered = {item["skill"] for item in items
                if isinstance(item, dict) and isinstance(item.get("skill"), str)}
     for name in known:
         if name not in covered:
             errors.append(f"커버리지 누락: {name}")
     return errors
+
+
+# 라우팅 게이트(문자 3-gram Dice, 한국어 형태소 분석 없이 표준 라이브러리만 사용)
+TRIGRAM_FLOOR = 0.05      # 최고 유사도가 이 값 미만이면 신호가 약해 판정에서 제외
+RANK1_RATIO = 0.95        # 신호 케이스 중 선언 스킬이 최고(동률 포함)여야 하는 비율
+DESCRIPTION_COLLISION = 0.75  # 설명 쌍 유사도(오류)
+DESCRIPTION_SIMILAR = 0.5     # 설명 쌍 유사도(경고)
+MIN_POSITIVE_CASES = 3
+MIN_NEGATIVE_CASES = 2
+
+
+def _trigrams(text):
+    lowered = text.lower()
+    return {lowered[i:i + 3] for i in range(len(lowered) - 2)}
+
+
+def dice_similarity(left, right):
+    a, b = _trigrams(left), _trigrams(right)
+    if not a or not b:
+        return 0.0
+    return 2.0 * len(a & b) / (len(a) + len(b))
+
+
+def skill_description(skill):
+    text = (SKILLS / skill / "SKILL.md").read_text(encoding="utf-8")
+    fm = validate_repo.frontmatter(text) or {}
+    return fm.get("description") or ""
+
+
+def route_checks(cases):
+    """요청이 자기 스킬 설명과 가장 가까운지, 스킬별 케이스 구성이 충분한지 검사한다.
+    반환: (errors, warnings). errors는 치명, warnings는 참고."""
+    errors, warnings = [], []
+    descriptions = {skill: skill_description(skill) for skill in skill_names()}
+    names = sorted(descriptions)
+    for i, left in enumerate(names):
+        for right in names[i + 1:]:
+            score = dice_similarity(descriptions[left], descriptions[right])
+            if score >= DESCRIPTION_COLLISION:
+                errors.append(f"설명 충돌(유사도 {score:.2f}): {left} vs {right}")
+            elif score >= DESCRIPTION_SIMILAR:
+                warnings.append(f"설명 유사(유사도 {score:.2f}): {left} vs {right}")
+    per_skill = {name: {"positive": 0, "negative": 0, "in_top": 0, "signal": 0} for name in names}
+    out_of_top = []
+    for item in cases["cases"]:
+        skill = item.get("skill")
+        if skill not in per_skill:
+            continue
+        if item.get("required") or "ends_with" in item or "expected_json" in item:
+            per_skill[skill]["positive"] += 1
+        if item.get("forbidden") or "expected_json" in item:
+            per_skill[skill]["negative"] += 1
+        request = item.get("request", "")
+        scores = {name: dice_similarity(request, descriptions[name]) for name in names}
+        top = max(scores.values()) if scores else 0.0
+        if top < TRIGRAM_FLOOR:
+            warnings.append(f"{item['id']}: 라우팅 신호 약함(최고 {top:.2f}) — 판정에서 제외")
+            continue
+        per_skill[skill]["signal"] += 1
+        if scores[skill] >= top:
+            per_skill[skill]["in_top"] += 1
+        else:
+            out_of_top.append(item["id"])
+    counted = sum(stats["signal"] for stats in per_skill.values())
+    rank1 = sum(stats["in_top"] for stats in per_skill.values())
+    if counted and rank1 / counted < RANK1_RATIO:
+        errors.append(f"라우팅 상위 판정 비율 {rank1}/{counted} < {RANK1_RATIO:.0%}: {', '.join(out_of_top)}")
+    for name in names:
+        stats = per_skill[name]
+        if stats["positive"] < MIN_POSITIVE_CASES:
+            errors.append(f"{name}: 긍정 케이스 {stats['positive']}건 (최소 {MIN_POSITIVE_CASES})")
+        if stats["negative"] < MIN_NEGATIVE_CASES:
+            errors.append(f"{name}: 부정 케이스 {stats['negative']}건 (최소 {MIN_NEGATIVE_CASES})")
+        if stats["signal"] and stats["in_top"] == 0:
+            errors.append(f"{name}: 상위 판정 케이스 없음")
+    return errors, warnings
 
 
 def _is_link(path):
@@ -211,6 +291,14 @@ def main(argv=None):
     if errors:
         print(f"FAIL {len(errors)}건")
         for error in errors:
+            print(" -", error)
+        return 1
+    route_errors, warnings = route_checks(cases)
+    for warning in warnings:
+        print("경고:", warning)
+    if route_errors:
+        print(f"FAIL 라우팅 {len(route_errors)}건")
+        for error in route_errors:
             print(" -", error)
         return 1
     try:

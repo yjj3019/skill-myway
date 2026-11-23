@@ -23,6 +23,7 @@ import subprocess
 import sys
 import tempfile
 import contract_json
+from atomic_output import new_output
 from summary_io import save_summary
 import workspace_tmp
 import time
@@ -248,8 +249,19 @@ def skill_load_any_evidence(jsonl_text):
     return {"status": "unverified", "reason": "Codex JSONL had no completed read-like tool event with skill path and content"}
 
 
+DISABLE_VALUES = {"1", "true", "yes"}
+
+
+def skills_disabled(environ=None):
+    """MYWAY_SKILLS_DISABLE이 '1'·'true'·'yes'(대소문자 무시)면 스킬 로드를 생략한다."""
+    value = (environ if environ is not None else os.environ).get("MYWAY_SKILLS_DISABLE", "")
+    return value.strip().lower() in DISABLE_VALUES
+
+
 def platform_command(platform, prompt):
     if platform == "claude":
+        if skills_disabled():
+            return ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose"]
         return ["claude", "--plugin-dir", str(ROOT / "plugins" / "myway"), "-p", prompt,
                 "--output-format", "stream-json", "--verbose"]
     if platform == "codex":
@@ -322,6 +334,7 @@ def prepare_workdir(platform):
 
     Claude는 `--plugin-dir`로 스킬을 읽으므로 빈 디렉터리를 쓴다.
     Codex·Grok은 프로젝트 스킬 경로에서 읽으므로 해당 경로에 스킬 사본을 만든다.
+    MYWAY_SKILLS_DISABLE이 활성화되면 사본을 만들지 않아 모델이 스킬을 읽을 수 없게 한다.
     """
     workdir = Path(tempfile.mkdtemp(prefix="myway-eval-", dir=workspace_tmp.temp_root()))
     try:
@@ -332,7 +345,7 @@ def prepare_workdir(platform):
                                      "CodexSandboxUsers:(OI)(CI)M"], capture_output=True)
             if result.returncode:
                 raise OSError("Could not grant access to the Codex evaluation workspace")
-        if platform in ("codex", "grok"):
+        if platform in ("codex", "grok") and not skills_disabled():
             base = workdir / (".agents/skills" if platform == "codex" else ".grok/skills")
             base.mkdir(parents=True)
             for skill in simulate_eval.SKILLS.iterdir():
@@ -515,6 +528,33 @@ def claude_usage_limit(text):
     return bool(re.fullmatch(r"You've hit your (?:\d+-hour )?limit\s*[·-]\s*resets [^\r\n]+", text.strip(), re.IGNORECASE))
 
 
+def installed_skill_record(platform, workdir, skill):
+    """플랫폼이 실제로 읽는 SKILL.md의 sha256과 원본과의 불일치 여부를 반환한다.
+
+    Claude는 `--plugin-dir`의 원본 플러그인 파일을 읽으므로 항상 원본 해시이며 불일치가 없다.
+    Codex·Grok은 작업 폴더 사본을 읽으므로 사본 해시를 남기고 원본과 다르거나 사본이 없으면
+    불일치로 기록한다. 로드는 이 해시로 보증하지 않으며 모델이 실제로 읽었다는 증거도 아니다.
+    """
+    source = ROOT / "plugins" / "myway" / "skills" / skill / "SKILL.md"
+    base = ".agents/skills" if platform == "codex" else ".grok/skills" if platform == "grok" else None
+    installed = source if base is None else (Path(workdir) / base / skill / "SKILL.md")
+    try:
+        digest = hashlib.sha256(installed.read_bytes()).hexdigest()
+    except OSError:
+        return None, True
+    expected = None if base is None else hashlib.sha256(source.read_bytes()).hexdigest()
+    return digest, base is not None and digest != expected
+
+
+def run_verify_replay(command, cwd, timeout):
+    """verify_replay 오라클(셸 명령)을 실행해 (stdout, 오류)를 반환한다. 종료 코드가 0이 아니면 오류다."""
+    result = subprocess.run(command, shell=True, cwd=str(cwd), capture_output=True,
+                           text=True, encoding="utf-8", errors="replace", timeout=timeout)
+    if result.returncode != 0:
+        return result.stdout, f"verify_replay oracle failed with exit code {result.returncode}"
+    return result.stdout, None
+
+
 def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, timeout_artifact_dir=None, deadline=None):
     prompt_case = case if artifact_dir else {**case, "artifact_policy": "forbidden"}
     prompt = build_prompt(prompt_case, auto_select=auto_select, platform=platform)
@@ -529,6 +569,7 @@ def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, time
     try:
         workdir = prepare_workdir(platform)
         prepared = time.perf_counter()
+        installed_skill_sha256, installed_skill_mismatch = installed_skill_record(platform, workdir, case["skill"])
         if deadline is not None:
             time_left = deadline - time.monotonic()
             if time_left <= 0:
@@ -571,24 +612,33 @@ def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, time
             provider_error = observed.get("result_error", False)
             usage = observed.get("usage")
             permission_denials = observed.get("permission_denials", [])
+        if skills_disabled():
+            trace = {"status": "disabled", "reason": "MYWAY_SKILLS_DISABLE 활성화로 스킬 로드 생략"}
         # 오류 종료의 진단에만 적용한다. 정상 응답은 동일 문구를 인용할 수 있다.
         limit_line = next((line.strip() for line in (output + "\n" + result.stdout + "\n" + result.stderr).splitlines()
                            if claude_usage_limit(line)), None) if platform == "claude" and (result.returncode != 0 or provider_error) else None
         artifacts = []
         artifact_error = None
         office_inspection = []
+        replay_output = ""
         if artifact_dir:
             try:
                 artifacts = capture_artifacts(workdir, artifact_dir)
                 office_inspection = check_office.inspect_office_artifacts(workdir, artifacts)
             except (OSError, ValueError, zipfile.BadZipFile) as exc:
                 artifact_error = str(exc)
+        if artifact_dir and not artifact_error and case.get("verify_replay"):
+            replay_output, replay_error = run_verify_replay(case["verify_replay"], workdir, timeout)
+            if replay_error:
+                artifact_error = replay_error
         exit_code = result.returncode if not artifact_error and not provider_error else (result.returncode or 1)
         return {
             "exit_code": exit_code,
             "output": output,
             "raw_events": raw_events,
             "selection_trace": trace,
+            "installed_skill_sha256": installed_skill_sha256,
+            "installed_skill_mismatch": installed_skill_mismatch,
             "event_types": event_types,
             "usage": usage,
             "permission_denials": permission_denials,
@@ -598,6 +648,7 @@ def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, time
             "artifacts": artifacts,
             "office_inspection": office_inspection,
             "artifact_error": artifact_error,
+            "verify_replay_output": replay_output,
             "seconds": round(time.perf_counter() - started, 1),
             "preparation_seconds": round(prepared - started, 3),
             "process_seconds": round(process_seconds, 3),
@@ -628,28 +679,41 @@ def run_case(case, platform, timeout, auto_select=False, artifact_dir=None, time
         raw_output = partial_text(exc.stdout)
         observed = (codex_jsonl_observation(raw_output) if platform == "codex" else
                     claude_jsonl_observation(raw_output, case["skill"]) if platform == "claude" else None)
+        selection_trace = (observed["trace"] if observed else
+                           {"status": "unverified", "reason": "process timed out before trace completion"})
+        if skills_disabled():
+            selection_trace = {"status": "disabled", "reason": "MYWAY_SKILLS_DISABLE 활성화로 스킬 로드 생략"}
+        installed_skill_sha256, installed_skill_mismatch = installed_skill_record(platform, workdir, case["skill"])
         artifacts = []
         artifact_error = None
+        replay_output = ""
         if artifact_dir or timeout_artifact_dir:
             try:
                 artifacts = capture_artifacts(workdir, artifact_dir or timeout_artifact_dir)
             except (OSError, ValueError, zipfile.BadZipFile) as capture_exc:
                 artifact_error = str(capture_exc)
+        if (artifact_dir or timeout_artifact_dir) and not artifact_error and case.get("verify_replay"):
+            replay_output, replay_error = run_verify_replay(case["verify_replay"], workdir, timeout)
+            if replay_error:
+                artifact_error = replay_error
         return {
             "exit_code": None,
             "timed_out": True,
             "output": observed["final_text"].strip() if observed else raw_output,
             "raw_events": raw_output if platform in ("codex", "claude") else "",
-            "selection_trace": observed["trace"] if observed else {"status": "unverified", "reason": "process timed out before trace completion"},
+            "selection_trace": selection_trace,
+            "installed_skill_sha256": installed_skill_sha256,
+            "installed_skill_mismatch": installed_skill_mismatch,
             "event_types": observed["trace"].get("event_types", []) if observed else [],
             "usage": observed.get("usage") if observed else None,
             "stderr_tail": (f"timeout after {timeout}s\n" + partial_text(exc.stderr))[-500:],
             "artifact_error": artifact_error,
+            "verify_replay_output": replay_output,
             "artifacts": artifacts,
             "office_inspection": [],
             "seconds": round(time.perf_counter() - started, 1),
             "preparation_seconds": round(prepared - started, 3),
-            "process_seconds": round(process_seconds, 3) if process_seconds is not None else None,
+            "process_seconds": round(process_seconds, 2) if process_seconds is not None else None,
             "process_timeout_seconds": timeout,
         }
     finally:
@@ -664,6 +728,50 @@ def output_stem(case_id):
     if len(case_id) <= 100 and re.fullmatch(r"[A-Za-z0-9_-]+", case_id) and case_id.upper() not in reserved:
         return case_id
     return "encoded-" + hashlib.sha256(case_id.encode("utf-8")).hexdigest()
+
+
+def rerun_command(args):
+    """파싱된 인자에서 고정된 순서로 재실행 명령을 만든다. sys.argv 원문을 쓰지 않는다."""
+    parts = ["python3", "scripts/run_eval.py"]
+    if args.cases:
+        parts += ["--cases", args.cases]
+    if args.auto_select:
+        parts.append("--auto-select")
+    parts += ["--platform", args.platform]
+    if args.only:
+        parts += ["--only"] + list(args.only)
+    parts += ["--out", args.out, "--timeout", str(args.timeout), "--repeat", str(args.repeat)]
+    if args.max_calls is not None:
+        parts += ["--max-calls", str(args.max_calls)]
+    if args.max_seconds is not None:
+        parts += ["--max-seconds", str(args.max_seconds)]
+    if args.dry_run:
+        parts.append("--dry-run")
+    if args.inspect_artifacts:
+        parts.append("--inspect-artifacts")
+    return parts
+
+
+def build_summary_markdown(args, summary_doc):
+    """summary.json과 같은 내용을 사람이 읽는 표와 stderr 발췌로 만든다."""
+    rows = [f"# 평가 요약 ({summary_doc['mode']})", "",
+           f"- 플랫폼: {summary_doc['platform']}",
+           f"- 시작: {summary_doc['started_at']}",
+           f"- 재실행: `{' '.join(rerun_command(args))}`", "",
+           "| 케이스 | 스킬 | 반복 | 실행 | 완료 | 타임아웃 | 미실행 | 자동 통과 |",
+           "|---|---|---|---|---|---|---|---|"]
+    for item in summary_doc["cases"]:
+        rows.append(f"| {item['id']} | {item.get('skill') or '-'} | {item['repeats']} | "
+                    f"{item['attempted']} | {item['completed']} | {item['timed_out']} | "
+                    f"{item['not_run']} | {item['passed_count']} |")
+    tails = [(item["id"], index + 1, run.get("stderr_tail", ""))
+            for item in summary_doc["cases"]
+            for index, run in enumerate(item["runs"]) if run.get("stderr_tail")]
+    if tails:
+        rows += ["", "## stderr 발췌"]
+        for case_id, index, tail in tails:
+            rows += ["", f"### {case_id} (r{index})", "```text", tail, "```"]
+    return "\n".join(rows) + "\n"
 
 
 def main(argv=None):
@@ -768,7 +876,7 @@ def main(argv=None):
     try:
         out_dir.mkdir(parents=True, exist_ok=True)
         if any((out_dir / name).exists() or (out_dir / name).is_symlink()
-               for name in [*filenames, *trace_filenames, "summary.json"]) or any(
+               for name in [*filenames, *trace_filenames, "summary.json", "summary.md"]) or any(
                    path.exists() or path.is_symlink() for path in artifact_paths):
             print("오류: 결과 파일이 이미 있습니다. 빈 출력 디렉터리를 사용하세요", file=sys.stderr)
             return 1
@@ -889,9 +997,11 @@ def main(argv=None):
             if passed and run.get("permission_denials"):
                 passed = None
             if (passed and not auto_select and args.platform in ("codex", "claude")
-                    and run.get("selection_trace") is not None
+                    and run.get("selection_trace") is not None and not skills_disabled()
                     and (run["selection_trace"].get("status") != "loaded"
                          or case["skill"] not in run["selection_trace"].get("skills", []))):
+                passed = None
+            if passed and run.get("installed_skill_mismatch"):
                 passed = None
             if (run.get("timed_out") and not run.get("artifact_error")
                     and not (case.get("artifact_policy") == "forbidden" and artifact_expectation is False)):
@@ -953,8 +1063,11 @@ def main(argv=None):
                 "artifacts": run.get("artifacts", []),
                 "actual_artifacts": run.get("artifacts", []),
                 "artifact_error": run.get("artifact_error"),
+                "verify_replay_output": run.get("verify_replay_output", ""),
                 "exit_code": run["exit_code"],
                 "seconds": run["seconds"],
+                "installed_skill_sha256": run.get("installed_skill_sha256"),
+                "installed_skill_mismatch": run.get("installed_skill_mismatch"),
                 "preparation_seconds": run.get("preparation_seconds"),
                 "process_seconds": run.get("process_seconds"),
                 "process_timeout_seconds": run.get("process_timeout_seconds"),
@@ -996,10 +1109,11 @@ def main(argv=None):
         })
 
     summary_doc = {
-        "schema_version": 4,
+        "schema_version": 5,
         "mode": "auto_select" if auto_select else "targeted",
         "inspect_artifacts": args.inspect_artifacts,
         "platform": args.platform,
+        "skills_disabled": skills_disabled(),
         "repeat": repeats,
         "timeout": args.timeout,
         "started_at": started_at,
@@ -1008,11 +1122,14 @@ def main(argv=None):
                    "attempted_calls": attempted_calls,
                    "elapsed_seconds": round(time.monotonic() - started, 1)},
         "input_manifest": input_manifest,
+        "rerun_command": rerun_command(args),
         "cases": summary,
         "note": "자동 검사는 형식·필수 요소만 본다. 문장 품질과 사실 정확성은 사람이 판정해야 한다. 저장소 내부 작업 공간에서 상위 지침 탐색과 쓰기 격리는 별도 검증이 필요하다.",
     }
     try:
         save_summary(out_dir / "summary.json", summary_doc)
+        with new_output(out_dir / "summary.md") as stream:
+            stream.write(build_summary_markdown(args, summary_doc).encode("utf-8"))
     except OSError as exc:
         print(f"오류: 요약 저장 실패: {exc}", file=sys.stderr)
         return 1

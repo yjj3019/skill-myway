@@ -210,6 +210,48 @@ class ValidateRepo(unittest.TestCase):
         p.write_text(p.read_text(encoding="utf-8") + "\n`references/nope-missing.md`\n", encoding="utf-8")
         self.assertTrue(any("nope-missing" in e for e in self.errs()))
 
+    def test_frontmatter_key_allowlist(self):
+        p = self.skill()
+        p.write_text(p.read_text(encoding="utf-8").replace("name: writing\n", "name: writing\ncustom: x\n", 1),
+                     encoding="utf-8")
+        self.assertTrue(any("frontmatter 키" in e for e in self.errs()))
+
+    def test_description_requires_positive_trigger(self):
+        p = self.skill()
+        t = p.read_text(encoding="utf-8").splitlines()
+        i = next(n for n, l in enumerate(t) if l.startswith("description:"))
+        t[i] = "description: 이것은 설명입니다"
+        p.write_text("\n".join(t) + "\n", encoding="utf-8")
+        self.assertTrue(any("긍정 트리거" in e for e in self.errs()))
+
+    def test_heading_slug_handles_korean_and_duplicates(self):
+        slugs = validate_repo.heading_slugs("# 입력 확인!\n\n# 입력 확인?\n\n## 안내 (2차)\n")
+        self.assertEqual(slugs, {"입력-확인", "입력-확인-1", "안내-2차"})
+
+    def test_anchor_links_must_match_reference_headings(self):
+        ref = self.r / "plugins/myway/skills/writing/references/test-anchors.md"
+        ref.write_text("# 제목 입력 확인\n\n## 2단계: 검토 (Revision)\n", encoding="utf-8")
+        p = self.skill()
+        p.write_text(p.read_text(encoding="utf-8") +
+                     "\n[올바른 앵커](references/test-anchors.md#제목-입력-확인)\n"
+                     "[틀린 앵커](references/test-anchors.md#없는-제목)\n", encoding="utf-8")
+        errors = self.errs()
+        self.assertTrue(any("없는-제목" in e for e in errors))
+        self.assertFalse(any("제목-입력-확인" in e for e in errors))
+
+    def test_anchor_link_target_must_exist(self):
+        p = self.skill()
+        p.write_text(p.read_text(encoding="utf-8") + "\n[없는 대상](references/nope.md#아무거나)\n", encoding="utf-8")
+        self.assertTrue(any("대상 파일 없음" in e for e in self.errs()))
+
+    def test_anchor_links_inside_code_fences_are_ignored(self):
+        ref = self.r / "plugins/myway/skills/writing/references/test-anchors.md"
+        ref.write_text("# 펜스-안-제목", encoding="utf-8")
+        p = self.skill()
+        p.write_text(p.read_text(encoding="utf-8") +
+                     "\n```\n[링크](references/test-anchors.md#틀린-앵커)\n```\n", encoding="utf-8")
+        self.assertEqual(self.errs(), [])
+
     def test_sensitive_patterns(self):
         n = self.r / "docs" / "x.md"
         for bad in ("a" * 32, "me@" + "corp.test", "10.1." + "2.3", "/home" + "/someone/x", "ghp_" + "a" * 20, "CVE-" + "2026-12345", "RHSA-" + "2026:1234"):

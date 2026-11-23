@@ -16,6 +16,7 @@ description: 프로젝트 개발 이력을 Notion 페이지에 표준 포맷으�
 3. **연결 확인.** `notion-search` 같은 Notion 도구를 호출할 수 있는지 본다.
    - 연결됨: 아래 1~4 절차.
    - 미연결 또는 실패: `references/fallback.md`로 전환한다. 허용된 경우 SESSION_LOG.md에 append하고, 실제 저장 결과를 확인한 뒤에만 기록했다고 알린다. 저장하지 못했거나 결과가 불명확하면 미저장 또는 저장 여부 미확인으로 보고한다. 기존 이력은 덮어쓰지 않는다.
+4. **동작 기록.** 사용 가능하면 저장소의 `scripts/moves_log.py --skill devlog --kind <유형> --note <한 줄>`을 실행해 이번 기록 동작(notion·fallback·session_log)을 로컬 상태 파일에 남긴다. `--no-log`를 주면 남기지 않는다. 로그 실패는 보고만 하고 본 작업을 막지 않는다. 실세션에서의 로그 누적 효과는 검증되지 않았다.
 
 Notion 기록이 실패하거나 승인되지 않아도 본 작업은 막지 않는다.
 

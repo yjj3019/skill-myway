@@ -12,12 +12,13 @@
 
 자동 통과 수는 run_eval.py가 저장한 원본 passed_count를 검증해 직접 사용한다.
 반올림된 auto_check_pass_rate(repeats와 곱한 값을 다시 반올림)로 되살리지 않는다.
-passed_count가 없거나 0 이상·repeats 이하가 아니면 '통과 미확인'으로 두고 합계에서 뺀다.
+상태 건수의 관계를 검증하고 passed_count가 완료 건수 이하여야 집계한다.
+필요한 값이 없거나 모순되면 '통과 미확인'으로 두고 합계에서 뺀다.
 
 보고 파일 두 개는 각각 덮어쓰지 않고 게시한다. 게시는 파일 단위라서
-두 파일의 동시 저장(쌍 원자성)은 보장되지 않으며, 두 번째 게시가 실패하면
-먼저 게시한 파일을 되돌린다. 되돌림은 게시 시점에 쓴 내용과 같은 파일만
-지우고, 그 사이 다른 작업이 교체한 파일은 남기고 보고한다.
+두 파일의 동시 저장(쌍 원자성)은 보장되지 않는다. 중간 실패 시 이미 게시된
+경로는 다른 작업이 교체했을 수 있으므로 삭제하지 않고 부분 저장을 보고한다.
+재시도에는 빈 출력 디렉터리를 사용한다.
 """
 import argparse
 import sys
@@ -77,11 +78,23 @@ def build_rows(baseline, candidate):
                 continue
             present.append(side)
             cells[side] = {field: _count(entry, field) for field in FIELDS}
-            repeats = _count(entry, "repeats")
-            passed = _count(entry, PASSED_COUNT)
+            counts = cells[side]
+            complete_counts = all(counts[field] is not None for field in COUNT_FIELDS)
+            a, c, f, t, n, r = (counts[k] for k in
+                               ('attempted', 'completed', 'execution_failed', 'timed_out', 'not_run', 'repeats'))
+            invalid = ((a is not None and any(v is not None and v > a for v in (c, f, t))) or
+                       (r is not None and any(v is not None and v > r for v in (a, c, f, t, n))) or
+                       (a is not None and sum(v for v in (c, f, t) if v is not None) > a) or
+                       (r is not None and sum(v for v in (a, n) if v is not None) > r) or
+                       (all(v is not None for v in (a, c, f, t)) and a != c + f + t) or
+                       (all(v is not None for v in (r, a, n)) and r != a + n))
+            consistent = complete_counts and not invalid
+            if invalid:
+                for field in COUNT_FIELDS:
+                    counts[field] = None
+            passed = counts[PASSED_COUNT]
             cells[side]["auto_passed"] = None
-            # repeats를 알 수 없으면 상한 검증이 불가하므로 passed_count도 미확인으로 둔다.
-            if isinstance(passed, int) and isinstance(repeats, int) and passed <= repeats:
+            if consistent and passed is not None and passed <= counts['completed']:
                 cells[side]["auto_passed"] = passed
         rows.append((case_id, cells, present))
     totals = {}
@@ -94,6 +107,8 @@ def build_rows(baseline, candidate):
             for field in COUNT_FIELDS:
                 if isinstance(entry[field], int):
                     counts[field] += entry[field]
+                else:
+                    counts[f"{field}_unknown"] += 1
             if isinstance(entry["auto_passed"], int):
                 counts["auto_passed"] += entry["auto_passed"]
             else:
@@ -144,8 +159,12 @@ def build_markdown(baseline_path, candidate_path, out_dir, rows, totals, status)
     lines.append("|---|---|---|---|---|---|---|---|")
     for side, label in (("baseline", "기준선"), ("candidate", "후보")):
         t = totals[side]
-        lines.append(f"| {label} | {t.get('repeats', 0)} | {t.get('attempted', 0)} | {t.get('completed', 0)} | "
-                     f"{t.get('execution_failed', 0)} | {t.get('timed_out', 0)} | {t.get('not_run', 0)} | {t.get('auto_passed', 0)} |")
+        def total_cell(field):
+            value = t.get(field, 0)
+            missing = t.get(f"{field}_unknown", 0)
+            return f"? (확인 합계 {value}, 미확인 {missing}건)" if missing else str(value)
+        lines.append(f"| {label} | " + " | ".join(total_cell(field) for field in
+                     (*COUNT_FIELDS, "auto_passed")) + " |")
     unknown = {side: totals[side].get("auto_passed_unknown", 0)
                for side in ("baseline", "candidate")}
     lines.append("")
@@ -197,27 +216,17 @@ def main(argv=None):
         "state": status,
         "note": "자동 검사 상태만 대조한다. 의미 품질·독립 판정·기준선 우월성은 NOT VERIFIED다.",
     }
-    published = []
     try:
         json_bytes = __import__("json").dumps(document, ensure_ascii=False, indent=2).encode("utf-8")
         with new_output(json_path) as stream:
             stream.write(json_bytes)
-        published.append((json_path, json_bytes))
         json_md = build_markdown(parsed.baseline, parsed.candidate, parsed.out,
                                  rows, totals, status).encode("utf-8")
         with new_output(md_path) as stream:
             stream.write(json_md)
-        published.append((md_path, json_md))
     except OSError as exc:
-        for path, expected in published:
-            try:
-                # 게시 후 다른 작업이 교체한 파일은 지우지 않고 남긴다.
-                if path.exists() and path.read_bytes() != expected:
-                    print(f"오류: 되돌리기 생략(다른 내용으로 교체됨): {path}", file=sys.stderr)
-                    continue
-                path.unlink(missing_ok=True)
-            except OSError as cleanup_exc:
-                print(f"오류: 되돌리기 실패: {path}: {cleanup_exc}", file=sys.stderr)
+        print(f"오류: 부분 저장 가능; 보고 경로를 삭제하지 않음: {json_path}, {md_path}. "
+              "빈 출력 디렉터리에서 재시도하세요.", file=sys.stderr)
         print(f"오류: 대조 보고 저장 실패: {exc}", file=sys.stderr)
         return 1
     print(f"저장: {out_dir}")

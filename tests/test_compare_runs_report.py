@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import tempfile
+import threading
 import unittest
 from unittest import mock
 
@@ -140,6 +141,35 @@ class TestRows(unittest.TestCase):
         self.assertEqual(totals["baseline"]["auto_passed"], 0)
         self.assertEqual(totals["baseline"]["auto_passed_unknown"], 1)
 
+    def test_inconsistent_counts_are_unknown(self):
+        entry = {"id": "a", "repeats": 3, "attempted": 1, "completed": 1,
+                 "execution_failed": 0, "timed_out": 0, "not_run": 2, "passed_count": 3}
+        rows, totals, _ = compare_runs_report.build_rows({"a": entry}, {})
+        self.assertIsNone(rows[0][1]["baseline"]["auto_passed"])
+        self.assertEqual(totals["baseline"]["auto_passed_unknown"], 1)
+
+    def test_inconsistent_partition_marks_all_counts_unknown(self):
+        entry = dict(BASE[0], not_run=1)
+        rows, totals, _ = compare_runs_report.build_rows({"a": entry}, {})
+        self.assertIsNone(rows[0][1]["baseline"]["repeats"])
+        self.assertEqual(totals["baseline"]["repeats_unknown"], 1)
+        self.assertEqual(totals["baseline"]["auto_passed_unknown"], 1)
+
+    def test_partial_counts_that_already_exceed_attempts_are_unknown(self):
+        entry = {"id": "a", "repeats": 3, "attempted": 2, "completed": 2,
+                 "execution_failed": 1, "timed_out": None, "not_run": 1, "passed_count": 2}
+        rows, totals, _ = compare_runs_report.build_rows({"a": entry}, {})
+        self.assertIsNone(rows[0][1]["baseline"]["completed"])
+        self.assertEqual(totals["baseline"]["completed_unknown"], 1)
+
+    def test_unknown_counts_in_totals_are_not_reported_as_zero(self):
+        entries = {"a": dict(BASE[0]), "b": {"id": "b"}}
+        rows, totals, status = compare_runs_report.build_rows(entries, {})
+        md = compare_runs_report.build_markdown("b", "c", "o", rows, totals, status)
+        self.assertIn("? (확인 합계 3, 미확인 1건)", md)
+        self.assertEqual(totals["baseline"]["repeats_unknown"], 1)
+        self.assertIn("? (확인 합계 2, 미확인 1건)", md)
+
 
 class TestMain(unittest.TestCase):
     def test_saves_json_and_markdown(self):
@@ -197,7 +227,7 @@ class TestMain(unittest.TestCase):
             rc = compare_runs_report.main(["--baseline", base, "--candidate", cand, "--out", out])
             self.assertEqual(rc, 1)
 
-    def test_second_publish_failure_rolls_back_first(self):
+    def test_second_publish_failure_preserves_first(self):
         with tempfile.TemporaryDirectory() as tmp:
             base = os.path.join(tmp, "base.json")
             cand = os.path.join(tmp, "cand.json")
@@ -218,8 +248,67 @@ class TestMain(unittest.TestCase):
             with mock.patch.object(compare_runs_report, "new_output", side_effect=flaky):
                 rc = compare_runs_report.main(["--baseline", base, "--candidate", cand, "--out", out])
             self.assertEqual(rc, 1)
-            self.assertFalse(os.path.exists(os.path.join(out, "compare-runs-summary.json")))
+            self.assertTrue(os.path.exists(os.path.join(out, "compare-runs-summary.json")))
             self.assertFalse(os.path.exists(os.path.join(out, "compare-runs-summary.md")))
+
+    def test_same_bytes_replacement_is_preserved_after_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base, cand, out = (os.path.join(tmp, name) for name in ("base.json", "cand.json", "out"))
+            for path in (base, cand):
+                with open(path, "w", encoding="utf-8") as handle:
+                    json.dump(doc(BASE), handle)
+            real = compare_runs_report.new_output
+            calls = 0
+            saved = []
+            def flaky(path):
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    target = os.path.join(out, "compare-runs-summary.json")
+                    with open(target, "rb") as handle:
+                        contents = handle.read()
+                    saved.append(contents)
+                    replacement = os.path.join(out, "replacement")
+                    with open(replacement, "wb") as handle:
+                        handle.write(contents)
+                    os.replace(replacement, target)
+                    raise OSError("failure")
+                return real(path)
+            with mock.patch.object(compare_runs_report, "new_output", side_effect=flaky):
+                self.assertEqual(compare_runs_report.main(["--baseline", base, "--candidate", cand, "--out", out]), 1)
+            with open(os.path.join(out, "compare-runs-summary.json"), "rb") as handle:
+                self.assertEqual(handle.read(), saved[0])
+
+    def test_concurrent_runs_do_not_mix_reports(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base, cand, out = (os.path.join(tmp, name) for name in ("base.json", "cand.json", "out"))
+            other = os.path.join(tmp, "other.json")
+            for path in (base, cand, other):
+                with open(path, "w", encoding="utf-8") as handle:
+                    json.dump(doc(BASE), handle)
+            barrier = threading.Barrier(2, timeout=10)
+            real = compare_runs_report.new_output
+            def synchronized(path):
+                if path.name.endswith(".json"):
+                    barrier.wait()
+                return real(path)
+            results = []
+            def run(baseline):
+                results.append(compare_runs_report.main(["--baseline", baseline, "--candidate", cand, "--out", out]))
+            with mock.patch.object(compare_runs_report, "new_output", side_effect=synchronized):
+                threads = [threading.Thread(target=run, args=(path,)) for path in (base, other)]
+                for thread in threads:
+                    thread.start()
+                for thread in threads:
+                    thread.join(timeout=15)
+                self.assertTrue(all(not thread.is_alive() for thread in threads))
+            self.assertEqual(sorted(results), [0, 1])
+            for name in ("compare-runs-summary.json", "compare-runs-summary.md"):
+                self.assertTrue(os.path.isfile(os.path.join(out, name)))
+            with open(os.path.join(out, "compare-runs-summary.json"), encoding="utf-8") as handle:
+                baseline = json.load(handle)["baseline_path"]
+            with open(os.path.join(out, "compare-runs-summary.md"), encoding="utf-8") as handle:
+                self.assertIn(f"- 기준선: {baseline}\n", handle.read())
 
     def test_rollback_keeps_replaced_file(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -1570,6 +1570,30 @@
         "재미있"
       ],
       "max_chars": 6000
+    },
+    {
+      "skill": "visual-design",
+      "id": "visual-design-retry-form",
+      "request": "가상 배송지 편집창의 좁은 화면용 시안을 검토해 줘. 저장 실패 직후 창이 닫히고 주소가 사라진다. 시안만 있고 작동 화면은 없다. 실패부터 다시 저장하기까지 어떻게 고치고 무엇을 확인할지 써 줘.",
+      "required": [["주소", "입력값"], ["유지", "보존", "남겨"], ["재시도", "다시"], ["키보드", "초점", "포커스"]],
+      "forbidden": ["조작을 확인했습니다"],
+      "max_chars": 4000
+    },
+    {
+      "skill": "code-review",
+      "id": "code-review-implement-empty-selection",
+      "request": "가상 Python 함수 def selected(keys=None): return keys or ['all'] 를 고쳐줘. 인자를 생략하면 기존 기본 목록을 반환하고, 빈 목록을 명시하면 빈 목록을 반환해야 해. 교체할 함수와 생략·빈 목록·일반 목록 호출 예시를 보여줘.",
+      "required": [["def selected("], ["None"], ["selected()"], ["selected([])"]],
+      "forbidden": ["return keys or"],
+      "max_chars": 4000
+    },
+    {
+      "skill": "writing",
+      "id": "writing-provisional-notice",
+      "request": "가상 안내 메모를 신청자에게 보낼 공지 두 문장으로 다듬어줘. 접수 30건 중 검토 완료 8건이라는 아침 메모에 오후 정정이 붙었다. 오후 기준 접수 30건 중 검토 완료 9건. 나머지는 목요일까지 마치는 것이 목표다. 공지 본문만 줘.",
+      "required": [["30건"], ["9건"], ["목요일"], ["목표"]],
+      "forbidden": ["8건"],
+      "max_chars": 300
     }
   ]
 }

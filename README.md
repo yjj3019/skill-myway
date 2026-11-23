@@ -15,7 +15,7 @@
 | `rhel-cve` | Red Hat 자료를 바탕으로 Confluence용 한국어 Markdown CVE 리포트 작성: 단건 `CVE-ID_리포트.md`, 다건/RHSB 통합, 명시적 다건 요약, 파일 없는 영향도 검증 답변 지원 |
 | `devlog` | Notion에 개발 이력 기록. 연결되지 않으면 `SESSION_LOG.md`에 기록 |
 | `incident-rca` | 장애·오류 원인 분석, 타임라인·가설·근거 분리, 재발 방지 대책 정리 |
-| `code-review` | 코드 변경 리뷰: 심각도·근거·Validation Gap, 테스트 약화 확인 |
+| `code-review` | 코드 변경 리뷰와 테스트 약화 점검, 기존 코드의 기능 구현·버그 수정과 호출 경로 검증 |
 | `prompt-engineering` | 프롬프트 구조화·검토·평가 케이스 설계 |
 | `product-management` | 제품 문제 정의, PRD 수용 기준, 우선순위와 가정·검증 근거 |
 | `research-brief` | 출처 등급과 기준일을 밝힌 조사·리서치 브리프 |

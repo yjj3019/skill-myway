@@ -151,8 +151,24 @@ def main(argv=None):
     parser.add_argument("--skill", nargs="+", default=["all"], help="스킬 이름 또는 all")
     parser.add_argument("--out", default=str(ROOT / "dist"), help="출력 디렉터리")
     args = parser.parse_args(argv)
-    for skill_dir in skill_dirs(args.skill):
-        dest, count, digest = build(skill_dir, Path(args.out), version)
+    selected = skill_dirs(args.skill)
+    out_dir = Path(args.out)
+    if len(set(selected)) != len(selected):
+        print("오류: 중복 스킬 선택", file=sys.stderr)
+        return 1
+    conflicts = [skill.name for skill in selected
+                 if os.path.lexists(out_dir / f"myway-{skill.name}-{version}.zip")]
+    if conflicts:
+        print(f"오류: 이미 존재하는 ZIP: {', '.join(conflicts)}", file=sys.stderr)
+        return 1
+    for index, skill_dir in enumerate(selected):
+        try:
+            dest, count, digest = build(skill_dir, out_dir, version)
+        except (ValueError, OSError) as exc:
+            done = ", ".join(skill.name for skill in selected[:index]) or "없음"
+            pending = ", ".join(skill.name for skill in selected[index:])
+            print(f"오류: {exc}\n생성 완료: {done}\n실패 또는 미완료: {pending}", file=sys.stderr)
+            return 1
         try:
             shown = dest.relative_to(ROOT)
         except ValueError:

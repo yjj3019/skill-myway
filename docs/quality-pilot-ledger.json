@@ -1,0 +1,70 @@
+{
+  "schema_version": 2,
+  "judgment_source": "human",
+  "context": {
+    "baseline": {
+      "cases": null,
+      "rubric": null,
+      "scorer": null,
+      "environment": null,
+      "model": null,
+      "execution_budget": null,
+      "tool_configuration": null,
+      "prompt": null
+    },
+    "candidate": {
+      "cases": null,
+      "rubric": null,
+      "scorer": null,
+      "environment": null,
+      "model": null,
+      "execution_budget": null,
+      "tool_configuration": null,
+      "prompt": null
+    }
+  },
+  "planned": [
+    {
+      "case": "writing-01",
+      "repeat": 1
+    },
+    {
+      "case": "writing-02",
+      "repeat": 1
+    },
+    {
+      "case": "incident-rca-01",
+      "repeat": 1
+    },
+    {
+      "case": "incident-rca-02",
+      "repeat": 1
+    }
+  ],
+  "trials": [
+    {
+      "case": "writing-01",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "writing-02",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "incident-rca-01",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    },
+    {
+      "case": "incident-rca-02",
+      "repeat": 1,
+      "baseline": "NOT_RUN",
+      "candidate": "NOT_RUN"
+    }
+  ]
+}

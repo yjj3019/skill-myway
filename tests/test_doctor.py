@@ -6,14 +6,18 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import doctor
+from install_skills import install
 
 
 class DoctorTests(unittest.TestCase):
     def test_all_found_returns_zero(self):
         with tempfile.TemporaryDirectory() as tmp, \
              mock.patch.object(doctor.shutil, "which", return_value="/usr/bin/claude"):
-            (Path(tmp) / "skills" / "myway").mkdir(parents=True)
+            target = Path(tmp) / ".claude" / "skills"
+            install(target)
             self.assertEqual(doctor.run(["claude"], home=tmp), 0)
+            (target / "writing" / "SKILL.md").unlink()
+            self.assertEqual(doctor.run(["claude"], home=tmp), 1)
 
     def test_missing_executable_reports_need_and_hint(self):
         with tempfile.TemporaryDirectory() as tmp, \
@@ -44,8 +48,9 @@ class DoctorTests(unittest.TestCase):
             self.assertEqual(doctor.run(["claude"], home=tmp), 1)
         with tempfile.TemporaryDirectory() as tmp, \
              mock.patch.object(doctor.shutil, "which", return_value="/usr/bin/codex"):
-            (Path(tmp) / "skills" / "myway").mkdir(parents=True)
+            install(Path(tmp) / ".agents" / "skills")
             self.assertEqual(doctor.run(["codex"], home=tmp), 0)
+            self.assertFalse(doctor.checks_for("grok", home=tmp)[1].found)
 
 
 if __name__ == "__main__":

@@ -24,6 +24,16 @@ def skills():
 
 
 class PackageAllSkills(unittest.TestCase):
+    def test_batch_checks_later_target_before_publishing_first(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            existing = Path(tmp) / f"myway-code-review-{VERSION}.zip"
+            existing.write_bytes(b"existing")
+            args = ["--out", tmp, "--skill", "writing"]
+            self.assertEqual(package_skill.main(args + ["code-review"]), 1)
+            self.assertEqual(package_skill.main(args + ["writing"]), 1)
+            self.assertEqual(list(Path(tmp).iterdir()), [existing])
+            self.assertEqual(existing.read_bytes(), b"existing")
+
     def test_interrupted_zip_write_can_be_retried(self):
         write = zipfile.ZipFile.writestr
         with tempfile.TemporaryDirectory() as tmp:

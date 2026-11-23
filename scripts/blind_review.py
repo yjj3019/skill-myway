@@ -21,6 +21,7 @@ import sys
 from pathlib import Path
 
 import contract_json
+from atomic_output import new_output
 
 MAX_BYTES = 16 * 1024 * 1024
 ALGORITHM = "hmac-sha256-case-id-v1"
@@ -130,24 +131,18 @@ def _digest(payload):
 def write_outputs(packet, key, packet_path, key_path):
     packet_bytes = (json.dumps(packet, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
     key_bytes = (json.dumps(key, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
-    created = []
+    packet_path, key_path = Path(packet_path), Path(key_path)
+    if packet_path.resolve() == key_path.resolve():
+        raise ValueError("패킷과 비공개 키는 서로 다른 경로가 필요합니다")
+    for path in (packet_path, key_path):
+        if path.exists() or path.is_symlink():
+            raise FileExistsError(path)
     try:
         for path, payload in ((packet_path, packet_bytes), (key_path, key_bytes)):
-            handle = open(path, "xb")
-            created.append((handle, path))
-            handle.write(payload)
-            handle.close()
-    except OSError:
-        for handle, path in created:
-            try:
-                handle.close()
-            except OSError:
-                pass
-            try:
-                Path(path).unlink()
-            except OSError:
-                pass
-        raise
+            with new_output(path) as handle:
+                handle.write(payload)
+    except OSError as exc:
+        raise OSError(f"저장 실패({path}): {exc}. 부분 저장 가능. 새 경로로 재시도하세요.") from exc
     return _digest(packet_bytes), _digest(key_bytes)
 
 

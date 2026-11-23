@@ -166,6 +166,7 @@ python -m venv "$env:TEMP\skill-myway-test-env"
 ## 블라인드 패킷
 
 `scripts/blind_review.py`로 A/B 순서를 섞은 검토 패킷과 비공개 키를 만든다.
+패킷과 키는 각각 덮어쓰기 없이 게시한다. 둘 중 하나를 저장하지 못하면 이미 게시된 파일을 보존한다. 새 경로 두 개로 다시 실행한 뒤 같은 실행에서 나온 패킷과 키를 함께 사용한다.
 
 ```sh
 python3 scripts/blind_review.py --cases cases.json \

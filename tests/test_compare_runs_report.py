@@ -68,6 +68,16 @@ class TestRead(unittest.TestCase):
 
 
 class TestRows(unittest.TestCase):
+    def test_verdict_agrees_with_known_passes(self):
+        for passed, verdict, expected in [(0, True, None), (1, False, None), (0, False, False), (1, True, True)]:
+            row = compare_runs_report._case_state(dict(CAND[1], passed_count=passed, auto_checks_passed=verdict))
+            self.assertIs(row["auto_checks_passed"], expected)
+            self.assertEqual("auto_checks_passed" in row["input_issues"], expected is None)
+        never_attempted = compare_runs_report._case_state(dict(BASE[1], auto_checks_passed=False))
+        self.assertIsNone(never_attempted["auto_checks_passed"])
+        # One observed failure and one unattempted run still establish FAIL.
+        observed = dict(BASE[1], attempted=1, completed=1, not_run=1, auto_checks_passed=False)
+        self.assertIs(compare_runs_report._case_state(observed)["auto_checks_passed"], False)
     def test_pairing_and_side_flags(self):
         rows, totals, status = compare_runs_report.build_rows(
             {c["id"]: c for c in BASE}, {c["id"]: c for c in CAND})

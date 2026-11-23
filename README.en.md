@@ -83,7 +83,9 @@ python3 scripts/install_skills.py --target grok         # ~/.grok/skills
 python3 scripts/install_skills.py --dest <path>         # any location
 ```
 
-`--link` creates symbolic links instead of copies (Windows may require elevated privileges); `--force` replaces an existing skill with the same name. Installed skills are not auto-updated, so pull the repository and reinstall.
+To update a copy installation, back up the installed directories and any local edits, pull the repository, then run `python3 scripts/install_skills.py --target codex --force`. The default skips existing names. Force replaces each matching skill directory in the selected target. Restore the saved directories to their original locations to recover a copy installation. A `--link` installation follows the checkout as it changes. To recover it, use the original revision and reconnect with `--link --force`.
+
+Run `python3 scripts/doctor.py --platform codex` to check the CLI and skill files in the default direct installation. For a custom `--dest`, check `<skill>/SKILL.md` in that directory. Restart the agent to load the updated skills.
 
 ## Paths Read per Platform
 

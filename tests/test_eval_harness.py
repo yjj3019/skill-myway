@@ -1392,7 +1392,7 @@ class RunEval(unittest.TestCase):
                                  only=["writing"], out="eval-results", timeout=300, repeat=1,
                                  max_calls=5, max_seconds=None, dry_run=False, inspect_artifacts=False)
         command = run_eval.rerun_command(args)
-        self.assertEqual(command[:2], ["python3", "scripts/run_eval.py"])
+        self.assertEqual(command[:2], [sys.executable, str(Path(run_eval.__file__).resolve())])
         self.assertEqual(command[command.index("--cases") + 1], "cases.json")
         self.assertEqual(command[command.index("--only") + 1], "writing")
         self.assertEqual(command[command.index("--max-calls") + 1], "5")
@@ -1407,7 +1407,7 @@ class RunEval(unittest.TestCase):
         run = {"exit_code": 1, "output": "결과", "stderr_tail": "진단: 오류 발생", "seconds": 0,
                "artifacts": [], "artifact_error": None}
         with tempfile.TemporaryDirectory() as tmp:
-            source, out = Path(tmp) / "cases.json", Path(tmp) / "out"
+            source, out = Path(tmp) / "cases with spaces.json", Path(tmp) / "output with spaces"
             source.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
             with mock.patch.object(run_eval, "run_case", return_value=run):
                 status = run_eval.main(["--cases", str(source), "--only", "writing",
@@ -1417,9 +1417,16 @@ class RunEval(unittest.TestCase):
             self.assertEqual(status, 1)
             self.assertIn("| writing-x | writing |", text)
             self.assertIn("진단: 오류 발생", text)
-            self.assertIn("--max-calls 1", text)
             self.assertEqual(summary["rerun_command"][-2:], ["--max-calls", "1"])
-            self.assertIn("--platform grok", text)
+            rerun = summary["rerun_command"]
+            next_out = Path(rerun[rerun.index("--out") + 1])
+            self.assertFalse(next_out.exists())
+            self.assertIn(str(next_out), text)
+            self.assertIn(str(out), summary["original_command"])
+            with mock.patch.object(run_eval, "run_case", return_value=run) as called:
+                run_eval.main(rerun[2:])
+            called.assert_called_once()
+            self.assertTrue((next_out / "summary.json").is_file())
 
     def test_existing_summary_md_is_a_conflict(self):
         with tempfile.TemporaryDirectory() as tmp:

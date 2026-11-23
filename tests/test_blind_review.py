@@ -2,6 +2,7 @@ import json
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -97,6 +98,23 @@ class BlindReview(unittest.TestCase):
                 blind_review.write_outputs(packet, key, packet_path, key_path)
             self.assertTrue(packet_path.is_file())
             self.assertTrue(key_path.is_file())
+
+    def test_key_failure_preserves_replaced_packet(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            packet, key = Path(tmp) / "packet", Path(tmp) / "key"
+            publish = blind_review.new_output
+            def competing_writer(path):
+                if path == key:
+                    replacement = Path(tmp) / "replacement"
+                    replacement.write_bytes(b"replacement")
+                    replacement.replace(packet)
+                    raise OSError("key write failed")
+                return publish(path)
+            with mock.patch.object(blind_review, "new_output", side_effect=competing_writer):
+                with self.assertRaises(OSError):
+                    blind_review.write_outputs({}, {}, packet, key)
+            self.assertEqual(packet.read_bytes(), b"replacement")
+            self.assertFalse(key.exists())
 
     def test_cli_end_to_end(self):
         with tempfile.TemporaryDirectory() as d:

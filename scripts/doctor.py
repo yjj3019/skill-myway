@@ -12,7 +12,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-TARGETS = {"claude": "~/.claude/skills", "codex": "~/.agents/skills", "grok": "~/.grok/skills"}
+from install_skills import SRC, TARGETS, local_skill_directories
 
 
 @dataclass
@@ -27,7 +27,9 @@ def checks_for(platform, home=None, env=None):
     base = Path(home) if home else Path.home()
     commands = {"claude": "claude", "codex": "codex", "grok": "grok"}
     executable = shutil.which(commands[platform], path=(env or {}).get("PATH"))
-    installed = (base / "skills" / "myway").exists()
+    directory = base / Path(TARGETS[platform]).relative_to("~")
+    expected = local_skill_directories(SRC)
+    missing = [skill.name for skill in expected if not (directory / skill.name / "SKILL.md").is_file()]
     return [
         Check(
             name=f"{platform} 실행 파일",
@@ -37,8 +39,8 @@ def checks_for(platform, home=None, env=None):
         ),
         Check(
             name=f"{platform} 스킬 설치",
-            found=installed,
-            need=f"{platform} 사용자 스킬 디렉터리에 myway 스킬이 있어야 합니다 ({TARGETS[platform]})",
+            found=bool(expected) and not missing,
+            need=f"직접 설치 경로 {directory}에서 누락된 스킬: {', '.join(missing)}",
             hint="scripts/install_skills.py --target {0}로 설치합니다".format(platform),
         ),
     ]

@@ -83,7 +83,9 @@ python3 scripts/install_skills.py --target grok         # ~/.grok/skills
 python3 scripts/install_skills.py --dest <경로>         # 원하는 위치
 ```
 
-`--link`는 복사 대신 심볼릭 링크를 만들고(Windows는 권한이 필요할 수 있음), `--force`는 기존 같은 이름의 스킬을 교체합니다. 설치한 스킬은 자동 갱신되지 않으므로 저장소를 pull한 뒤 다시 설치합니다.
+복사 설치를 갱신할 때는 기존 설치와 로컬 수정본을 별도 폴더에 백업하고 저장소를 갱신한 뒤 `python3 scripts/install_skills.py --target codex --force`를 실행합니다. 기본 설치는 기존 이름을 건너뛰며, `--force`는 선택한 대상에서 이름이 같은 스킬 디렉터리 전체를 교체합니다. 복구할 때는 백업한 디렉터리를 원래 위치로 복사합니다. `--link` 설치는 저장소를 가리키므로 pull한 내용이 바로 적용됩니다. 링크 설치를 복원하려면 원래 저장소 버전에서 `--link --force`로 다시 연결합니다.
+
+갱신 후 `python3 scripts/doctor.py --platform codex`로 CLI와 기본 직접 설치 경로의 스킬 본문을 확인합니다. `--dest`로 설치했다면 지정한 폴더의 `<스킬명>/SKILL.md`를 확인합니다. 에이전트를 재시작해 원하는 스킬을 불러옵니다.
 
 ## 플랫폼별 읽는 경로
 

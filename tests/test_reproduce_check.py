@@ -19,7 +19,7 @@ class ReproduceCheckTests(unittest.TestCase):
         self.assertEqual(run.call_count, 3)
         self.assertEqual(run.call_args_list[0].args[0][1], "scripts/validate_repo.py")
         self.assertEqual(run.call_args_list[1].args[0][1], "scripts/run_tests.py")
-        self.assertEqual(run.call_args_list[2].args[0], ["git", "diff", "--exit-code"])
+        self.assertEqual(run.call_args_list[2].args[0], ["git", "diff", "--exit-code", "HEAD", "--"])
         for call in run.call_args_list:
             self.assertEqual(call.kwargs["cwd"], str(Path(".")))
 

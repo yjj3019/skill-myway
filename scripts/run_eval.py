@@ -19,6 +19,7 @@ import os
 import platform
 import re
 import shutil
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -730,9 +731,9 @@ def output_stem(case_id):
     return "encoded-" + hashlib.sha256(case_id.encode("utf-8")).hexdigest()
 
 
-def rerun_command(args):
+def invocation(args):
     """파싱된 인자에서 고정된 순서로 재실행 명령을 만든다. sys.argv 원문을 쓰지 않는다."""
-    parts = ["python3", "scripts/run_eval.py"]
+    parts = [sys.executable, str(Path(__file__).resolve())]
     if args.cases:
         parts += ["--cases", args.cases]
     if args.auto_select:
@@ -752,12 +753,32 @@ def rerun_command(args):
     return parts
 
 
+def rerun_command(args):
+    parts = invocation(args)
+    original = Path(args.out).resolve()
+    parent = original.parent
+    stem = (original.name or "eval") + "-rerun"
+    target = parent / stem
+    index = 1
+    while os.path.lexists(target):
+        index += 1
+        target = parent / f"{stem}-{index}"
+    parts[parts.index("--out") + 1] = str(target)
+    return parts
+
+
 def build_summary_markdown(args, summary_doc):
     """summary.json과 같은 내용을 사람이 읽는 표와 stderr 발췌로 만든다."""
+    parts = summary_doc["rerun_command"]
+    if os.name == "nt":
+        command = "& " + " ".join("'" + part.replace("'", "''") + "'" for part in parts)
+        shell = "powershell"
+    else:
+        command, shell = shlex.join(parts), "sh"
     rows = [f"# 평가 요약 ({summary_doc['mode']})", "",
            f"- 플랫폼: {summary_doc['platform']}",
            f"- 시작: {summary_doc['started_at']}",
-           f"- 재실행: `{' '.join(rerun_command(args))}`", "",
+           "", "재실행", "", f"```{shell}", command, "```", "",
            "| 케이스 | 스킬 | 반복 | 실행 | 완료 | 타임아웃 | 미실행 | 자동 통과 |",
            "|---|---|---|---|---|---|---|---|"]
     for item in summary_doc["cases"]:
@@ -1123,6 +1144,7 @@ def main(argv=None):
                    "elapsed_seconds": round(time.monotonic() - started, 1)},
         "input_manifest": input_manifest,
         "rerun_command": rerun_command(args),
+        "original_command": invocation(args),
         "cases": summary,
         "note": "자동 검사는 형식·필수 요소만 본다. 문장 품질과 사실 정확성은 사람이 판정해야 한다. 저장소 내부 작업 공간에서 상위 지침 탐색과 쓰기 격리는 별도 검증이 필요하다.",
     }

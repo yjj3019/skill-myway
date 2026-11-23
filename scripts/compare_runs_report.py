@@ -86,7 +86,9 @@ def _case_state(entry):
             issues.append(PASSED_COUNT)
         passed = None
     verdict = entry.get("auto_checks_passed")
-    if verdict is not None and type(verdict) is not bool:
+    inconsistent_pass = verdict is True and (passed is None or not repeats or passed != repeats)
+    inconsistent_fail = verdict is False and passed is not None and passed == counts["attempted"]
+    if (verdict is not None and type(verdict) is not bool) or inconsistent_pass or inconsistent_fail:
         issues.append("auto_checks_passed")
         verdict = None
     rate = entry.get(RATE)

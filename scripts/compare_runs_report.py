@@ -16,7 +16,8 @@ passed_count가 없거나 0 이상·repeats 이하가 아니면 '통과 미확�
 
 보고 파일 두 개는 각각 덮어쓰지 않고 게시한다. 게시는 파일 단위라서
 두 파일의 동시 저장(쌍 원자성)은 보장되지 않으며, 두 번째 게시가 실패하면
-먼저 게시한 파일을 되돌린다.
+먼저 게시한 파일을 되돌린다. 되돌림은 게시 시점에 쓴 내용과 같은 파일만
+지우고, 그 사이 다른 작업이 교체한 파일은 남기고 보고한다.
 """
 import argparse
 import sys
@@ -58,7 +59,8 @@ def _count(entry, field):
     value = entry.get(field)
     if field == RATE:
         return value
-    return value if isinstance(value, int) and value >= 0 else None
+    # bool은 int의 하위형이라 정수 검사에서 명시적으로 배제한다.
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
 
 
 def build_rows(baseline, candidate):
@@ -78,7 +80,8 @@ def build_rows(baseline, candidate):
             repeats = _count(entry, "repeats")
             passed = _count(entry, PASSED_COUNT)
             cells[side]["auto_passed"] = None
-            if isinstance(passed, int) and (not isinstance(repeats, int) or passed <= repeats):
+            # repeats를 알 수 없으면 상한 검증이 불가하므로 passed_count도 미확인으로 둔다.
+            if isinstance(passed, int) and isinstance(repeats, int) and passed <= repeats:
                 cells[side]["auto_passed"] = passed
         rows.append((case_id, cells, present))
     totals = {}
@@ -196,16 +199,22 @@ def main(argv=None):
     }
     published = []
     try:
+        json_bytes = __import__("json").dumps(document, ensure_ascii=False, indent=2).encode("utf-8")
         with new_output(json_path) as stream:
-            stream.write(__import__("json").dumps(document, ensure_ascii=False, indent=2).encode("utf-8"))
-        published.append(json_path)
+            stream.write(json_bytes)
+        published.append((json_path, json_bytes))
+        json_md = build_markdown(parsed.baseline, parsed.candidate, parsed.out,
+                                 rows, totals, status).encode("utf-8")
         with new_output(md_path) as stream:
-            stream.write(build_markdown(parsed.baseline, parsed.candidate, parsed.out,
-                                       rows, totals, status).encode("utf-8"))
-        published.append(md_path)
+            stream.write(json_md)
+        published.append((md_path, json_md))
     except OSError as exc:
-        for path in published:
+        for path, expected in published:
             try:
+                # 게시 후 다른 작업이 교체한 파일은 지우지 않고 남긴다.
+                if path.exists() and path.read_bytes() != expected:
+                    print(f"오류: 되돌리기 생략(다른 내용으로 교체됨): {path}", file=sys.stderr)
+                    continue
                 path.unlink(missing_ok=True)
             except OSError as cleanup_exc:
                 print(f"오류: 되돌리기 실패: {path}: {cleanup_exc}", file=sys.stderr)

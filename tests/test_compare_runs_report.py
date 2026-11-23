@@ -121,6 +121,25 @@ class TestRows(unittest.TestCase):
         md = compare_runs_report.build_markdown("b.json", "c.json", "out", rows, totals, status)
         self.assertIn("자동 통과 미확인 케이스(합계 제외): 기준선 2건, 후보 0건", md)
 
+    def test_null_repeats_makes_passed_unknown(self):
+        # repeats 없이는 상한 검증이 불가하므로 passed_count가 정수여도 미확인으로 둔다.
+        entry = {"id": "a", "repeats": None, "attempted": 200, "completed": 200, "execution_failed": 0,
+                 "timed_out": 0, "not_run": 0, "passed_count": 101, "auto_check_pass_rate": None}
+        rows, totals, status = compare_runs_report.build_rows({entry["id"]: entry}, {})
+        self.assertIsNone(rows[0][1]["baseline"]["auto_passed"])
+        self.assertEqual(totals["baseline"]["auto_passed"], 0)
+        self.assertEqual(totals["baseline"]["auto_passed_unknown"], 1)
+
+    def test_bool_values_are_not_counts(self):
+        # bool은 int의 하위형이지만 true를 1로 세지 않는다.
+        entry = {"id": "a", "repeats": True, "attempted": True, "completed": True, "execution_failed": 0,
+                 "timed_out": 0, "not_run": 0, "passed_count": True, "auto_check_pass_rate": None}
+        rows, totals, status = compare_runs_report.build_rows({entry["id"]: entry}, {})
+        self.assertIsNone(rows[0][1]["baseline"]["repeats"])
+        self.assertIsNone(rows[0][1]["baseline"]["auto_passed"])
+        self.assertEqual(totals["baseline"]["auto_passed"], 0)
+        self.assertEqual(totals["baseline"]["auto_passed_unknown"], 1)
+
 
 class TestMain(unittest.TestCase):
     def test_saves_json_and_markdown(self):
@@ -200,6 +219,36 @@ class TestMain(unittest.TestCase):
                 rc = compare_runs_report.main(["--baseline", base, "--candidate", cand, "--out", out])
             self.assertEqual(rc, 1)
             self.assertFalse(os.path.exists(os.path.join(out, "compare-runs-summary.json")))
+            self.assertFalse(os.path.exists(os.path.join(out, "compare-runs-summary.md")))
+
+    def test_rollback_keeps_replaced_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = os.path.join(tmp, "base.json")
+            cand = os.path.join(tmp, "cand.json")
+            out = os.path.join(tmp, "out")
+            with open(base, "w", encoding="utf-8") as handle:
+                json.dump(doc(BASE), handle)
+            with open(cand, "w", encoding="utf-8") as handle:
+                json.dump(doc(CAND), handle)
+            real = compare_runs_report.new_output
+            calls = {"count": 0}
+
+            def flaky(path):
+                calls["count"] += 1
+                if calls["count"] == 2:
+                    json_path = os.path.join(out, "compare-runs-summary.json")
+                    with open(json_path, "wb") as handle:
+                        handle.write(b'{"foreign": true}')
+                    raise OSError("두 번째 게시 주입 실패")
+                return real(path)
+
+            with mock.patch.object(compare_runs_report, "new_output", side_effect=flaky):
+                rc = compare_runs_report.main(["--baseline", base, "--candidate", cand, "--out", out])
+            self.assertEqual(rc, 1)
+            json_path = os.path.join(out, "compare-runs-summary.json")
+            self.assertTrue(os.path.exists(json_path))
+            with open(json_path, encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), '{"foreign": true}')
             self.assertFalse(os.path.exists(os.path.join(out, "compare-runs-summary.md")))
 
 

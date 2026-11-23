@@ -5,10 +5,18 @@
   --baseline: run_eval.py가 저장한 기준선 summary.json
   --candidate: 같은 사례 파일로 실행한 후보 summary.json
   --out: compare-runs-summary.json과 compare-runs-summary.md를 저장할 디렉터리
-종료 코드: 0 저장 성공, 1 입력 오류(읽기 실패·스키마 불일치·중복 키).
+종료 코드: 0 저장 성공, 1 입력 오류(읽기 실패·스키마 불일치·중복 키)·이미 존재하는 보고 파일·저장 실패.
 
 자동 검사 상태(시도·완료·실패·타임아웃·미실행·자동 통과)만 대조한다.
 의미 품질·독립 판정·기준선 우월성은 검증하지 않는다.
+
+자동 통과 수는 run_eval.py가 저장한 원본 passed_count를 검증해 직접 사용한다.
+반올림된 auto_check_pass_rate(repeats와 곱한 값을 다시 반올림)로 되살리지 않는다.
+passed_count가 없거나 0 이상·repeats 이하가 아니면 '통과 미확인'으로 두고 합계에서 뺀다.
+
+보고 파일 두 개는 각각 덮어쓰지 않고 게시한다. 게시는 파일 단위라서
+두 파일의 동시 저장(쌍 원자성)은 보장되지 않으며, 두 번째 게시가 실패하면
+먼저 게시한 파일을 되돌린다.
 """
 import argparse
 import sys
@@ -18,10 +26,11 @@ from pathlib import Path
 import contract_json
 from atomic_output import new_output
 
-# 사례 항목에서 분모로 쓰는 정수 필드와 자동 통과율 필드.
+# 사례 항목에서 분모로 쓰는 정수 필드와 자동 통과 수·자동 통과율 필드.
 COUNT_FIELDS = ("repeats", "attempted", "completed", "execution_failed", "timed_out", "not_run")
+PASSED_COUNT = "passed_count"
 RATE = "auto_check_pass_rate"
-FIELDS = COUNT_FIELDS + (RATE,)
+FIELDS = COUNT_FIELDS + ("passed_count", RATE)
 
 
 def _read(path):
@@ -66,11 +75,11 @@ def build_rows(baseline, candidate):
                 continue
             present.append(side)
             cells[side] = {field: _count(entry, field) for field in FIELDS}
-            cells[side]["auto_passed"] = None
             repeats = _count(entry, "repeats")
-            rate = _count(entry, RATE)
-            if isinstance(repeats, int) and isinstance(rate, (int, float)):
-                cells[side]["auto_passed"] = round(rate * repeats)
+            passed = _count(entry, PASSED_COUNT)
+            cells[side]["auto_passed"] = None
+            if isinstance(passed, int) and (not isinstance(repeats, int) or passed <= repeats):
+                cells[side]["auto_passed"] = passed
         rows.append((case_id, cells, present))
     totals = {}
     for side in ("baseline", "candidate"):
@@ -84,7 +93,11 @@ def build_rows(baseline, candidate):
                     counts[field] += entry[field]
             if isinstance(entry["auto_passed"], int):
                 counts["auto_passed"] += entry["auto_passed"]
+            else:
+                counts["auto_passed_unknown"] += 1
         totals[side] = dict(counts)
+        totals[side].setdefault("auto_passed", 0)
+        totals[side].setdefault("auto_passed_unknown", 0)
     status = {"both": 0, "only_baseline": 0, "only_candidate": 0, "auto_state_differs": 0}
     for case_id, cells, present in rows:
         if len(present) == 2:
@@ -130,7 +143,13 @@ def build_markdown(baseline_path, candidate_path, out_dir, rows, totals, status)
         t = totals[side]
         lines.append(f"| {label} | {t.get('repeats', 0)} | {t.get('attempted', 0)} | {t.get('completed', 0)} | "
                      f"{t.get('execution_failed', 0)} | {t.get('timed_out', 0)} | {t.get('not_run', 0)} | {t.get('auto_passed', 0)} |")
+    unknown = {side: totals[side].get("auto_passed_unknown", 0)
+               for side in ("baseline", "candidate")}
     lines.append("")
+    if any(unknown.values()):
+        lines.append(f"- 자동 통과 미확인 케이스(합계 제외): 기준선 {unknown['baseline']}건, "
+                     f"후보 {unknown['candidate']}건")
+        lines.append("")
     lines.append("## 대조 상태")
     lines.append("")
     lines.append(f"- 양쪽에 있는 케이스: {status['both']}, 기준선만: {status['only_baseline']}, "
@@ -156,6 +175,13 @@ def main(argv=None):
         print(f"오류: {exc}", file=sys.stderr)
         return 1
     out_dir.mkdir(parents=True, exist_ok=True)
+    json_path = out_dir / "compare-runs-summary.json"
+    md_path = out_dir / "compare-runs-summary.md"
+    existing = [path for path in (json_path, md_path) if path.exists()]
+    if existing:
+        print(f"오류: 이미 존재하는 보고 파일이 있어 덮어쓰지 않음: "
+              f"{', '.join(path.name for path in existing)}", file=sys.stderr)
+        return 1
     document = {
         "schema_version": 1,
         "baseline_path": parsed.baseline,
@@ -168,13 +194,21 @@ def main(argv=None):
         "state": status,
         "note": "자동 검사 상태만 대조한다. 의미 품질·독립 판정·기준선 우월성은 NOT VERIFIED다.",
     }
+    published = []
     try:
-        with new_output(out_dir / "compare-runs-summary.json") as stream:
+        with new_output(json_path) as stream:
             stream.write(__import__("json").dumps(document, ensure_ascii=False, indent=2).encode("utf-8"))
-        with new_output(out_dir / "compare-runs-summary.md") as stream:
+        published.append(json_path)
+        with new_output(md_path) as stream:
             stream.write(build_markdown(parsed.baseline, parsed.candidate, parsed.out,
                                        rows, totals, status).encode("utf-8"))
+        published.append(md_path)
     except OSError as exc:
+        for path in published:
+            try:
+                path.unlink(missing_ok=True)
+            except OSError as cleanup_exc:
+                print(f"오류: 되돌리기 실패: {path}: {cleanup_exc}", file=sys.stderr)
         print(f"오류: 대조 보고 저장 실패: {exc}", file=sys.stderr)
         return 1
     print(f"저장: {out_dir}")

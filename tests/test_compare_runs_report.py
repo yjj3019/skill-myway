@@ -3,6 +3,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
@@ -12,15 +13,16 @@ import compare_runs_report  # noqa: E402
 
 BASE = [
     {"id": "a", "repeats": 3, "attempted": 3, "completed": 2, "execution_failed": 1,
-     "timed_out": 0, "not_run": 0, "auto_check_pass_rate": 0.67, "overall_status": "NOT VERIFIED"},
+     "timed_out": 0, "not_run": 0, "passed_count": 2, "auto_check_pass_rate": 0.67,
+     "overall_status": "NOT VERIFIED"},
     {"id": "b", "repeats": 2, "attempted": 0, "completed": 0, "execution_failed": 0,
-     "timed_out": 0, "not_run": 2, "auto_check_pass_rate": None},
+     "timed_out": 0, "not_run": 2, "passed_count": 0, "auto_check_pass_rate": None},
 ]
 CAND = [
     {"id": "a", "repeats": 3, "attempted": 3, "completed": 3, "execution_failed": 0,
-     "timed_out": 0, "not_run": 0, "auto_check_pass_rate": 1.0},
+     "timed_out": 0, "not_run": 0, "passed_count": 3, "auto_check_pass_rate": 1.0},
     {"id": "c", "repeats": 1, "attempted": 1, "completed": 1, "execution_failed": 0,
-     "timed_out": 0, "not_run": 0, "auto_check_pass_rate": 1.0},
+     "timed_out": 0, "not_run": 0, "passed_count": 1, "auto_check_pass_rate": 1.0},
 ]
 
 
@@ -82,6 +84,43 @@ class TestRows(unittest.TestCase):
         self.assertIn("미실행 2", md)
         self.assertIn("| 측 | 예정 | 시도 | 완료 | 실패 | 타임아웃 | 미실행 | 자동 통과 |", md)
 
+    def test_auto_passed_uses_passed_count_not_rounded_rate(self):
+        # 101/200 -> rate 0.51을 다시 곱해 반올림하면 102가 되지만 원본 passed_count 101을 쓴다.
+        entry = {"id": "a", "repeats": 200, "attempted": 200, "completed": 200, "execution_failed": 0,
+                 "timed_out": 0, "not_run": 0, "passed_count": 101, "auto_check_pass_rate": 0.51}
+        rows, totals, status = compare_runs_report.build_rows({entry["id"]: entry}, {})
+        self.assertEqual(rows[0][1]["baseline"]["auto_passed"], 101)
+        self.assertEqual(totals["baseline"]["auto_passed"], 101)
+        self.assertEqual(totals["baseline"]["auto_passed_unknown"], 0)
+
+    def test_partial_not_run_still_counts_passed_count(self):
+        # 미실행이 있어 rate가 None이어도 passed_count는 정확하므로 집계에 넣는다.
+        entry = {"id": "a", "repeats": 3, "attempted": 2, "completed": 2, "execution_failed": 0,
+                 "timed_out": 0, "not_run": 1, "passed_count": 2, "auto_check_pass_rate": None}
+        rows, totals, status = compare_runs_report.build_rows({entry["id"]: entry}, {})
+        self.assertEqual(rows[0][1]["baseline"]["auto_passed"], 2)
+        self.assertEqual(totals["baseline"]["auto_passed"], 2)
+        self.assertEqual(totals["baseline"]["auto_passed_unknown"], 0)
+
+    def test_invalid_passed_count_is_unknown_and_excluded(self):
+        raw = [
+            {"id": "a", "repeats": 3, "attempted": 3, "completed": 3, "execution_failed": 0,
+             "timed_out": 0, "not_run": 0, "auto_check_pass_rate": 1.0},
+            {"id": "b", "repeats": 3, "attempted": 3, "completed": 3, "execution_failed": 0,
+             "timed_out": 0, "not_run": 0, "passed_count": -1, "auto_check_pass_rate": None},
+            {"id": "c", "repeats": 3, "attempted": 3, "completed": 3, "execution_failed": 0,
+             "timed_out": 0, "not_run": 0, "passed_count": 3, "auto_check_pass_rate": None},
+        ]
+        rows, totals, status = compare_runs_report.build_rows({c["id"]: c for c in raw}, {})
+        by_id = {row[0]: row for row in rows}
+        self.assertIsNone(by_id["a"][1]["baseline"]["auto_passed"])
+        self.assertIsNone(by_id["b"][1]["baseline"]["auto_passed"])
+        self.assertEqual(by_id["c"][1]["baseline"]["auto_passed"], 3)
+        self.assertEqual(totals["baseline"]["auto_passed"], 3)
+        self.assertEqual(totals["baseline"]["auto_passed_unknown"], 2)
+        md = compare_runs_report.build_markdown("b.json", "c.json", "out", rows, totals, status)
+        self.assertIn("자동 통과 미확인 케이스(합계 제외): 기준선 2건, 후보 0건", md)
+
 
 class TestMain(unittest.TestCase):
     def test_saves_json_and_markdown(self):
@@ -103,6 +142,65 @@ class TestMain(unittest.TestCase):
                 md = handle.read()
             self.assertIn("| a |", md)
             self.assertIn("NOT VERIFIED", md)
+
+    def test_existing_output_blocks_before_any_write(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = os.path.join(tmp, "base.json")
+            cand = os.path.join(tmp, "cand.json")
+            out = os.path.join(tmp, "out")
+            with open(base, "w", encoding="utf-8") as handle:
+                json.dump(doc(BASE), handle)
+            with open(cand, "w", encoding="utf-8") as handle:
+                json.dump(doc(CAND), handle)
+            os.makedirs(out)
+            md_path = os.path.join(out, "compare-runs-summary.md")
+            with open(md_path, "w", encoding="utf-8") as handle:
+                handle.write("기존 보고서\n")
+            rc = compare_runs_report.main(["--baseline", base, "--candidate", cand, "--out", out])
+            self.assertEqual(rc, 1)
+            with open(md_path, encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "기존 보고서\n")
+            self.assertFalse(os.path.exists(os.path.join(out, "compare-runs-summary.json")))
+
+    def test_existing_both_outputs_are_listed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = os.path.join(tmp, "base.json")
+            cand = os.path.join(tmp, "cand.json")
+            out = os.path.join(tmp, "out")
+            with open(base, "w", encoding="utf-8") as handle:
+                json.dump(doc(BASE), handle)
+            with open(cand, "w", encoding="utf-8") as handle:
+                json.dump(doc(CAND), handle)
+            os.makedirs(out)
+            for name in ("compare-runs-summary.json", "compare-runs-summary.md"):
+                with open(os.path.join(out, name), "w", encoding="utf-8") as handle:
+                    handle.write(f"기존 {name}\n")
+            rc = compare_runs_report.main(["--baseline", base, "--candidate", cand, "--out", out])
+            self.assertEqual(rc, 1)
+
+    def test_second_publish_failure_rolls_back_first(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = os.path.join(tmp, "base.json")
+            cand = os.path.join(tmp, "cand.json")
+            out = os.path.join(tmp, "out")
+            with open(base, "w", encoding="utf-8") as handle:
+                json.dump(doc(BASE), handle)
+            with open(cand, "w", encoding="utf-8") as handle:
+                json.dump(doc(CAND), handle)
+            real = compare_runs_report.new_output
+            calls = {"count": 0}
+
+            def flaky(path):
+                calls["count"] += 1
+                if calls["count"] == 2:
+                    raise OSError("두 번째 게시 주입 실패")
+                return real(path)
+
+            with mock.patch.object(compare_runs_report, "new_output", side_effect=flaky):
+                rc = compare_runs_report.main(["--baseline", base, "--candidate", cand, "--out", out])
+            self.assertEqual(rc, 1)
+            self.assertFalse(os.path.exists(os.path.join(out, "compare-runs-summary.json")))
+            self.assertFalse(os.path.exists(os.path.join(out, "compare-runs-summary.md")))
 
 
 if __name__ == "__main__":

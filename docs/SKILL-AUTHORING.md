@@ -28,6 +28,7 @@
 
 - `tests/eval_cases/cases.json`에 가상 케이스를 추가한다. 실제 개인·조직 정보는 쓰지 않는다.
 - `python scripts/simulate_eval.py`로 스키마·커버리지·민감 패턴을 검사한다.
+- 고정된 값은 schema 2의 `expected_json`으로 키와 자료형까지 대조한다. 같은 객체의 자유 문구 필드는 `{"contains_all": ["처리", ["목표", "목표치"]], "numbers": [8]}`처럼 정의할 수 있다. 빈 contains_all 배열은 자유 문구의 공백 아닌 내용만 확인한다. 그룹이 있으면 그룹마다 표현 하나가 필요하고, 선택적 `numbers`는 필드 안의 모든 숫자를 개수까지 대조한다. 문장의 논리·자연스러움은 별도 판정한다.
 - 가능하면 `python scripts/run_eval.py --only <스킬> --max-calls 1`로 실제 출력 형식을 확인한다. 케이스가 여러 개면 나머지는 미실행으로 기록되므로 목적에 맞게 예산을 정한다.
 
 ## 5. 버전·기록

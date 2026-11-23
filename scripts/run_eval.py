@@ -295,13 +295,26 @@ def requirement_met(requirement, lowered):
     return False
 
 
+def matches_answer_field(actual, expected):
+    if type(expected) is not dict:
+        return type(actual) is type(expected) and actual == expected
+    if not isinstance(actual, str) or not actual.strip():
+        return False
+    if "numbers" in expected:
+        # Match complete numeric literals so 18, -8 and 8.5 cannot stand in for 8.
+        numbers = re.findall(r"[-+]?\d+(?:[.,]\d+)*", actual)
+        if sorted(numbers) != sorted(str(n) for n in expected["numbers"]):
+            return False
+    return all(requirement_met(term, actual.lower()) for term in expected["contains_all"])
+
+
 def matches_json_answer(output, expected):
     try:
         answer = contract_json.loads(output)
     except (ValueError, RecursionError):
         return False
     return (type(answer) is dict and answer.keys() == expected.keys()
-            and all(type(answer[key]) is type(value) and answer[key] == value
+            and all(matches_answer_field(answer[key], value)
                     for key, value in expected.items()))
 
 

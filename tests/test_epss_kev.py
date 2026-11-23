@@ -68,6 +68,16 @@ class FirstOrgResponse(unittest.TestCase):
         self.assertEqual(found, {})
         self.assertEqual(failures, {"CVE-2099-00001": "api_unavailable_or_invalid"})
 
+    def test_score_and_report_date_remain_independent(self):
+        for value, expected in ((None, None), ("2099-02-30", None), ("2099-03-01", "2099-03-01")):
+            with self.subTest(date=value):
+                record = {"epss": "0.01", "percentile": "0.2"}
+                if value is not None:
+                    record["date"] = value
+                result = MODULE.to_score(record, "fixture")
+                self.assertEqual(result["epss_percent"], 1.0)
+                self.assertEqual(result["score_date"], expected)
+
     def test_missing_date_does_not_invalidate_score(self):
         row = {"cve": "CVE-2099-00001", "epss": 0.2, "percentile": 0.3}
         with mock.patch.object(MODULE, "fetch", return_value=json.dumps({"data": [row]})):

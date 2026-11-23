@@ -47,6 +47,22 @@ def load_cases(path):
         raise ValueError(f"케이스 파일을 읽을 수 없습니다: {path} ({exc})") from exc
 
 
+def valid_answer_field(value):
+    if type(value) in (str, int, bool, type(None)):
+        return True
+    if type(value) is not dict or "contains_all" not in value or set(value) - {"contains_all", "numbers"}:
+        return False
+    terms = value["contains_all"]
+    if not isinstance(terms, list):
+        return False
+    for term in terms:
+        alternatives = term if isinstance(term, list) else [term]
+        if not alternatives or not all(isinstance(word, str) and word.strip() for word in alternatives):
+            return False
+    numbers = value.get("numbers", [])
+    return isinstance(numbers, list) and all(type(n) is int and n >= 0 for n in numbers)
+
+
 def validate(cases):
     errors = []
     if not isinstance(cases, dict) or type(cases.get("schema_version")) is not int or cases["schema_version"] not in (1, 2):
@@ -110,9 +126,9 @@ def validate(cases):
         if "expected_json" in item:
             expected = item["expected_json"]
             if (cases["schema_version"] != 2 or type(expected) is not dict or not expected
-                    or any(type(name) is not str or not name.strip() or type(value) not in (str, int, bool, type(None))
+                    or any(type(name) is not str or not name.strip() or not valid_answer_field(value)
                            for name, value in expected.items())):
-                errors.append(f"{case_id}: expected_json requires a nonempty flat JSON answer in schema 2")
+                errors.append(f"{case_id}: expected_json requires a nonempty schema 2 answer with scalar or text-field expectations")
         if "ends_with" in item and (cases["schema_version"] != 2 or not isinstance(item["ends_with"], str) or not item["ends_with"]):
             errors.append(f"{case_id}: ends_with는 schema_version 2의 비어 있지 않은 문자열이어야 합니다")
         max_chars = item.get("max_chars", 8000)

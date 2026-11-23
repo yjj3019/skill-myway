@@ -42,7 +42,7 @@ Notion 기록이 실패하거나 승인되지 않아도 본 작업은 막지 않
 
 ## 3. 이력 추가: 표준 포맷
 
-기존 페이지를 `notion-fetch`로 연 뒤 `## 개발 이력` 섹션 끝에 `notion-update-page`로 아래 블록을 append한다. 기존 내용은 보존한다.
+기존 페이지를 `notion-fetch`로 연 뒤 `## 개발 이력` 섹션 끝에 `notion-update-page`로 아래 블록을 append한다. 기존 내용은 보존한다. 전송 전 기록 ID와 본문을 로컬에 보존하고 원격 블록에도 같은 ID를 넣는다. 응답 유실과 재시도는 `references/fallback.md`의 조회·복구 순서를 따른다.
 
 ```
 ### [YYYY-MM-DD HH:MM] 작업 제목 (유형: 기능구현|디버깅|리팩토링|설계|이슈)

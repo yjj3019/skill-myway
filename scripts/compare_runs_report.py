@@ -32,7 +32,7 @@ from atomic_output import new_output
 COUNT_FIELDS = ("repeats", "attempted", "completed", "execution_failed", "timed_out", "not_run")
 PASSED_COUNT = "passed_count"
 RATE = "auto_check_pass_rate"
-FIELDS = COUNT_FIELDS + ("passed_count", RATE)
+STATE_FIELDS = COUNT_FIELDS + ("auto_passed", "auto_checks_passed", RATE)
 
 
 def _read(path):
@@ -58,10 +58,44 @@ def _read(path):
 
 def _count(entry, field):
     value = entry.get(field)
-    if field == RATE:
-        return value
     # bool은 int의 하위형이라 정수 검사에서 명시적으로 배제한다.
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+
+def _conflicting_total(total, parts):
+    if total is None:
+        return False
+    known = [value for value in parts if value is not None]
+    return sum(known) > total or (len(known) == len(parts) and sum(known) != total)
+
+
+def _case_state(entry):
+    counts = {field: _count(entry, field) for field in COUNT_FIELDS}
+    issues = [field for field in COUNT_FIELDS if counts[field] is None and entry.get(field) is not None]
+    outcomes = [counts[field] for field in ("completed", "execution_failed", "timed_out")]
+    attempted, repeats, not_run = counts["attempted"], counts["repeats"], counts["not_run"]
+    if (_conflicting_total(attempted, outcomes)
+            or _conflicting_total(repeats, [attempted, not_run])
+            or _conflicting_total(repeats, [*outcomes, not_run])):
+        issues.append("상태 건수 합계")
+        counts = dict.fromkeys(COUNT_FIELDS)
+
+    passed = _count(entry, PASSED_COUNT)
+    if None in counts.values() or passed is None or passed > counts["completed"]:
+        if entry.get(PASSED_COUNT) is not None:
+            issues.append(PASSED_COUNT)
+        passed = None
+    verdict = entry.get("auto_checks_passed")
+    if verdict is not None and type(verdict) is not bool:
+        issues.append("auto_checks_passed")
+        verdict = None
+    rate = entry.get(RATE)
+    if rate is not None and (type(rate) not in (float, int) or passed is None or not repeats
+                             or rate != round(passed / repeats, 2)):
+        issues.append(RATE)
+        rate = None
+    return {**counts, PASSED_COUNT: passed, "auto_passed": passed, RATE: rate,
+            "auto_checks_passed": verdict, "input_issues": issues}
 
 
 def build_rows(baseline, candidate):
@@ -77,25 +111,7 @@ def build_rows(baseline, candidate):
                 cells[side] = None
                 continue
             present.append(side)
-            cells[side] = {field: _count(entry, field) for field in FIELDS}
-            counts = cells[side]
-            complete_counts = all(counts[field] is not None for field in COUNT_FIELDS)
-            a, c, f, t, n, r = (counts[k] for k in
-                               ('attempted', 'completed', 'execution_failed', 'timed_out', 'not_run', 'repeats'))
-            invalid = ((a is not None and any(v is not None and v > a for v in (c, f, t))) or
-                       (r is not None and any(v is not None and v > r for v in (a, c, f, t, n))) or
-                       (a is not None and sum(v for v in (c, f, t) if v is not None) > a) or
-                       (r is not None and sum(v for v in (a, n) if v is not None) > r) or
-                       (all(v is not None for v in (a, c, f, t)) and a != c + f + t) or
-                       (all(v is not None for v in (r, a, n)) and r != a + n))
-            consistent = complete_counts and not invalid
-            if invalid:
-                for field in COUNT_FIELDS:
-                    counts[field] = None
-            passed = counts[PASSED_COUNT]
-            cells[side]["auto_passed"] = None
-            if consistent and passed is not None and passed <= counts['completed']:
-                cells[side]["auto_passed"] = passed
+            cells[side] = _case_state(entry)
         rows.append((case_id, cells, present))
     totals = {}
     for side in ("baseline", "candidate"):
@@ -120,7 +136,7 @@ def build_rows(baseline, candidate):
     for case_id, cells, present in rows:
         if len(present) == 2:
             status["both"] += 1
-            if cells["baseline"] != cells["candidate"]:
+            if any(cells["baseline"][key] != cells["candidate"][key] for key in STATE_FIELDS):
                 status["auto_state_differs"] += 1
         elif present == ["baseline"]:
             status["only_baseline"] += 1
@@ -138,6 +154,10 @@ def _cell(entry):
                      ("auto_passed", "자동 통과")):
         value = entry[key]
         parts.append(f"{label} {value}" if value is not None else f"{label} ?")
+    verdict = {True: "PASS", False: "FAIL", None: "NOT VERIFIED"}[entry["auto_checks_passed"]]
+    parts.append(f"자동 판정 {verdict}")
+    if entry["input_issues"]:
+        parts.append("입력 확인 필요: " + ", ".join(entry["input_issues"]))
     return " / ".join(parts)
 
 
@@ -196,10 +216,14 @@ def main(argv=None):
     except ValueError as exc:
         print(f"오류: {exc}", file=sys.stderr)
         return 1
-    out_dir.mkdir(parents=True, exist_ok=True)
     json_path = out_dir / "compare-runs-summary.json"
     md_path = out_dir / "compare-runs-summary.md"
-    existing = [path for path in (json_path, md_path) if path.exists()]
+    try:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        existing = [path for path in (json_path, md_path) if path.exists()]
+    except OSError as exc:
+        print(f"오류: 출력 디렉터리 준비 실패: {out_dir}: {exc}", file=sys.stderr)
+        return 1
     if existing:
         print(f"오류: 이미 존재하는 보고 파일이 있어 덮어쓰지 않음: "
               f"{', '.join(path.name for path in existing)}", file=sys.stderr)

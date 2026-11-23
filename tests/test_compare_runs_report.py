@@ -1,10 +1,13 @@
 import json
+import io
 import os
 import sys
 import tempfile
 import threading
 import unittest
 from unittest import mock
+from pathlib import Path
+from contextlib import redirect_stderr
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
@@ -172,6 +175,49 @@ class TestRows(unittest.TestCase):
 
 
 class TestMain(unittest.TestCase):
+    def test_comparison_of_partial_and_unverified_cases(self):
+        case = dict(BASE[0], repeats=2, attempted=2, completed=2, execution_failed=0,
+                    passed_count=0, auto_check_pass_rate=None)
+        left = [dict(case, id="verdict", auto_checks_passed=False),
+                dict(case, id="invalid", passed_count=3),
+                dict(case, id="partial", attempted=None, not_run=1)]
+        right = [dict(case, id="verdict", auto_checks_passed=None),
+                 dict(case, id="invalid", passed_count=4),
+                 dict(case, id="partial", attempted=None, not_run=0)]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for name, cases in (("base", left), ("cand", right)):
+                (root / name).write_text(json.dumps(doc(cases)), encoding="utf-8")
+            args = ["--baseline", str(root / "base"), "--candidate", str(root / "cand")]
+            self.assertEqual(compare_runs_report.main(args + ["--out", tmp]), 0)
+            report = json.loads((root / "compare-runs-summary.json").read_text(encoding="utf-8"))
+            md = (root / "compare-runs-summary.md").read_text(encoding="utf-8")
+            rows = {row["id"]: row for row in report["rows"]}
+            self.assertIs(rows["verdict"]["baseline"]["auto_checks_passed"], False)
+            self.assertIsNone(rows["verdict"]["candidate"]["auto_checks_passed"])
+            verdict_row = next(line for line in md.splitlines() if line.startswith("| verdict |"))
+            self.assertIn("자동 판정 FAIL", verdict_row)
+            self.assertIn("자동 판정 NOT VERIFIED", verdict_row)
+            for side in ("baseline", "candidate"):
+                self.assertIsNone(rows["invalid"][side]["auto_passed"])
+                self.assertIn("passed_count", rows["invalid"][side]["input_issues"])
+            self.assertIsNone(rows["partial"]["baseline"]["completed"])
+            self.assertEqual(rows["partial"]["candidate"]["completed"], 2)
+            self.assertEqual(report["totals"]["baseline"]["completed_unknown"], 1)
+            self.assertEqual(report["state"]["auto_state_differs"], 2)
+
+    def test_output_file_in_place_of_directory_returns_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "summary.json"
+            original = json.dumps(doc(BASE))
+            path.write_text(original, encoding="utf-8")
+            errors = io.StringIO()
+            with redirect_stderr(errors):
+                rc = compare_runs_report.main(["--baseline", str(path), "--candidate", str(path), "--out", str(path)])
+            self.assertEqual(rc, 1)
+            self.assertIn(str(path), errors.getvalue())
+            self.assertEqual(path.read_text(encoding="utf-8"), original)
+
     def test_saves_json_and_markdown(self):
         with tempfile.TemporaryDirectory() as tmp:
             base = os.path.join(tmp, "base.json")

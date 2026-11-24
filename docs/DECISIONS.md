@@ -365,3 +365,7 @@ MIT 저장소(obra/superpowers, addyosmani/agent-skills, DietrichGebert/ponytail
 - `scripts/replay_eval.py`: 저장 응답에 현재 규칙을 다시 적용한다.
 - 스킬 변경: `evidence-first`(목표어를 게이트로, 작성자와 승인자 분리), `visual-design`(참고 대비 독창성 점검 참조 문서), `incident-rca`(증거 인용 시 가릴 값과 남길 값), `research-brief`(조회 결과 구분).
 - 자동 변별력 점검은 정상 응답의 품질을 보증하지 않는다. 요청문 되돌리기와 일반 거절 문구 두 가지 퇴화 응답만 시험한다.
+
+## D-042 Office 기본 서식 손상 대비 (1.26.0)
+
+일부 환경에서 설치된 python-pptx·python-docx의 기본 서식(zip)이 다른 텍스트로 바뀌어 `Presentation()`·`Document()`가 실패하고, 이 때문에 Office 검사 테스트가 환경에 따라 실패했다. `scripts/office_defaults.py`는 기본 서식이 정상이면 그대로 쓰고, 열 수 없을 때만 `scripts/office_templates/*.b64.txt`(확장자를 Office 형식으로 두지 않은 base64 텍스트)를 임시 파일로 풀어 연다. 서식을 다른 오류까지 숨기지 않는다. 대체 서식은 python-pptx 1.0.2·python-docx 1.2.0 배포본의 기본 서식 사본이며 MIT 출처를 `docs/LICENSES.md`에 적었다. 서식이 바뀌는 원인은 확인하지 못했다.

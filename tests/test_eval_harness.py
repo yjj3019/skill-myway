@@ -17,6 +17,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import run_eval  # noqa: E402
 import simulate_eval  # noqa: E402
 import check_office  # noqa: E402
+import office_defaults  # noqa: E402
 
 
 def sample_cases():
@@ -716,7 +717,7 @@ class RunEval(unittest.TestCase):
             folder = Path(tmp)
             image = folder / "example.png"
             Image.new("RGB", (8, 8)).save(image)
-            doc = Document()
+            doc = office_defaults.new_document()
             described = doc.add_picture(str(image))
             described._inline.docPr.set("descr", "Example image")
             missing = doc.add_picture(str(image))
@@ -726,7 +727,7 @@ class RunEval(unittest.TestCase):
             self.assertEqual(report["status"], "PASS", report)
             self.assertEqual(report["images_without_alt_text"], [missing._inline.docPr.get("name")])
 
-            deck = Presentation()
+            deck = office_defaults.new_presentation()
             slide = deck.slides.add_slide(deck.slide_layouts[6])
             described = slide.shapes.add_picture(str(image), 0, 0)
             described._element.nvPicPr.cNvPr.set("descr", "Example image")
@@ -843,7 +844,7 @@ class RunEval(unittest.TestCase):
         from pptx import Presentation
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             path = Path(tmp) / "untitled.pptx"
-            prs = Presentation()
+            prs = office_defaults.new_presentation()
             prs.slides.add_slide(prs.slide_layouts[6])
             prs.save(path)
             report = check_office.inspect_office_file(path)

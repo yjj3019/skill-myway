@@ -345,3 +345,5 @@ MIT 고지는 원문의 복제물에 붙이는 의무다. 이번 추가는 복�
 - [hah23255/pm-claude-skills](https://github.com/hah23255/pm-claude-skills/tree/0ee3c267163d096314b7d5c10520eb5b1a1f4ba7)은 루트 MIT, [product-on-purpose/pm-skills](https://github.com/product-on-purpose/pm-skills/tree/3456e5e309f38ac2a66943f20d4aaf8031268dfb)는 루트 Apache-2.0, [menkesu/awesome-pm-skills](https://github.com/menkesu/awesome-pm-skills/tree/c1b6e2da2f524237e1b24ae958b3b9da579e132d)는 루트 MIT와 별도 출처 고지가 있다. 대표 PRD·명세 진입 문서와 루트 라이선스를 확인했다.
 - [coderblackcat/Product-Manager-Skills](https://github.com/coderblackcat/Product-Manager-Skills/tree/cfcb697f14b8891d8b3ec43c16c3547df3e70e13)는 CC BY-NC-SA 4.0이다. 해당 자료의 문장·템플릿·코드를 복제하거나 번역해 배포하지 않았다.
 - PM 스킬은 사용자 요청의 문제·근거·요구사항·검증 연결을 기준으로 새로 설계했다. 외부 저장소의 개별 파일·제3자 자산 전체는 검토하지 않았으며, 재작성만으로 법적 적합성이 보장되는 것은 아니다.
+
+- `scripts/office_templates/`의 기본 서식 사본은 python-pptx 1.0.2(Copyright (c) 2013 Steve Canny, MIT)와 python-docx 1.2.0(Copyright (c) 2013 Steve Canny, MIT) 배포본에서 가져왔다. 라이브러리 서식이 손상된 환경의 대체용이며 base64 텍스트로 보관한다.

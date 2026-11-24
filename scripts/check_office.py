@@ -20,6 +20,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import office_defaults
 import workspace_tmp
 import zipfile
 import xml.etree.ElementTree as ET
@@ -222,7 +223,7 @@ def check(out_dir):
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
 
-    prs = Presentation()
+    prs = office_defaults.new_presentation()
     for index, title in enumerate(("가상 표지: 20% 절감 제안", "가상 문제: 수작업 낭비", "가상 제안: 3단계 도입")):
         slide = prs.slides.add_slide(prs.slide_layouts[5])
         slide.shapes.title.text = title
@@ -236,7 +237,7 @@ def check(out_dir):
     reopened = Presentation(out / "sample.pptx")
     pptx = {"slides": len(reopened.slides), "titles": [s.shapes.title.text for s in reopened.slides]}
 
-    document = Document()
+    document = office_defaults.new_document()
     document.add_heading("가상 운영 보고서", level=1)
     document.add_paragraph("가상 서비스 A의 절차 통합 결과다. 수치는 가상 20% 절감이다.")
     table = document.add_table(rows=2, cols=2)

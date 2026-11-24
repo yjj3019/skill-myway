@@ -26,7 +26,7 @@
 - 판정 근거: 2026-11-23 외부 1차 진단. 스킬 추가보다 같은 작업에서 성공률·오류 누락·토큰·비용을 함께 측정한 뒤 효과가 확인된 규칙만 반영하는 방식을 권고했다.
 - 보류 이유: 측정 없이 신설하면 자동 판정 한계에 같은 비용 문제를 반복할 수 있다.
 - 대체 처리: 성공률·오류 누락·토큰·비용 측정 항목을 평가 기록에 남기고 효과가 확인된 규칙만 스킬에 반영한다.
-- 재검토 조건: 같은 작업의 측정 실행 후.
+- 재검토 조건: 같은 작업의 측정 실행 후. 측정에는 '간결하게 답하라'만 준 대조군을 포함한다(2026-11-24 caveman 평가 문서 참고). 무지시 기준선과만 비교하면 효과가 부풀려진다.
 
 ## 외부 스킬 스캐너(NVIDIA scanning-agent-skills 문서) — 보류 (2026-11-23)
 
@@ -155,6 +155,20 @@
 - 판정 근거: 2026-11-23 외부 저장소 분석.
 - 기각 이유: 모델 내부 동작을 자동으로 켜는 옵션은 측정 전 도입·승인 경계 밖이고, 비용 상한과 격리를 보장하지 않는다.
 - 대체 처리: 도입하지 않는다. 모델별 동작·한도는 미확인으로 두고 평가 예산으로만 제한한다.
+
+## 외부 저장소 29건 일괄 검토 — 기각·보류 (2026-11-24)
+
+- 제안 이유: 사용자가 제시한 공개 저장소 목록에서 현 프로젝트에 필요한 개선점을 찾는다.
+- 확인 범위: 얕은 복제(depth 1)로 README·라이선스·SKILL.md 목록을 열람했다. caveman의 `evals/README.md`, GoogleChrome/modern-web-guidance-src의 `grader-replay`·`coherence-auditor`, last30days와 ScrapeCreators의 SKILL.md 앞부분은 본문까지 읽었다. 나머지는 README 첫 부분과 라이선스까지만 보았다. 실행·설치·탐지 정확도는 확인하지 않았다. remotion·theatre·ag-ui는 Windows 경로 길이 때문에 체크아웃이 불완전했다.
+- 라이선스 관측: caveman·headroom·GoogleChrome 저장소·univer는 Apache-2.0, hydra는 AGPL, 나머지 다수는 MIT, anthropics/skills는 저장소 루트에 라이선스 파일이 없었다. remotion은 `docs/LICENSES.md`에 조직 규모별 조건을 이미 기록했다.
+- 기각(코드·제품 라이브러리 또는 런타임): serena·codegraph(MCP 코드 인덱스), headroom·caveman 런타임(컨텍스트 압축 프록시·CLI), lottie-web·tsparticles·rough·zdog·theatre·hydra·motion-canvas·remotion(모션·렌더 라이브러리), univer(스프레드시트 엔진), ag-ui(에이전트-UI 프로토콜), astryx(React 디자인 시스템), muse 영상 스킬 3종·ComfyUI-ReaVideoBreakdown·create-blender-story-video·ffmpeg-skill(영상 생성·편집). 기각 이유: 별도 런타임·Node/Go 도구 체인·상용 조건 가능성은 D-025·D-039와 충돌하고 hydra의 AGPL은 배포 조건이 다르다.
+- 기각(전체 이식): MengTo/Skills(스킬 217건)와 anthropics/skills는 D-024의 전체 이식 기각과 같다.
+- 기각(범위 밖): elementalsouls/Claude-BugHunter(스킬 84건)는 공격 기법 중심 모음이라 방어 목적의 `code-review`·`rhel-cve` 범위와 다르다. 이 저장소의 민감 정보·승인 경계 규칙상 반입하지 않는다.
+- 보류(소셜 수집): ScrapeCreators 스킬과 last30days는 유료 API 키와 외부 플랫폼 수집에 의존한다. 약관·개인정보·자격 증명 보관 판단이 필요해 지금은 반입하지 않는다. 출처 가용성 진단 개념은 `scripts/doctor.py`가 이미 다룬다.
+- 개념만 흡수(후속 후보): 아래 두 가지는 새 스킬이 아니라 평가 문서의 절차로만 다룬다. 원문 복사는 없다.
+  - caveman 평가: 스킬 효과는 '무지시 기준선'이 아니라 '간결하게 답하라'만 준 대조군과 비교해야 부풀려지지 않는다. 위 토큰 최적화 보류 항목의 재검토 조건에 반영했다.
+  - GoogleChrome grader-replay: 판정 규칙을 바꿀 때 저장된 과거 응답에 새 규칙을 다시 적용해 전후 차이를 분류한다. 원문을 가져오지 않고 `scripts/replay_eval.py`로 새로 구현했다(2026-11-24, `docs/EVALUATION.md`). 모델은 호출하지 않는다.
+- 재검토 조건: 위 개념 흡수 후보는 평가 규칙을 바꾸는 다음 작업에서 필요성이 확인될 때. 소셜 수집은 자격 증명·약관 검토 후.
 
 ## 검토 절차
 

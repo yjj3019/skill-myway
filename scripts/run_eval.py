@@ -343,6 +343,13 @@ def evaluate_output(output, case):
     }
 
 
+def auto_checks_passed(checks):
+    """evaluate_output 결과가 모든 자동 검사를 통과했는지 판정한다. 재적용 스크립트도 이 함수를 쓴다."""
+    return bool(checks and checks["nonempty"] and not checks["missing_required"]
+                and not checks["forbidden_found"] and checks["within_limit"] and checks["ends_with_ok"]
+                and checks["json_answer_ok"] and not checks["unexpected_advisory_count"])
+
+
 def prepare_workdir(platform):
     """평가용 임시 작업 디렉터리를 만든다.
 
@@ -974,9 +981,7 @@ def main(argv=None):
             elif run.get("permission_denials"):
                 stop_reason = f"{args.platform}_permission_denied"
             checks = evaluate_output(run["output"], case) if run["exit_code"] == 0 and not limited else None
-            passed = bool(checks and checks["nonempty"] and not checks["missing_required"]
-                          and not checks["forbidden_found"] and checks["within_limit"] and checks["ends_with_ok"]
-                          and checks["json_answer_ok"] and not checks["unexpected_advisory_count"])
+            passed = auto_checks_passed(checks)
             artifact_expectation = None
             office_inspection = []
             if auto_select or args.inspect_artifacts:

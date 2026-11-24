@@ -163,7 +163,8 @@ def auto_check(output, case):
     checks = run_eval.evaluate_output(output, case)
     passed = (checks["nonempty"] and checks["has_content_checks"] and not checks["missing_required"]
               and not checks["forbidden_found"] and checks["within_limit"] and checks["ends_with_ok"]
-              and checks["json_answer_ok"] and not checks["unexpected_advisory_count"])
+              and checks["json_answer_ok"] and not checks["unexpected_advisory_count"]
+              and not checks.get("request_copied"))
     return checks, bool(passed)
 
 

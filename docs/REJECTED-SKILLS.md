@@ -168,7 +168,7 @@
 - 개념만 흡수(2026-11-24 반영, 원문 복사 없음):
   - caveman 평가: 스킬 효과는 '무지시 기준선'이 아니라 '간결하게 답하라'만 준 대조군과 비교한다. 위 토큰 최적화 보류 항목의 재검토 조건에 반영했다.
   - Chrome grader-replay: 판정 규칙을 바꿀 때 저장 응답에 새 규칙을 다시 적용한다. `scripts/replay_eval.py`로 새로 구현했다.
-  - skill-creator 평가 비평: 스킬 없이도 통과하는 약한 검사를 찾는다. `scripts/probe_cases.py`로 새로 구현했고, 케이스 116건 중 87건이 요청문을 되돌려도 통과함을 확인해 `tests/probe_baseline.json`으로 악화를 막는다. 기존 약한 케이스의 보강은 후속 작업이다.
+  - skill-creator 평가 비평: 스킬 없이도 통과하는 약한 검사를 찾는다. `scripts/probe_cases.py`로 새로 구현했고, 케이스 116건 중 87건이 요청문을 되돌려도 통과함을 확인해 `tests/probe_baseline.json`으로 악화를 막는다. 기존 약한 케이스는 요청문 복사 검사(30자)와 케이스별 필수 항목 추가로 보강해 기준선을 비웠다(D-043).
   - MengTo `iterate-until-verified`: 목표어를 관측 가능한 게이트로 바꾸고 만든 쪽과 판정하는 쪽을 분리한다. `evidence-first`에 두 줄로 반영했다.
   - MengTo `audit-reference-originality`: 참고 자료 대비 독창성 위험을 증거 쌍으로 점검하고 법적 표절을 선언하지 않는다. `visual-design/references/reference-originality.md`로 새로 작성했다.
   - BugHunter `evidence-hygiene`: 증거에서 비밀·타인 개인정보는 가리고 대조에 필요한 식별자는 남긴다. `incident-rca`의 금지 항목에 한 줄로 반영했다. 공격 기법 자료는 반입하지 않았다.

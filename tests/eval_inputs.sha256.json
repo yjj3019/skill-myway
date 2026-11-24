@@ -2,14 +2,14 @@
   "all-skill-measurement-cases.json": "71f1abffde8a332017e6c75f9ebe2e3a5d28cb0ededf0a18369f1f0838cf8b36",
   "all-skill-paired-template.json": "f8fac71d8be97796a68bdb4fcfdbaed8467715f4147351f40d7d43330ff66650",
   "auto_select_cases.json": "f143ca7a10cc2dcba5fdd47adafb07a01d1b81b342cbcf1ba9a74b1c1bcb0c4e",
-  "cases.json": "607a7fdfd9f0cabe5bb7bdbd99b2f30d2f9187d9bea0cf0744ff46e4bb2dbf3e",
+  "cases.json": "a69b0a5994a859a0db13873ac2ed401ade3ba3efdd287739fe8e81eee8792929",
   "critical-cases-extra.json": "e8bd7bede615679e6b56dc02a522641fcb0304848c0237d6f1cda37da2ff2094",
-  "critical-regression-cases.json": "3ee12f0ba44286dacb90fc25c8e10f39b9229a47526cc80771ddf79dde13a022",
+  "critical-regression-cases.json": "51ef3fec65b25b9a229abe5dc9e0986b4ee788ce57232cb907f1e2e448e7d56d",
   "critical-review-rubric.md": "6e346898cf92ae60f61eb4e726271fd9be143239171ff8c5a44ff60cc3853a93",
   "dialogue_cases.json": "98529eb531e176b9fbc8ac734eec8eb95cc86238e61e1045f4071c4878fff0e3",
   "duration-boundary-cases.json": "ff6ebd3ca785280f8d71094b37ef2dbd564a862c28a4d261e9bd0f2d57cc24ee",
   "duration-boundary-rubric.md": "d38e6fa488d510f285a083b6ecf155deecf195bd4f337aa0c3c88a95ec277b71",
-  "duration-regression-cases.json": "ba573d7dea0c04fc9adb0168bc83b6fda71ae3dfa78a505ca91e913361235124",
+  "duration-regression-cases.json": "6f5b686ecbe7ba7c4f31d3de982f5632dee884a3ccbce6be18e979507d1f8be0",
   "review-rubric.json": "e7505d86a04c2f58445f7c5f1a0ea2d74c93522562377750b0bf14fc24754ede",
   "visual-review-rubric.md": "5ac382417939df7c5e5902897c5c0513a1ad734f24592509d089ca1d700027d6"
 }

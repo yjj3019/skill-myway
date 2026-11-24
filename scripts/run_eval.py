@@ -318,6 +318,22 @@ def matches_json_answer(output, expected):
                     for key, value in expected.items()))
 
 
+REQUEST_COPY_SPAN = 30
+
+
+def copies_request(output, request, span=REQUEST_COPY_SPAN):
+    """요청문의 연속 `span`자(공백 제외)를 응답이 그대로 포함하면 True. 요청이 짧으면 판정하지 않는다.
+
+    정상 응답은 요청의 단어를 인용해도 이만큼 길게 그대로 베끼지 않는다. 요청문 되돌리기가
+    키워드 검사를 통과하는 것을 막기 위한 검사이며 응답의 품질을 판정하지 않는다.
+    """
+    compact_request = re.sub(r"\s+", "", request)
+    compact_output = re.sub(r"\s+", "", output)
+    if len(compact_request) < span:
+        return False
+    return any(compact_request[i:i + span] in compact_output for i in range(len(compact_request) - span + 1))
+
+
 def evaluate_output(output, case):
     lowered = output.lower()
     missing = [item for item in case.get("required", []) if not requirement_met(item, lowered)]
@@ -340,6 +356,7 @@ def evaluate_output(output, case):
         "ends_with_ok": output.rstrip().endswith(case["ends_with"]) if "ends_with" in case else True,
         "within_limit": within_limit,
         "unexpected_advisory_count": len(unexpected_ids),
+        "request_copied": (not case.get("allow_request_copy", False)) and copies_request(output, case.get("request", "")),
     }
 
 
@@ -347,7 +364,8 @@ def auto_checks_passed(checks):
     """evaluate_output 결과가 모든 자동 검사를 통과했는지 판정한다. 재적용 스크립트도 이 함수를 쓴다."""
     return bool(checks and checks["nonempty"] and not checks["missing_required"]
                 and not checks["forbidden_found"] and checks["within_limit"] and checks["ends_with_ok"]
-                and checks["json_answer_ok"] and not checks["unexpected_advisory_count"])
+                and checks["json_answer_ok"] and not checks["unexpected_advisory_count"]
+                and not checks.get("request_copied"))
 
 
 def prepare_workdir(platform):

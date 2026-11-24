@@ -41,3 +41,4 @@ description: 웹·앱 화면, 발표자료, 문서, 이미지, 인포그래픽�
 - 비교·과정·구조 같은 콘텐츠의 시각 구조를 정할 때는 `references/editorial-layout.md`, 이미지 제작은 `references/art-direction.md`, 형식 간 출력과 검수는 `references/media-production.md`를 적용한다. 각 참고 자료가 필요한 작업에서 실제로 열 수 없으면 그 한계를 남긴다.
 - 여러 화면·페이지의 생성과 검토를 반복하거나 상태를 이어받아야 한다면 `references/design-harness.md`의 작업 계약·검토 근거·중단 조건을 적용한다. 지침은 보안 격리나 다른 에이전트의 참여를 보장하지 않는다.
 - 기존 웹·앱의 획일적인 시각 표현을 개선하거나 변경분 UI를 리뷰할 때 `references/design-harness.md`의 화면 점검과 변경 영향 대조를 활용한다. 실제 화면을 보지 못한 제안은 렌더 검증으로 보고하지 않는다.
+- 참고 화면·이미지·문구가 주어진 결과물이 그 참고와 지나치게 겹치는지 점검할 때는 `references/reference-originality.md`를 따른다.

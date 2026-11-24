@@ -159,15 +159,20 @@
 ## 외부 저장소 29건 일괄 검토 — 기각·보류 (2026-11-24)
 
 - 제안 이유: 사용자가 제시한 공개 저장소 목록에서 현 프로젝트에 필요한 개선점을 찾는다.
-- 확인 범위: 얕은 복제(depth 1)로 README·라이선스·SKILL.md 목록을 열람했다. caveman의 `evals/README.md`, GoogleChrome/modern-web-guidance-src의 `grader-replay`·`coherence-auditor`, last30days와 ScrapeCreators의 SKILL.md 앞부분은 본문까지 읽었다. 나머지는 README 첫 부분과 라이선스까지만 보았다. 실행·설치·탐지 정확도는 확인하지 않았다. remotion·theatre·ag-ui는 Windows 경로 길이 때문에 체크아웃이 불완전했다.
+- 확인 범위: 얕은 복제(depth 1)로 README·라이선스·SKILL.md 목록을 열람했다. 본문까지 읽은 곳은 caveman `evals/README.md`, Chrome 저장소 `grader-replay`·`coherence-auditor`, anthropics `skill-creator`(SKILL.md·`agents/grader.md`·`agents/analyzer.md`), MengTo `iterate-until-verified`·`audit-verify-explain-grade-5`·`audit-reference-originality`, BugHunter `evidence-hygiene`, ffmpeg-skill SKILL.md 일부, last30days SKILL.md의 출력 계약·자기 점검, ponytail-audit 앞부분이다. 나머지는 README 첫 부분과 라이선스까지만 보았다. 실행·설치·탐지 정확도는 확인하지 않았다. remotion·theatre·ag-ui는 Windows 경로 길이 때문에 체크아웃이 불완전했다.
 - 라이선스 관측: caveman·headroom·GoogleChrome 저장소·univer는 Apache-2.0, hydra는 AGPL, 나머지 다수는 MIT, anthropics/skills는 저장소 루트에 라이선스 파일이 없었다. remotion은 `docs/LICENSES.md`에 조직 규모별 조건을 이미 기록했다.
 - 기각(코드·제품 라이브러리 또는 런타임): serena·codegraph(MCP 코드 인덱스), headroom·caveman 런타임(컨텍스트 압축 프록시·CLI), lottie-web·tsparticles·rough·zdog·theatre·hydra·motion-canvas·remotion(모션·렌더 라이브러리), univer(스프레드시트 엔진), ag-ui(에이전트-UI 프로토콜), astryx(React 디자인 시스템), muse 영상 스킬 3종·ComfyUI-ReaVideoBreakdown·create-blender-story-video·ffmpeg-skill(영상 생성·편집). 기각 이유: 별도 런타임·Node/Go 도구 체인·상용 조건 가능성은 D-025·D-039와 충돌하고 hydra의 AGPL은 배포 조건이 다르다.
 - 기각(전체 이식): MengTo/Skills(스킬 217건)와 anthropics/skills는 D-024의 전체 이식 기각과 같다.
 - 기각(범위 밖): elementalsouls/Claude-BugHunter(스킬 84건)는 공격 기법 중심 모음이라 방어 목적의 `code-review`·`rhel-cve` 범위와 다르다. 이 저장소의 민감 정보·승인 경계 규칙상 반입하지 않는다.
 - 보류(소셜 수집): ScrapeCreators 스킬과 last30days는 유료 API 키와 외부 플랫폼 수집에 의존한다. 약관·개인정보·자격 증명 보관 판단이 필요해 지금은 반입하지 않는다. 출처 가용성 진단 개념은 `scripts/doctor.py`가 이미 다룬다.
-- 개념만 흡수(후속 후보): 아래 두 가지는 새 스킬이 아니라 평가 문서의 절차로만 다룬다. 원문 복사는 없다.
-  - caveman 평가: 스킬 효과는 '무지시 기준선'이 아니라 '간결하게 답하라'만 준 대조군과 비교해야 부풀려지지 않는다. 위 토큰 최적화 보류 항목의 재검토 조건에 반영했다.
-  - GoogleChrome grader-replay: 판정 규칙을 바꿀 때 저장된 과거 응답에 새 규칙을 다시 적용해 전후 차이를 분류한다. 원문을 가져오지 않고 `scripts/replay_eval.py`로 새로 구현했다(2026-11-24, `docs/EVALUATION.md`). 모델은 호출하지 않는다.
+- 개념만 흡수(2026-11-24 반영, 원문 복사 없음):
+  - caveman 평가: 스킬 효과는 '무지시 기준선'이 아니라 '간결하게 답하라'만 준 대조군과 비교한다. 위 토큰 최적화 보류 항목의 재검토 조건에 반영했다.
+  - Chrome grader-replay: 판정 규칙을 바꿀 때 저장 응답에 새 규칙을 다시 적용한다. `scripts/replay_eval.py`로 새로 구현했다.
+  - skill-creator 평가 비평: 스킬 없이도 통과하는 약한 검사를 찾는다. `scripts/probe_cases.py`로 새로 구현했고, 케이스 116건 중 87건이 요청문을 되돌려도 통과함을 확인해 `tests/probe_baseline.json`으로 악화를 막는다. 기존 약한 케이스의 보강은 후속 작업이다.
+  - MengTo `iterate-until-verified`: 목표어를 관측 가능한 게이트로 바꾸고 만든 쪽과 판정하는 쪽을 분리한다. `evidence-first`에 두 줄로 반영했다.
+  - MengTo `audit-reference-originality`: 참고 자료 대비 독창성 위험을 증거 쌍으로 점검하고 법적 표절을 선언하지 않는다. `visual-design/references/reference-originality.md`로 새로 작성했다.
+  - BugHunter `evidence-hygiene`: 증거에서 비밀·타인 개인정보는 가리고 대조에 필요한 식별자는 남긴다. `incident-rca`의 금지 항목에 한 줄로 반영했다. 공격 기법 자료는 반입하지 않았다.
+  - last30days: 출처별 결과를 '없음'과 '조회 실패'로 나눠 보고한다. `research-brief` 수집 절차에 한 줄로 반영했다.
 - 재검토 조건: 위 개념 흡수 후보는 평가 규칙을 바꾸는 다음 작업에서 필요성이 확인될 때. 소셜 수집은 자격 증명·약관 검토 후.
 
 ## 검토 절차

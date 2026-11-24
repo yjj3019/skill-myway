@@ -301,6 +301,7 @@ Windows 프로세스 수명 재설계에는 [Microsoft Job Objects](https://lear
 - addyosmani/agent-skills (MIT): 5축 리뷰, 품질 기준 약화 탐지, 보안 위협 모델, ADR
 - DietrichGebert/ponytail (MIT): 최소 변경·범위 확인
 - JuliusBrussee/caveman (Apache-2.0), GoogleChrome/modern-web-guidance-src (Apache-2.0): 2026-11-24에 평가 절차 개념(간결 지시 대조군, 저장 응답 재적용)만 참고했다. 문장·코드는 복사하지 않았고 현재 스킬·스크립트에 반영된 것도 없다. `docs/REJECTED-SKILLS.md`에 판정을 남겼다.
+- MengTo/Skills (MIT), elementalsouls/Claude-BugHunter (MIT), mvanhorn/last30days-skill (MIT), anthropics/skills의 skill-creator(해당 디렉터리의 `LICENSE.txt`는 Apache-2.0이며 저장소 루트에는 라이선스 파일이 없다): 2026-11-24에 목표어의 게이트화, 독창성 점검, 증거 가림 기준, 조회 결과 구분, 변별력 없는 검사 탐지 개념만 참고했다. 문장·코드는 복사하지 않고 새로 작성했다.
 
 MIT 고지는 원문의 복제물에 붙이는 의무다. 이번 추가는 복제가 없어 고지문을 포함하지 않았고, 출처를 이 문서에 남긴다. 향후 원문을 직접 인용하면 MIT 저작권 표시와 허가 고지를 함께 넣는다.
 

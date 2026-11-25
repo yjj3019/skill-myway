@@ -597,3 +597,4 @@ Windows에서 저장소 검사와 세 스킬의 형식 검사가 통과했다. �
 - 스킬 기동 점검 도구(2026-11-25): 합성 이벤트 로그로 분류·쌍 비교 13건을 시험했고 `validate_repo.py` PASS, `run_tests.py` 413건 실패 0건 skip 0건이다. **NOT VERIFIED**: 실제 Claude Code·Codex CLI 출력으로 기동 판정을 시험하지 않았고, 18개 사례의 `required` 단어가 실제 응답에 쓰이는지와 기동률은 모델 실행 전이다.
 - 스킬 기동 1차 실행(2026-11-25, 1회, 스킬 사용 팔만): Claude Code 긍정 11/12·부정 6/6, Codex 긍정 12/12·부정 6/6. **NOT VERIFIED**: MISSED 1건의 재현·원인(저장소 `CLAUDE.md` 오염 가능), Claude 권한 거부 6건의 사례 결과, 스킬 미사용 대조, 응답 의미 품질. 사례 2건은 결과를 본 뒤 수정했다.
 - 스킬 기동 2차(2026-11-25, Claude `--isolated` 7건): `act-evidence-first` 3회 중 2회 미기동(재현), 원인은 description 조건 가설이며 **NOT VERIFIED**. references 읽기 거부는 해소됐고 devlog·office-docs·rhel-cve는 쓰기·실행·MCP 거부로 자동 검사가 미검증이다.
+- evidence-first description 수정 시도(2026-11-25): Claude `--isolated`에서 변경 전 1/6, 변경 후 0/8로 효과가 없어 철회했다(1.26.0 유지). 가설 기각, 실제 원인은 **NOT VERIFIED**. Claude의 `evidence-first` 미기동은 개선되지 않은 알려진 한계다.

@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "note": "스킬 기동 점검용 공개 개발 케이스. 요청에 스킬 이름을 쓰지 않는다. expected_skill이 null이면 어떤 myway 스킬도 기동되지 않아야 하는 부정 사례다. 공개 사례이므로 description 튜닝이 이 사례에 과적합될 수 있고, 최종 성능 증거가 아니다.",
+  "cases": [
+    {
+      "id": "act-code-review",
+      "expected_skill": "code-review",
+      "request": "아래 변경을 머지하기 전에 점검해 줘.\n\n```diff\n--- a/orders/query.py\n+++ b/orders/query.py\n@@ def find_order(conn, order_id):\n-    return conn.execute(\"SELECT * FROM orders WHERE id = ?\", (order_id,)).fetchone()\n+    return conn.execute(\"SELECT * FROM orders WHERE id = '\" + order_id + \"'\").fetchone()\n--- a/tests/test_query.py\n+++ b/tests/test_query.py\n@@ def test_find_order():\n-    assert find_order(conn, \"A1\")[\"total\"] == 1200\n+    assert find_order(conn, \"A1\") is not None\n```\n\n테스트는 실행해 보지 않았다.",
+      "required": [["SQL", "인젝션", "주입"], ["테스트", "단언", "assert"], ["미확인", "확인하지", "실행하지", "Validation Gap"]],
+      "allow_request_copy": true,
+      "forbidden": [],
+      "max_chars": 8000
+    },
+    {
+      "id": "act-devlog",
+      "expected_skill": "devlog",
+      "request": "오늘 마일스톤 하나 끝났어. 가상 프로젝트 '배송조회 앱'의 로그인 API 구현을 마쳤고, 토큰 만료 처리가 빠져 있던 오류를 고쳤어. 개발이력 남겨줘. Notion은 연결돼 있지 않아.",
+      "required": [["SESSION_LOG", "세션 로그"], ["토큰"], ["로그인"]],
+      "forbidden": [],
+      "max_chars": 8000
+    },
+    {
+      "id": "act-document-authoring",
+      "expected_skill": "document-authoring",
+      "request": "가상 서비스 'ACME 큐'의 신입 운영자용 운영 가이드를 새로 쓰려고 해. 독자와 목적을 기준으로 목차와 첫 장 초안을 구조적으로 써 줘. 아직 확인하지 못한 운영 값은 꾸며내지 마.",
+      "required": [["독자", "대상"], ["목차"], ["확인", "미확인", "질문"]],
+      "forbidden": [],
+      "max_chars": 8000
+    },
+    {
+      "id": "act-evidence-first",
+      "expected_skill": "evidence-first",
+      "request": "아래 완료 보고가 믿을 만한지 검토해 줘. 보고 내용: '모든 테스트 통과, 배포 완료, 문서 갱신 끝.' 실행 로그나 링크는 첨부되지 않았다.",
+      "required": [["증거", "근거"], ["미검증", "NOT VERIFIED", "확인되지", "확인할 수 없"]],
+      "forbidden": [],
+      "max_chars": 8000
+    },
+    {
+      "id": "act-incident-rca",
+      "expected_skill": "incident-rca",
+      "request": "가상 장애의 원인 분석 보고서를 써 줘. 관측: 09:00 API 지연 경보, 09:05 DB 연결 대기열 포화, 09:12 작업자 재시작, 09:25 정상화. 직전 배포 기록은 없다. 근본 원인은 아직 모른다.",
+      "required": [["타임라인", "시간순"], ["가설", "추정"], ["확정", "미확인", "알 수 없", "확인되지"]],
+      "forbidden": [],
+      "max_chars": 8000
+    },
+    {
+      "id": "act-office-docs",
+      "expected_skill": "office-docs",
+      "request": "가상 회사 제안서용 PowerPoint(.pptx)를 사내 브랜드 스타일로 만들려고 해. 아직 파일은 만들지 말고, 슬라이드 구성안과 브랜드 값(색·폰트)을 어디서 읽어 어떻게 적용할지 먼저 알려 줘.",
+      "required": [["brand-profile", "브랜드 프로필", "프로필"], ["슬라이드"], ["색", "폰트"]],
+      "forbidden": [],
+      "max_chars": 8000
+    },
+    {
+      "id": "act-product-management",
+      "expected_skill": "product-management",
+      "request": "가상 앱의 '알림 모아보기' 기능에 대해 PRD 수용 기준과 우선순위 판단을 해 줘. 사용자 수와 개발 비용 자료는 없다. 없는 수치는 만들지 마.",
+      "required": [["수용 기준", "acceptance"], ["가정", "미확인"], ["검증"]],
+      "forbidden": [],
+      "max_chars": 8000
+    },
+    {
+      "id": "act-prompt-engineering",
+      "expected_skill": "prompt-engineering",
+      "request": "고객 문의를 '결제', '배송', '기타' 세 가지로 분류하는 프롬프트를 설계해 줘. 출력 형식을 고정하고 평가 케이스도 같이 제안해 줘.",
+      "required": [["출력 형식", "JSON", "형식"], ["평가"], ["기타"]],
+      "forbidden": [],
+      "max_chars": 8000
+    },
+    {
+      "id": "act-research-brief",
+      "expected_skill": "research-brief",
+      "request": "아래 세 자료로 가상 시장 규모 비교 브리프를 써 줘. 자료 A(2025-03 발행): 2024년 시장 120억. 자료 B(2025-06 발행): 2024년 시장 95억. 자료 C(날짜 없음): 시장이 빠르게 커지는 중. 자료끼리 숫자가 다르다.",
+      "required": [["상충", "충돌", "불일치", "차이"], ["출처", "자료 A"], ["기준일", "날짜", "발행"]],
+      "forbidden": [],
+      "max_chars": 8000
+    },
+    {
+      "id": "act-rhel-cve",
+      "expected_skill": "rhel-cve",
+      "request": "가상 CVE-2099-00001이 RHEL 9에 미치는 영향을 Confluence에 올릴 한국어 Markdown 리포트로 정리해 줘. 이 ID는 가상이라 조회 결과가 없을 수 있다.",
+      "required": [["CVE-2099-00001"], ["RHEL 9", "RHEL9"], ["조회", "확인", "자료 없"]],
+      "forbidden": [],
+      "max_chars": 8000
+    },
+    {
+      "id": "act-visual-design",
+      "expected_skill": "visual-design",
+      "request": "가상 모바일 결제 화면의 시각 설계 방향을 잡아 줘. 정보 구조, 타이포그래피, 접근성까지 포함하고, 화면을 직접 렌더링해 보지는 못했다.",
+      "required": [["대비", "contrast"], ["타이포", "글꼴", "폰트"], ["렌더", "미확인", "검증하지"]],
+      "forbidden": [],
+      "max_chars": 8000
+    },
+    {
+      "id": "act-writing",
+      "expected_skill": "writing",
+      "request": "내 블로그 글 문단인데 AI가 쓴 티가 안 나게 내 말투로 다듬어 줘.\n\n'오늘날 빠르게 변화하는 디지털 환경에서 개발자 도구의 중요성은 아무리 강조해도 지나치지 않습니다. 본 글에서는 다양한 측면을 종합적으로 살펴보겠습니다.'",
+      "required": [["개발자"], ["도구"]],
+      "allow_request_copy": true,
+      "forbidden": [],
+      "max_chars": 8000
+    },
+    {
+      "id": "neg-code-write",
+      "expected_skill": null,
+      "request": "파이썬으로 n번째 피보나치 수를 반환하는 짧은 함수를 써 줘.",
+      "required": [["def"], ["fib", "피보나치"]],
+      "forbidden": [],
+      "max_chars": 4000
+    },
+    {
+      "id": "neg-trivia",
+      "expected_skill": null,
+      "request": "대한민국의 수도는 어디야? 한 단어로만 답해.",
+      "required": [["서울"]],
+      "forbidden": [],
+      "max_chars": 200
+    },
+    {
+      "id": "neg-translate",
+      "expected_skill": null,
+      "request": "이 문장을 한국어로 번역해 줘: 'The meeting has been moved to Friday.'",
+      "required": [["금요일"]],
+      "forbidden": [],
+      "max_chars": 500
+    },
+    {
+      "id": "neg-arithmetic",
+      "expected_skill": null,
+      "request": "17 곱하기 23은 얼마야? 숫자만 답해.",
+      "required": [["391"]],
+      "forbidden": [],
+      "max_chars": 100
+    },
+    {
+      "id": "neg-git-concept",
+      "expected_skill": null,
+      "request": "git status와 git diff의 차이를 두세 문장으로 설명해 줘. 검토할 변경은 없어.",
+      "required": [["status"], ["diff"]],
+      "forbidden": [],
+      "max_chars": 1500
+    },
+    {
+      "id": "neg-commit-message",
+      "expected_skill": null,
+      "request": "로그인 버그를 고친 커밋의 메시지를 한 줄로 지어 줘.",
+      "required": [["로그인", "login"]],
+      "forbidden": [],
+      "max_chars": 300
+    }
+  ]
+}

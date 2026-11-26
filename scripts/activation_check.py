@@ -9,6 +9,9 @@
   python scripts/activation_check.py --platform claude --arm without --out DIR2 --max-calls 12
   python scripts/activation_check.py --compare DIR/summary.json DIR2/summary.json
   python scripts/activation_check.py --platform codex --dry-run
+
+종료 코드: 0 정상, 1 --strict 위반(기동 미달·미실행), 2 입력·실행 오류.
+--strict 없이는 기동 실패(MISSED 등)가 있어도 0을 반환한다(기존 동작).
 """
 from __future__ import annotations
 
@@ -16,6 +19,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -32,7 +36,13 @@ DEFAULT_CASES = ROOT / "tests" / "eval_cases" / "activation_cases.json"
 MAX_BYTES = 4 * 1024 * 1024
 
 ACTIVATION_STATUSES = ("ACTIVATED", "ACTIVATED_WITH_EXTRA", "WRONG_SKILL", "MISSED",
-                       "FALSE_POSITIVE", "CORRECT_NONE", "UNVERIFIED")
+                       "FALSE_POSITIVE", "CORRECT_NONE", "UNVERIFIED",
+                       "REFERENCE_ONLY", "WRONG_VERSION", "BLOCKED")
+STRICT_OK = ("ACTIVATED", "ACTIVATED_WITH_EXTRA", "CORRECT_NONE")
+SCHEMA_VERSION = 2
+# run_eval.codex_jsonl_observation이 권한 거부로 보는 출력 표지와 같은 값이다.
+DENIAL_MARKERS = ("CreateProcessAsUserW failed: 5", "PermissionError: [Errno 13]", "PermissionError: [WinError 5]")
+READ_COMMAND = re.compile(r"\b(cat|head|tail|type|Get-Content|gc|sed|less|more)\b|read_text", re.IGNORECASE)
 OUTCOME_STATUSES = ("DISCRIMINATING", "NON_DISCRIMINATING", "SKILL_HURTS", "BOTH_FAIL", "UNVERIFIED")
 
 
@@ -76,11 +86,124 @@ def loaded_skills(platform, stdout):
     return {"skills": skills, "final_text": observed["final_text"].strip(),
             "observable": bool(observed["trace"].get("event_types")),
             "provider_error": bool(observed.get("result_error")),
-            "permission_denials": observed.get("permission_denials", [])}
+            "permission_denials": observed.get("permission_denials", []),
+            **entry_diagnostics(platform, stdout)}
+
+
+def _norm(text):
+    return str(text).replace("\\", "/")
+
+
+def _names_dir(text, name):
+    """텍스트가 `skills/<name>/` 아래 경로를 가리키는지(다른 곳의 같은 단어는 제외)."""
+    return re.search(rf"(?:^|/)skills/{re.escape(name)}/", _norm(text)) is not None
+
+
+def _names_reference(text, name):
+    return re.search(rf"(?:^|/)skills/{re.escape(name)}/references/[^\s'\"]+", _norm(text)) is not None
+
+
+def _local_body(name):
+    return (simulate_eval.SKILLS / name / "SKILL.md").read_text(encoding="utf-8").split("---", 2)[-1].strip()
+
+
+def _local_heading(name):
+    for line in _local_body(name).splitlines():
+        if line.startswith("# "):
+            return line.strip()
+    return None
+
+
+def _looks_like_other_version(name, text):
+    """로컬 본문과 다르지만 같은 스킬의 본문으로 보이는 텍스트인지(첫 제목이 같고 전체는 다름)."""
+    heading = _local_heading(name)
+    body = _local_body(name)
+    normalized = text.replace("\r\n", "\n")
+    return bool(heading) and heading in normalized and body not in normalized
+
+
+def entry_diagnostics(platform, stdout):
+    """스킬 폴더에 대한 진입 시도를 요청 쪽 이벤트에서만 관찰한다.
+
+    도구 호출 입력과 거부된 도구 입력만 본다. 도구 결과 본문과 모델 문장은 보지 않는다.
+    스킬 본문에도 `references/...` 경로가 적혀 있어 그 내용을 읽으면 오탐이 생기기 때문이다.
+    결과는 기대 스킬이 로드되지 않았을 때 실패 유형을 구분하는 단서일 뿐이다.
+    """
+    names = simulate_eval.skill_names()
+    found = {"reference_reads": set(), "blocked": set(), "wrong_version": set(), "call_without_body": set()}
+    events = []
+    for line in stdout.splitlines():
+        try:
+            event = json.loads(line)
+        except (ValueError, TypeError):
+            continue
+        if isinstance(event, dict):
+            events.append(event)
+
+    if platform == "claude":
+        pending, succeeded, body_seen = {}, set(), set()
+        for event in events:
+            message = event.get("message")
+            content = message.get("content") if isinstance(message, dict) else None
+            for item in content if isinstance(content, list) else []:
+                if not isinstance(item, dict):
+                    continue
+                if event.get("type") == "assistant" and item.get("type") == "tool_use" and isinstance(item.get("input"), dict):
+                    tool, data = item.get("name"), item["input"]
+                    if tool == "Skill" and isinstance(data.get("skill"), str) and item.get("id"):
+                        pending[item["id"]] = data["skill"].removeprefix("myway:")
+                    elif tool == "Read":
+                        target = data.get("file_path", "")
+                        found["reference_reads"].update(n for n in names if _names_reference(target, n))
+                    elif tool in ("Bash", "PowerShell"):
+                        command = str(data.get("command", ""))
+                        if READ_COMMAND.search(command):
+                            found["reference_reads"].update(n for n in names if _names_reference(command, n))
+                elif event.get("type") == "user" and item.get("type") == "tool_result":
+                    call_id = item.get("tool_use_id")
+                    name = pending.get(call_id) if isinstance(call_id, str) else None
+                    if name in names and not item.get("is_error") and item.get("content"):
+                        succeeded.add(name)
+                elif event.get("type") == "user" and item.get("type") == "text" and isinstance(item.get("text"), str):
+                    for name in succeeded:
+                        if _local_body(name) in item["text"]:
+                            body_seen.add(name)
+                        elif _looks_like_other_version(name, item["text"]):
+                            found["wrong_version"].add(name)
+            if event.get("type") == "result" and isinstance(event.get("permission_denials"), list):
+                for denial in event["permission_denials"]:
+                    if isinstance(denial, dict):
+                        text = json.dumps(denial.get("tool_input", ""), ensure_ascii=False)
+                        found["blocked"].update(n for n in names if _names_dir(text, n))
+        found["call_without_body"] = succeeded - body_seen - found["wrong_version"]
+    elif platform == "codex":
+        for event in events:
+            item = event.get("item")
+            if event.get("type") != "item.completed" or not isinstance(item, dict) \
+                    or item.get("type") != "command_execution":
+                continue
+            command, output = str(item.get("command", "")), str(item.get("aggregated_output", ""))
+            if item.get("exit_code") not in (None, 0):
+                if any(marker in output for marker in DENIAL_MARKERS):
+                    found["blocked"].update(n for n in names if _names_dir(command, n))
+                continue
+            if not READ_COMMAND.search(command):
+                continue
+            found["reference_reads"].update(n for n in names if _names_reference(command, n))
+            for name in names:
+                if re.search(rf"(?:^|/)skills/{re.escape(name)}/SKILL\.md", _norm(command)) \
+                        and _looks_like_other_version(name, output):
+                    found["wrong_version"].add(name)
+    return found
 
 
 def classify_activation(expected, observation):
-    """기대 스킬과 관측된 로드 집합으로 기동 상태를 분류한다."""
+    """기대 스킬과 관측된 로드 집합으로 기동 상태를 분류한다.
+
+    기대 스킬이 로드됐으면 다른 일과 무관하게 ACTIVATED 계열이다. 로드되지 않았을 때만 아래 순서로 원인 단서를 본다:
+    BLOCKED(스킬 폴더 접근이 거부됨) → WRONG_VERSION(본문이 현재와 다름) →
+    UNVERIFIED(Skill 호출은 성공했으나 본문 텍스트가 없어 형식 변화와 구분 불가) → REFERENCE_ONLY(참고 파일만 읽음).
+    """
     if not observation["observable"] or observation["provider_error"] or not observation["final_text"]:
         return "UNVERIFIED"
     skills = observation["skills"]
@@ -88,6 +211,14 @@ def classify_activation(expected, observation):
         return "FALSE_POSITIVE" if skills else "CORRECT_NONE"
     if expected in skills:
         return "ACTIVATED" if skills == {expected} else "ACTIVATED_WITH_EXTRA"
+    if expected in observation.get("blocked", ()):
+        return "BLOCKED"
+    if expected in observation.get("wrong_version", ()):
+        return "WRONG_VERSION"
+    if expected in observation.get("call_without_body", ()):
+        return "UNVERIFIED"
+    if expected in observation.get("reference_reads", ()):
+        return "REFERENCE_ONLY"
     return "WRONG_SKILL" if skills else "MISSED"
 
 
@@ -187,8 +318,10 @@ def judge_run(case, platform, run, arm):
     if text and not observation["provider_error"] and not observation["permission_denials"]:
         auto_pass = run_eval.auto_checks_passed(run_eval.evaluate_output(text, case))
     activation = classify_activation(case.get("expected_skill"), observation) if arm == "with" else "UNVERIFIED"
+    notes = {key: sorted(observation[key]) for key in ("reference_reads", "blocked", "wrong_version", "call_without_body")
+             if observation.get(key)}
     return {**row, "activation": activation, "auto_pass": auto_pass,
-            "loaded": sorted(observation["skills"]), "final_text": text}
+            "loaded": sorted(observation["skills"]), "entry_notes": notes, "final_text": text}
 
 
 def write_results(out_dir, platform, arm, cases_path, rows, runs, isolated=False):
@@ -197,13 +330,21 @@ def write_results(out_dir, platform, arm, cases_path, rows, runs, isolated=False
         (out / f"{row['id']}.md").write_text(row["final_text"] + "\n", encoding="utf-8")
         (out / f"{row['id']}.trace.jsonl").write_text(runs[row["id"]]["stdout"], encoding="utf-8")
     stored = [{k: v for k, v in row.items() if k != "final_text"} for row in rows]
-    summary = {"schema_version": 1, "platform": platform, "arm": arm, "isolated": isolated,
+    summary = {"schema_version": SCHEMA_VERSION, "platform": platform, "arm": arm, "isolated": isolated,
                "cases_sha256": file_sha256(cases_path), "tool_sha256": file_sha256(__file__),
                "cli": run_eval.cli_identity(platform), "rows": stored,
                "aggregate": summarize_rows(stored) if arm == "with" else None,
                "notice": "기동 판정은 이벤트 로그 근거다. 자동 검사 PASS는 응답 품질을 뜻하지 않으며 의미 품질은 NOT VERIFIED다."}
     (out / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     return summary
+
+
+def strict_violations(summary):
+    """--strict 위반 목록. 미실행 케이스는 분모에서 빼지 않고 위반으로 센다."""
+    problems = [f"{row['id']}: {row['activation']}" for row in summary["rows"] if row["activation"] not in STRICT_OK]
+    if summary.get("not_run"):
+        problems.append(f"미실행 {summary['not_run']}건")
+    return problems
 
 
 def print_summary(summary):
@@ -230,7 +371,11 @@ def main(argv=None):
     parser.add_argument("--isolated", action="store_true",
                         help="Claude 전용: 작업 폴더를 저장소 밖에 만들고 스킬 폴더 읽기를 허용")
     parser.add_argument("--compare", nargs=2, metavar=("WITH_SUMMARY", "WITHOUT_SUMMARY"))
+    parser.add_argument("--strict", action="store_true",
+                        help="with 팔 전용: 모든 행이 기동(또는 부정 사례 무기동)이고 미실행이 없을 때만 0, 아니면 1")
     args = parser.parse_args(argv)
+    if args.strict and (args.compare or args.arm != "with"):
+        parser.error("--strict는 with 팔 실행에만 쓸 수 있다")
 
     if args.compare:
         try:
@@ -306,6 +451,11 @@ def main(argv=None):
     print_summary(summary)
     if summary["not_run"]:
         print(f"예산 소진으로 미실행 {summary['not_run']}건", file=sys.stderr)
+    if args.strict:
+        problems = strict_violations(summary)
+        if problems:
+            print("--strict 위반: " + "; ".join(problems), file=sys.stderr)
+            return 1
     return 0
 
 

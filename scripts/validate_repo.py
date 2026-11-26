@@ -132,7 +132,7 @@ def check_skill_markdown_links(skill, errors):
     """마크다운 앵커 링크(경로.md#슬러그)가 대상 파일의 실제 제목과 맞는지 검사한다.
     코드 펜스 안 링크와 스킬 밖 대상은 검사하지 않는다."""
     mds = [p for p in skill.rglob("*.md") if p.is_file()]
-    headings = {p: heading_slugs(strip_code_fences(p.read_text(encoding="utf-8"))) for p in mds}
+    headings = {p.resolve(): heading_slugs(strip_code_fences(p.read_text(encoding="utf-8"))) for p in mds}
     for p in mds:
         prose = strip_code_fences(p.read_text(encoding="utf-8"))
         for match in re.finditer(r"\]\(([^()\s]+\.md#[^()\s]+)\)", prose):

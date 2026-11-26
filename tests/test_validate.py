@@ -239,6 +239,17 @@ class ValidateRepo(unittest.TestCase):
         self.assertTrue(any("없는-제목" in e for e in errors))
         self.assertFalse(any("제목-입력-확인" in e for e in errors))
 
+    def test_anchor_links_work_when_skill_path_is_not_normalized(self):
+        # 링크·8.3 단축 이름 대신 `..`를 낀 경로로 resolve 불일치를 재현한다(플랫폼 무관).
+        skill = self.skill().parent
+        (skill / "references").mkdir(exist_ok=True)
+        (skill / "references/test-anchors.md").write_text("# 제목 입력 확인\n", encoding="utf-8")
+        self.skill().write_text(self.skill().read_text(encoding="utf-8") +
+                                "\n[앵커](references/test-anchors.md#제목-입력-확인)\n", encoding="utf-8")
+        errors = []
+        validate_repo.check_skill_markdown_links(skill.parent / skill.name / ".." / skill.name, errors)
+        self.assertEqual(errors, [])
+
     def test_anchor_link_target_must_exist(self):
         p = self.skill()
         p.write_text(p.read_text(encoding="utf-8") + "\n[없는 대상](references/nope.md#아무거나)\n", encoding="utf-8")

@@ -12,19 +12,23 @@ import moves_log
 
 class MovesLogTests(unittest.TestCase):
     def test_log_path_uses_localappdata_on_windows(self):
+        # Python 3.11은 os.name을 바꾸면 Path()가 다른 OS의 Path를 만들 수 없다. Path를 문자열 통과로 바꿔 경로 조합만 검사한다.
         with mock.patch.object(moves_log.os, "name", "nt"), \
+             mock.patch.object(moves_log, "Path", side_effect=str), \
              mock.patch.dict(os.environ, {"LOCALAPPDATA": r"C:\state"}, clear=True):
-            self.assertEqual(moves_log.log_path(), Path(os.path.join(r"C:\state", "myway", "moves.jsonl")))
+            self.assertEqual(moves_log.log_path(), os.path.join(r"C:\state", "myway", "moves.jsonl"))
 
     def test_log_path_uses_xdg_state_home_then_local_state(self):
         with mock.patch.object(moves_log.os, "name", "posix"), \
+             mock.patch.object(moves_log, "Path", side_effect=str), \
              mock.patch.dict(os.environ, {"XDG_STATE_HOME": "/xdg", "HOME": "/home"}, clear=True):
-            self.assertEqual(moves_log.log_path(), Path(os.path.join("/xdg", "myway", "moves.jsonl")))
+            self.assertEqual(moves_log.log_path(), os.path.join("/xdg", "myway", "moves.jsonl"))
         with mock.patch.object(moves_log.os, "name", "posix"), \
+             mock.patch.object(moves_log, "Path", side_effect=str), \
              mock.patch.dict(os.environ, {"HOME": "/home"}, clear=True):
             self.assertEqual(
                 moves_log.log_path(),
-                Path(os.path.join(os.path.join("/home", ".local", "state"), "myway", "moves.jsonl")))
+                os.path.join(os.path.join("/home", ".local", "state"), "myway", "moves.jsonl"))
 
     def test_missing_base_raises(self):
         with mock.patch.object(moves_log.os, "name", "posix"), \

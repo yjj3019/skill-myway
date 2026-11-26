@@ -1,3 +1,4 @@
+import contextlib
 import io
 import json
 import subprocess
@@ -40,12 +41,27 @@ def claude_stream(session, text, load=False):
     return "\n".join(json.dumps(event, ensure_ascii=False) for event in events)
 
 
+def codex_acl_granted():
+    """CI 러너에는 CodexSandboxUsers 그룹이 없다. icacls 호출만 성공으로 대체하고 나머지는 그대로 실행한다."""
+    real = subprocess.run
+
+    def fake(cmd, *args, **kwargs):
+        if cmd and "icacls" in str(cmd[0]).lower():
+            return mock.Mock(returncode=0)
+        return real(cmd, *args, **kwargs)
+
+    stack = contextlib.ExitStack()
+    stack.enter_context(mock.patch.object(dialogue_eval.run_eval.subprocess, "run", side_effect=fake))
+    stack.enter_context(mock.patch.object(dialogue_eval.run_eval.os, "getlogin", return_value="sample"))
+    return stack
+
+
 class DialogueEvaluation(unittest.TestCase):
     def run_case(self, mock_results, max_calls=2, platform="codex"):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "out"
             with mock.patch.object(dialogue_eval.process_control, "run", side_effect=mock_results) as call, \
-                 redirect_stdout(io.StringIO()):
+                 redirect_stdout(io.StringIO()), codex_acl_granted():
                 status = dialogue_eval.main(["--platform", platform, "--case", "rhel-cve-audit-missing",
                                              "--out", str(out), "--max-calls", str(max_calls),
                                              "--max-seconds", "60", "--timeout", "20"])

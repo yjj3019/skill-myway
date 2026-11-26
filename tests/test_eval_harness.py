@@ -1,4 +1,5 @@
 import argparse
+import contextlib
 import hashlib
 import json
 import io
@@ -308,6 +309,21 @@ class SimulateEval(unittest.TestCase):
         doc = sample_cases()
         doc["cases"][0]["verify_replay"] = ""
         self.assertTrue(any("verify_replay" in error for error in simulate_eval.validate(doc)))
+
+
+def codex_acl_granted():
+    """CI 러너에는 CodexSandboxUsers 그룹이 없다. icacls 호출만 성공으로 대체하고 나머지는 그대로 실행한다."""
+    real = subprocess.run
+
+    def fake(cmd, *args, **kwargs):
+        if cmd and "icacls" in str(cmd[0]).lower():
+            return mock.Mock(returncode=0)
+        return real(cmd, *args, **kwargs)
+
+    stack = contextlib.ExitStack()
+    stack.enter_context(mock.patch.object(run_eval.subprocess, "run", side_effect=fake))
+    stack.enter_context(mock.patch.object(run_eval.os, "getlogin", return_value="sample"))
+    return stack
 
 
 class RunEval(unittest.TestCase):
@@ -1187,7 +1203,7 @@ class RunEval(unittest.TestCase):
         ]
         raw = "\n".join(json.dumps(event) for event in events)
         process = mock.Mock(returncode=0, stdout=raw, stderr="")
-        with mock.patch.object(run_eval.process_control, "run", return_value=process):
+        with mock.patch.object(run_eval.process_control, "run", return_value=process), codex_acl_granted():
             run = run_eval.run_case(case, "codex", 5)
         self.assertEqual(run["permission_denials"], ["command_execution"])
         with tempfile.TemporaryDirectory() as tmp:
@@ -1207,8 +1223,9 @@ class RunEval(unittest.TestCase):
         self.assertEqual(run_eval.codex_jsonl_observation("\n".join(map(json.dumps, events)))["permission_denials"], [])
 
     def test_windowsapps_shell_is_excluded_only_from_codex_child_path(self):
-        original = os.pathsep.join([r"C:\Windows\System32", r"C:\Fake\WindowsApps"])
+        original = ";".join([r"C:\Windows\System32", r"C:\Fake\WindowsApps"])
         with mock.patch.object(run_eval.sys, "platform", "win32"), \
+             mock.patch.object(run_eval.os, "pathsep", ";"), \
              mock.patch.object(run_eval.shutil, "which", return_value=r"C:\Fake\WindowsApps\pwsh.exe"), \
              mock.patch.dict(os.environ, {"PATH": original}):
             self.assertEqual(run_eval.evaluation_environment("codex")["PATH"], r"C:\Windows\System32")
@@ -1296,7 +1313,8 @@ class RunEval(unittest.TestCase):
     def test_prepare_workdir(self):
         import shutil
         for platform, rel in (("claude", None), ("codex", ".agents/skills"), ("grok", ".grok/skills")):
-            workdir = run_eval.prepare_workdir(platform)
+            with codex_acl_granted():
+                workdir = run_eval.prepare_workdir(platform)
             try:
                 if rel is None:
                     self.assertEqual(list(workdir.iterdir()), [])

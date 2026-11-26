@@ -1,5 +1,12 @@
 # 라이선스·출처 검토
 
+## 2026-11-26 외부 디자인 자료 사용 관문 작성
+
+- 열람 범위: 웹 검색 결과 요약 두 건(hugohe3/ppt-master, getdesign.md·DESIGN.md), GitHub API의 라이선스 메타데이터와 저장소 메타데이터, 그리고 한 스크립트의 환경 변수 관련 줄을 찾는 grep이다. 스크립트 내용은 저장소에도 임시 파일에도 저장하지 않았다. 이 저장소의 기존 기록 문서도 읽었다.
+- 반영: `visual-design/references/external-design-sources.md`(신규), `visual-design/SKILL.md`의 포인터 한 줄, `office-docs/references/deck-evidence.md`의 규칙 한 줄. 외부 문장·코드·파일은 복사하지 않았다. 두 참고 요약은 영어였고 새 문장은 이 저장소의 요구에 맞춰 한국어로 독립 작성했다. 이름이 비슷한 AGPL-3.0 프로젝트는 어떤 부분에도 쓰지 않았다.
+- 40자 연속 문자열 대조는 하지 않았다. 대조할 수 있는 자료가 영어 검색 요약뿐이고 새 문장은 한국어라 의미 있는 대조가 아니다. 원본 저장소 파일과는 대조하지 않았다.
+- NOT VERIFIED: ppt-master의 LICENSE 원문과 파일별 권리, getdesign.md 카탈로그의 파일별 이용 허락, Google Labs DESIGN.md 사양 원문, 서드파티가 표시한 환경 변수 수집의 실제 동작. 저장소 수준 표시는 개별 파일의 권리를 확정하지 않는다.
+
 ## 2026-11-23 첨부 저장소 개념 대조
 
 - 사용자가 첨부한 [mankidev/antialgorithm](https://github.com/mankidev/antialgorithm)과 [EL4CTEO/fast-anything](https://github.com/EL4CTEO/fast-anything), 기존 기록의 [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills/tree/8c99fa36d90068c82d547f7c12a9d67a3e95f4ee)를 개념 검토했다. 세 저장소는 저장소 수준 MIT 표시다. 원문 문장·코드·예제는 복사하지 않고 이 저장소의 요구와 기존 구현에 맞게 재작성했다.

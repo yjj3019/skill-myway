@@ -1,5 +1,13 @@
 # 라이선스·출처 검토
 
+## 2026-11-27 evidence-first 판정 계약과 검사기 작성
+
+- 참고한 자료: ① 사용자의 별도 프로젝트 ProposalSkills(MIT, 소유자가 같음)의 응답 계약 검사기 `check_decision_answer.py`를 **읽기 전용으로** 열람했다(로컬 사본과 원격 `277afc8`의 일부). 그 저장소에는 어떤 쓰기도 하지 않았다. ② 사용자가 작성·정리한 Notion 검토안의 계약과 검사기 초안(작성: ChatGPT, 기록 시 미실행 초안으로 표시됨).
+- 새로 쓴 것: `evidence-first/scripts/check_evidence_answer.py`, `references/answer-contract.md`, SKILL.md 2.1절, `tests/test_evidence_answer.py`. 계약 형식(JSON)과 검사 로직은 검토안의 설계를 바탕으로 이 저장소의 요구에 맞게 독립적으로 다시 작성했고(연쇄 오류 차단, 중복 키 거부, fixture 스키마 검증 등 변경), ProposalSkills의 코드·문장은 가져오지 않았다.
+- 대조: 새 파일 4개를 ProposalSkills의 `check_decision_answer.py`(로컬 사본)와 공백 제외 40자 창으로 비교해 일치 0건을 확인했다. 처음에는 import 머리말, argparse 설정, 출력 반복문, `__main__` 가드의 관용구 4구간(40~165자)이 겹쳤고, 표현을 바꿔 0건이 됐다. 이 대조는 법적 판단이 아니며 의미·구조 유사성은 판정하지 못한다. Notion 검토안의 코드는 디스크에 없어 문자열 대조를 하지 않았다.
+- 권리: 새 파일은 저장소 기본 라이선스(Apache-2.0)를 따른다. evidence-first는 별도 license 선언이 없다. 두 참고 자료의 소유자가 같으므로 제3자 권리 문제는 확인되지 않았으나, 이는 법률 의견이 아니다.
+- NOT VERIFIED: ProposalSkills 전체 저장소·이력과의 대조(체커 한 파일만 대조), Notion 검토안 코드와의 문자열 대조.
+
 ## 2026-11-26 외부 디자인 자료 사용 관문 작성
 
 - 열람 범위: 웹 검색 결과 요약 두 건(hugohe3/ppt-master, getdesign.md·DESIGN.md), GitHub API의 라이선스 메타데이터와 저장소 메타데이터, 그리고 한 스크립트의 환경 변수 관련 줄을 찾는 grep이다. 스크립트 내용은 저장소에도 임시 파일에도 저장하지 않았다. 이 저장소의 기존 기록 문서도 읽었다.

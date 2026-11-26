@@ -39,6 +39,15 @@ description: 작업·지침·스킬·절차를 검토하거나 개선할 때 근
 - 같은 원인으로 두 번 실패하면 재시도를 멈추고 접근을 바꾼다(단계 전체 최대 3회).
 - 확인하지 않은 외부 변경을 재시도로 덮지 않는다.
 
+### 2.1 완료·검증 주장의 판정 계약
+
+완료나 검증 주장을 판정해 달라는 요청에만 적용한다. 일반 질문과 구현에는 형식을 강제하지 않는다.
+
+- 주장마다 VERIFIED, CONTRADICTED, NOT_VERIFIED, BLOCKED 중 하나로 판정하고 근거 증거를 가리킨다. 증거가 없거나 확인 범위를 벗어난 주장은 VERIFIED로 쓰지 않는다.
+- 종합 판정은 CONTRADICTED > BLOCKED > NOT_VERIFIED > VERIFIED 순서로 정한다. VERIFIED가 아니면 다음에 필요한 증거를 적는다.
+- 형식이 지정된 평가에서는 JSON(`EVIDENCE_STATUS`, `CLAIMS`, `REQUIRED_EVIDENCE`)으로 답하고 `scripts/check_evidence_answer.py`로 검사할 수 있다. 모델이 쓴 증거 ID는 증거가 아니다. 검사기를 실행하지 못했으면 통과로 보고하지 않는다.
+- 계약 통과는 형식과 일관성만 뜻하며 의미 품질이나 독립 검증을 대체하지 않는다. 세부는 `references/answer-contract.md`를 따른다.
+
 기준선과 후보를 비교하면 예정된 짝, 양쪽 출력이 있는 짝, 양쪽 결과에 판정이 끝난 짝을 따로 센다. 개선·악화·동률은 판정 완료 사례에서만 집계한다. 시간 초과, 미채점과 미확인 안전 평가는 별도 상태로 남긴다.
 
 ## 3. 독립 확인
@@ -74,5 +83,6 @@ description: 작업·지침·스킬·절차를 검토하거나 개선할 때 근
 ## 7. 참고 파일
 
 - `references/verification-gate.md`: 완료 주장 전 검증 게이트, 주장별 필요 증거, 환경 명시, 금지 패턴
+- `references/answer-contract.md`: 완료·검증 주장의 판정 값, JSON 답변 형식, 결정적 검사기 사용과 한계
 - `references/external-skill-review.md`: 외부 스킬 도입·감사 시 실행 경로, 권한, 라이선스와 확인 범위 점검
 

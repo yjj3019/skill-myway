@@ -610,3 +610,10 @@ Windows에서 저장소 검사와 세 스킬의 형식 검사가 통과했다. �
 - 원격 CI(86a3fc6)에서 windows-latest 3.11·3.12·3.13의 `test_evidence_answer.CommandLine` 3건이 실패했다. 자식 프로세스 stdout이 cp1252라 한국어 위반 메시지를 출력하다 `UnicodeEncodeError`가 났고 stdout이 비었다. ubuntu·macOS와 libreoffice는 통과했다.
 - 로컬에서 `PYTHONIOENCODING=cp1252`로 재현했고(수정 전 트레이스백), 수정 후에는 `\uXXXX` 이스케이프로 출력되고 종료 코드 1이 유지됨을 확인했다. 검사기는 stdout·stderr를 `errors="backslashreplace"`로 재구성하고, 테스트는 `PYTHONIOENCODING=utf-8`로 자식 프로세스를 고정한다.
 - 로컬 `tests.test_evidence_answer` 17건 통과. 수정 후 원격 CI는 푸시 뒤 확인한다(NOT VERIFIED).
+
+## evidence-first 판정 계약의 실제 모델 준수 측정 (2026-11-27)
+
+- 환경: Claude Code 2.1.332, `--isolated` 방식(저장소 밖 작업 폴더), 플러그인 로드, 모델 호출 13회(첫 시도는 측정 스크립트의 키 이름 오류로 결과 없이 1회 소모, 재실행 12회가 결과). 스크립트는 저장소에 두지 않았다. 시나리오 4개(증거 없음, 0건 실행 로그, 일부만 증거 있음, 접근 거부)와 정답 fixture는 모델에 보이지 않게 고정했고 채점은 `check_evidence_answer.py`로 했다.
+- A팔(프롬프트에 JSON 형식과 판정 규칙을 명시, 4 시나리오 × 2회): 8/8 통과. 모두 순수 JSON이었고 판정·증거 ID·종합 우선순위가 fixture와 일치했다. 이 결과는 모델이 명시된 계약을 따를 수 있다는 것까지만 보이며, 스킬의 기여는 아니다(8건 모두 스킬 호출 0건).
+- B팔(키 이름만 주고 규칙은 말하지 않음, 4 시나리오 × 1회): 0/4 통과. 4건 모두 스킬 호출 0건이었고, 응답은 코드펜스로 감싼 JSON에 `INSUFFICIENT`, `PARTIAL`, `UNVERIFIED` 같은 계약 밖 판정 값과 `verdict`, `claim` 같은 키를 썼다. 스킬이 기동하지 않으면 계약이 전달되지 않는다는 2단계 관측(Routing 실패)과 일치한다.
+- 한계(NOT VERIFIED): 표본이 작다(B팔은 시나리오당 1회). B팔 프롬프트에 스킬 이름이나 계약을 직접 가리키는 표현이 없었으므로 "스킬을 명시 호출하면 따르는가"는 측정하지 않았다. 증거 ID와 실제 로그의 연결, 일반 응답에 대한 부작용은 확인하지 않았다.

@@ -604,3 +604,9 @@ Windows에서 저장소 검사와 세 스킬의 형식 검사가 통과했다. �
 - 기동 점검 하네스 변경(2026-11-26, 작업 트리, Windows, Python 3.13.17): `validate_repo.py` PASS, `run_tests.py` 433건(기존 415 + 새 18) 실패 0·오류 0·skip 0. 새 상태 REFERENCE_ONLY·WRONG_VERSION·BLOCKED와 `--strict` 종료 코드는 합성 이벤트로만 시험했고, 코드를 일부러 망가뜨린 변형 3건에서 테스트가 실패함을 확인했다. **NOT VERIFIED**: 실제 Claude Code·Codex 로그에서 `WRONG_VERSION`·`BLOCKED`가 나오는 형식 일치(10회 실행에서는 두 상태가 발생하지 않았다), Codex 쪽 새 상태의 실제 로그 시험.
 - 미기동 원인 관측(2026-11-26, Claude Code 2.1.332 `--isolated`, 10회): evidence-first 기동 1/8, 대조군 writing 2/2. 미기동 7건은 스킬 목록에는 있었고 도구 호출이 0회였다(Routing 실패로 보임). 세부와 한계는 `docs/SKILL-ACTIVATION-TEST.md` 10절. **NOT VERIFIED**: 미기동의 정확한 원인(스킬 168개·플러그인 27개 환경의 영향 포함), Codex, 스킬 미사용 대조팔, 응답 의미 품질.
 - evidence-first 판정 계약·검사기(2026-11-27, 1.28.0 작업 트리, Windows, Python 3.13.17): `validate_repo.py` PASS, `run_tests.py` 450건(기존 433 + 새 17) 실패 0·오류 0·skip 0, 단독 ZIP 패키징 성공(`scripts/` 포함 7개 파일). 검사기를 일부러 망가뜨린 변형 4건(연쇄 오류 차단 제거, 종합 우선순위 뒤바꿈, 중복 키 허용, 가짜 증거 ID 허용)에서 테스트가 실패함을 확인했다. ProposalSkills 체커와 새 파일 4개의 40자 대조 일치 0건(관용구 4구간을 다시 쓴 뒤). **NOT VERIFIED**: 실제 모델 응답이 계약을 지키는지, 일반 응답에 부작용이 없는지, 증거 ID와 실제 로그의 연결(외부 수집기 미구현), 원격 CI, Notion 검토안 코드와의 문자열 대조, macOS·Linux·다른 Python 버전. 검사기 통과는 형식·일관성만 뜻한다.
+
+## evidence-first 검사기 Windows 출력 인코딩 수정 (2026-11-27)
+
+- 원격 CI(86a3fc6)에서 windows-latest 3.11·3.12·3.13의 `test_evidence_answer.CommandLine` 3건이 실패했다. 자식 프로세스 stdout이 cp1252라 한국어 위반 메시지를 출력하다 `UnicodeEncodeError`가 났고 stdout이 비었다. ubuntu·macOS와 libreoffice는 통과했다.
+- 로컬에서 `PYTHONIOENCODING=cp1252`로 재현했고(수정 전 트레이스백), 수정 후에는 `\uXXXX` 이스케이프로 출력되고 종료 코드 1이 유지됨을 확인했다. 검사기는 stdout·stderr를 `errors="backslashreplace"`로 재구성하고, 테스트는 `PYTHONIOENCODING=utf-8`로 자식 프로세스를 고정한다.
+- 로컬 `tests.test_evidence_answer` 17건 통과. 수정 후 원격 CI는 푸시 뒤 확인한다(NOT VERIFIED).

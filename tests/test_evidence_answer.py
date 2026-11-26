@@ -1,6 +1,7 @@
 import copy
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -148,7 +149,8 @@ class CommandLine(unittest.TestCase):
             a.write_text(answer_text, encoding="utf-8")
             f.write_text(fixture_text if fixture_text is not None else json.dumps(FIXTURE), encoding="utf-8")
             result = subprocess.run([sys.executable, "-B", str(CHECKER), str(a), str(f)],
-                                    capture_output=True, text=True, encoding="utf-8")
+                                    capture_output=True, text=True, encoding="utf-8",
+                                    env={**os.environ, "PYTHONIOENCODING": "utf-8"})
         return result.returncode, result.stdout, result.stderr
 
     def test_exit_codes(self):

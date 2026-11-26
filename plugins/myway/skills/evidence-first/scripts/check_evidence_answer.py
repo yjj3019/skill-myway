@@ -167,6 +167,9 @@ def main(argv=None):
     cli.add_argument("answer", type=Path, help="검사할 답변 JSON")
     cli.add_argument("fixture", type=Path, help="사람이 고정한 기대값 JSON")
     args = cli.parse_args(argv)
+    for stream in (sys.stdout, sys.stderr):  # 콘솔 인코딩이 한국어를 못 담아도 출력이 죽지 않게 한다
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="backslashreplace")
     try:
         answer_text = _read(args.answer)
         fixture = loads(_read(args.fixture))

@@ -632,3 +632,12 @@ Windows에서 저장소 검사와 세 스킬의 형식 검사가 통과했다. �
 - 실제 로그 실측(모델 호출 3회, 저장소 밖 스크립트, `--allowedTools Bash`, 작업 폴더는 임시 폴더, 실행 명령은 `echo`와 `false`뿐): ① `echo` 사례는 장부 생성과 검사 통과(종료 코드 0). ② `false` 사례 1차는 모델이 `false; echo "exit=$?"`로 명령을 바꿔 실제 종료 코드가 0이었고 검사기가 UNSUPPORTED_VERDICT로 거부했다(의도한 동작). ③ 명령을 그대로 실행하도록 한 재실행은 장부에 `exit_code` 1, `is_error` true가 기록되고 통과했다. 이 환경(Windows, Claude Code 2.1.332, Bash 도구)에서 "Exit code N" 머리말 해석이 실제 로그와 맞음을 확인했다. 비오류 결과의 종료 코드 0 가정은 ① ②에서 맞았다.
 - NOT VERIFIED: Codex·Grok 로그 형식, 종료 코드가 머리말로 오지 않는 도구 결과, 여러 번 호출이 섞인 긴 실행에서 모델이 `call:N` 순번을 정확히 세는지(실측은 호출 1회짜리 두 사례뿐), 일반 요청(스킬 이름 없음)에서의 기동과 계약 준수.
 - 전체 검증(1.29.0 작업 트리, Windows, Python 3.13.17): `validate_repo.py` PASS, `run_tests.py` 실행 464건(450 + 장부 14), 실패 0, skip 0, 종료 코드 0(약 765초). 단독 ZIP `myway-evidence-first-1.29.0.zip`은 8개 파일(두 스크립트 포함)로 묶였다. 원격 CI는 푸시 뒤 확인한다(NOT VERIFIED).
+
+## 남은 항목 해소 시도 (2026-11-27, 1.30.0 작업 트리)
+
+- 깨끗한 설정 기동(Claude, 모델 호출 10회): 스킬 30개·MCP 0개 환경에서 evidence-first 2/8, 대조군 2/2. 스킬 수 교란은 주된 원인이 아니다(SKILL-ACTIVATION-TEST 11절, D-049). 일반 요청의 기동은 해결하지 않았고 해결 수단이 이 저장소에 없다는 결론이다.
+- Codex 로그(모델 호출 1회): 실제 로그의 `item.started/completed`, `command_execution`, `exit_code`, `aggregated_output`, `status` 구조를 확인해 장부로 만들었다(3항목). 이 PC의 Codex 샌드박스가 `setup helper exited with status Some(1)`로 명령 실행을 거부해 세 시도 모두 `exit_code -1`, `status failed`였다. 성공 사례(exit_code 0, status completed)는 **NOT VERIFIED**이며 합성 이벤트로만 시험했다.
+- Grok 로그(모델 호출 1회): `--output-format streaming-json`의 `tool_call`과 `tool_call_update.rawOutput`(`exit_code`, `output_for_prompt`)을 확인해 장부로 만들었다(성공 사례만, 실패 사례는 합성 시험).
+- 긴 실행의 순번 세기(Claude, 호출 6번짜리 3회): 장부 6항목, 모델이 인용한 `call:2`, `call:4`, `call:6`이 모두 정확했고 검사 3/3 통과. 한계: 순차 단일 도구 호출만 시험했다. 병렬 도구 호출, 호출 수십 번의 더 긴 실행은 NOT VERIFIED.
+- 장부 시험 18건(+4: Codex 항목·오류 보존, Grok 짝짓기, 혼합·중복 오류, Codex 장부 검사). 이 변경의 전체 시험·원격 CI 결과는 아래 줄에 따로 적는다.
+- 전체 검증(1.30.0 작업 트리, Windows, Python 3.13.17): `validate_repo.py` PASS, `run_tests.py` 실행 468건(464 + 장부 4), 실패 0, skip 0, 종료 코드 0(약 740초). 원격 CI는 푸시 뒤 확인한다(NOT VERIFIED).

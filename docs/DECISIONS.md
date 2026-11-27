@@ -419,3 +419,9 @@ D-041에서 기준선으로 막아 둔 약한 케이스(요청문 되돌리기 8
 - 증거 장부: `scripts/build_evidence_ledger.py`가 Claude Code stream-json 실행 로그에서 도구 호출 순서대로 `call:N` 항목을 만든다. 원문은 저장하지 않고 해시·길이·종료 코드·사람이 정한 패턴의 일치 여부만 남긴다. 검사기는 `--ledger`로 이 장부를 받아 ① 장부에 없는 ID ② 인용한 항목이 조건(`tool`, `command_regex`, `exit_code`, `output_flags`)을 만족하지 않는 판정을 거부한다. 장부가 없으면 기존 동작 그대로다.
 - 제안서(`docs/EVIDENCE-COLLECTOR-PROPOSAL-2026-11-27.md`) 대비 변경: 해시 기반 ID 대신 호출 순번 `call:N`을 쓴다. 모델은 도구 호출 ID를 볼 수 없어 해시를 인용할 수 없고, 장부가 실행마다 따로 만들어지므로 순번으로도 실행 간 재사용이 의미가 없다.
 - 한계: Claude Code stream-json만 다룬다(Codex·Grok 형식은 실측하지 못했다). 조건을 겨우 채우는 사소한 명령, 로그 파일 변조, 의미 품질은 막지 못한다. 모델이 자기 도구 호출 순번을 세어야 한다.
+
+## D-049 증거 장부의 Codex·Grok 지원과 기동 원인 결론 (1.30.0)
+
+- 장부 빌더가 Codex `exec --json`(`item.completed`의 command_execution)과 Grok `streaming-json`(`tool_call`과 rawOutput이 있는 `tool_call_update`)을 읽는다. 호스트는 이벤트 모양으로 자동 판별하고 섞이면 오류다. 구조는 실제 로그에서 확인했다. Codex는 이 PC의 샌드박스 오류로 실패 사례(exit_code -1)만 확인했고 성공 사례는 확인하지 못했다. 그래서 Codex 성공 경로는 합성 이벤트로만 시험했다.
+- 기동 문제(Routing)는 이 저장소에서 해결하지 않는다. 근거: ① 스킬 30개 환경(사용자 플러그인·MCP 제거)에서도 `evidence-first` 기동은 2/8로, 168개 환경의 1/8과 유사해 스킬 수는 주된 원인이 아니다. ② description 수정은 0/8이라 철회했다(2026-11-25). ③ 미기동 사례는 짧은 신뢰성 질문이고 모델이 스킬 없이 직접 답하며, description이 단순 질문에는 쓰지 않는다고 스스로 한정한다. ④ 스킬 이름을 직접 부르면 8/8로 기동한다. 호스트의 스킬 호출은 모델 재량이므로 description으로 보장할 수 없다. 보장이 필요하면 호스트 훅처럼 저장소 밖의 강제 수단이 필요하며 이는 별도 설계 판단이다.
+- 기동 점검 사례 `act-evidence-first-b/c/d`의 기대는 그대로 둔다. 측정 후에 기대를 바꾸지 않는다.

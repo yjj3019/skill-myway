@@ -103,6 +103,69 @@ class LedgerBuild(unittest.TestCase):
             builder.parse_flags(["x=a", "x=b"])
 
 
+def codex_event(kind, item_id, command, output="", code=None, status="in_progress"):
+    return json.dumps({"type": kind, "item": {"id": item_id, "type": "command_execution", "command": command,
+                                              "aggregated_output": output, "exit_code": code, "status": status}})
+
+
+def grok_call(call_id, command):
+    return json.dumps({"type": "tool_call", "toolCallId": call_id, "toolName": "run_terminal_command",
+                       "status": "pending", "rawInput": {"command": command}})
+
+
+def grok_update(call_id, raw):
+    return json.dumps({"type": "tool_call_update", "toolCallId": call_id, "status": None, "rawOutput": raw})
+
+
+class HostFormats(unittest.TestCase):
+    """Codex·Grok 이벤트 모양은 실제 로그에서 옮긴 구조이며, 값은 가상이다."""
+
+    def test_codex_completed_items_become_entries_with_failures_kept_as_errors(self):
+        log = [codex_event("item.started", "i0", "echo ledger-probe"),
+               codex_event("item.completed", "i0", "echo ledger-probe", "Failed to create process", -1, "failed"),
+               codex_event("item.started", "i1", "echo ok"),
+               codex_event("item.completed", "i1", "echo ok", "ledger-probe", 0, "completed"),
+               codex_event("item.started", "i2", "sleep 9")]
+        ledger = builder.build_ledger(log, builder.parse_flags(["p=ledger-probe"]))
+        self.assertEqual(ledger["source"], "codex-exec-jsonl")
+        first, second = ledger["entries"]
+        self.assertEqual((first["id"], first["exit_code"], first["is_error"], first["flags"]["p"]), ("call:1", -1, True, False))
+        self.assertEqual((second["exit_code"], second["is_error"], second["flags"]["p"]), (0, False, True))
+        self.assertEqual(ledger["unmatched"], 1)
+
+    def test_grok_calls_pair_with_the_last_update_that_has_raw_output(self):
+        log = [grok_call("g1", "echo ledger-probe"),
+               json.dumps({"type": "tool_call_update", "toolCallId": "g1", "status": None, "rawOutput": None}),
+               grok_update("g1", {"type": "Bash", "output_for_prompt": "ledger-probe", "exit_code": 0, "command": "echo ledger-probe"}),
+               grok_call("g2", "false"),
+               grok_update("g2", {"type": "Bash", "output_for_prompt": "", "exit_code": 1}),
+               grok_call("g3", "never finishes")]
+        ledger = builder.build_ledger(log, builder.parse_flags(["p=ledger-probe"]))
+        self.assertEqual(ledger["source"], "grok-streaming-json")
+        first, second = ledger["entries"]
+        self.assertEqual((first["tool"], first["command"], first["exit_code"], first["flags"]["p"]),
+                         ("run_terminal_command", "echo ledger-probe", 0, True))
+        self.assertEqual((second["exit_code"], second["is_error"]), (1, True))
+        self.assertEqual(ledger["unmatched"], 1)
+
+    def test_mixed_hosts_and_duplicate_ids_are_errors(self):
+        with self.assertRaises(builder.LedgerError):
+            builder.build_ledger(LOG + [codex_event("item.completed", "i0", "x", "", 0, "completed")])
+        with self.assertRaises(builder.LedgerError):
+            builder.build_ledger([codex_event("item.completed", "i0", "x", "", 0, "completed")] * 2)
+        with self.assertRaises(builder.LedgerError):
+            builder.build_ledger([grok_call("g1", "a"), grok_call("g1", "b")])
+
+    def test_checker_accepts_a_codex_ledger_the_same_way(self):
+        log = [codex_event("item.completed", "i0", "python -m unittest", "Ran 3 tests\nOK", 0, "completed")]
+        ledger = checker.validate_ledger(builder.build_ledger(log, builder.parse_flags(["tests_ran=Ran [1-9][0-9]* tests?"])))
+        fixture = {"claims": {"tests": {"expected_status": "VERIFIED", "required_conditions": [
+            {"tool": "command_execution", "command_regex": "unittest", "exit_code": 0, "output_flags": ["tests_ran"]}]}}}
+        ans = {"EVIDENCE_STATUS": "VERIFIED", "REQUIRED_EVIDENCE": [],
+               "CLAIMS": [{"id": "tests", "status": "VERIFIED", "evidence_ids": ["call:1"]}]}
+        self.assertEqual(checker.check(ans, fixture, ledger), [])
+
+
 class LedgerCheck(unittest.TestCase):
     def setUp(self):
         self.ledger = by_id(ledger_of())

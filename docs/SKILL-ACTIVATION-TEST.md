@@ -169,3 +169,17 @@ evidence-first 기동 1/8, 대조군 2/2.
 - 모델이 왜 부르지 않았는지(설명이 맞지 않는다고 판단했는지, 목록 규모 때문인지)는 로그에 없다. 원인 확정은 **NOT VERIFIED**다.
 - 표본 8건, 단일 모델·단일 환경이다. 이전 기록(1/6, 0/8)과 방향은 같지만 조건이 같지 않다.
 - 다음 시험 후보(승인 후): 사용자 플러그인이 거의 없는 깨끗한 설정에서 같은 사례를 실행해 스킬 수의 영향을 분리한다.
+
+## 11. 깨끗한 설정에서의 기동 관측 (2026-11-27, Claude `--isolated`, 10회)
+
+목적: 10절에서 남긴 교란(스킬 168개 환경)을 분리한다. 방법: `--setting-sources project,local --strict-mcp-config`를 추가해 사용자 플러그인과 MCP를 뺐다(init 이벤트의 스킬 목록이 168개에서 30개로 줄고 MCP 0개). 저장소 코드는 바꾸지 않고 저장소 밖 래퍼로 `isolated_claude_command`를 감쌌다. 사례 5건(evidence-first 4건 + 대조군 `act-writing`) × 2회, 호출 10회.
+
+| 사례 | 1회 | 2회 |
+|---|---|---|
+| act-evidence-first | ACTIVATED | ACTIVATED |
+| act-evidence-first-b | MISSED | MISSED |
+| act-evidence-first-c | MISSED | MISSED |
+| act-evidence-first-d | MISSED | MISSED |
+| act-writing | ACTIVATED | ACTIVATED |
+
+evidence-first 기동 2/8(168개 환경 1/8), 대조군 2/2. 스킬 수를 줄여도 b·c·d는 6/6 미기동이므로 스킬 수 교란은 주된 원인이 아니다. 표본이 작아 1/8과 2/8의 차이는 의미 있게 해석하지 않는다. 결론과 처리는 D-049를 따른다.

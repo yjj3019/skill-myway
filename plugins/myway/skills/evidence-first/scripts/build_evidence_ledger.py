@@ -12,8 +12,9 @@
   - Claude Code: 종료 코드는 셸 도구(Bash·PowerShell) 결과에서만 얻는다. 오류 결과의 "Exit code N" 머리말을 읽고
     오류가 아니면 0으로 본다. 실제 로그로 확인했다(Windows, Bash 도구, 성공과 종료 코드 1).
   - Codex: `item.completed`의 command_execution만 센다. `exit_code`와 `aggregated_output`을 그대로 쓰고 status가
-    completed가 아니면 오류다. 실제 로그에서 구조와 실패 사례(exit_code -1, status failed)를 확인했고, 이 PC의
-    샌드박스 오류 때문에 성공 사례(exit_code 0)는 확인하지 못했다.
+    completed가 아니면 오류다. 실제 로그에서 구조, 실패 사례(exit_code -1, status failed), 성공 사례(exit_code 0,
+    status completed)를 확인했다. 명령은 호스트가 셸(예: Windows의 powershell.exe -Command ...)로 감싼 문자열로
+    기록되므로 command_regex는 감싼 전체 문자열에 맞춘다.
   - Grok: `tool_call`과 rawOutput이 있는 마지막 `tool_call_update`를 짝짓고 `exit_code`와 `output_for_prompt`를 쓴다.
     실제 로그의 성공 사례(exit_code 0)만 확인했다.
   - 로그 파일 자체가 변조되지 않았다고 가정한다. 장부는 모델이 아니라 하네스가 만들어야 한다.

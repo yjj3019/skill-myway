@@ -645,3 +645,7 @@ Windows에서 저장소 검사와 세 스킬의 형식 검사가 통과했다. �
 ## 병렬 호출 순번 시험 (2026-11-28, Claude, 모델 호출 2회)
 - 한 응답(같은 message id)에서 Bash 3개를 병렬로 호출하고 별도 호출 1개를 더한 실행 2회. 장부 4항목, 각 주장이 정확히 하나의 호출(a→call:1, b→call:2, g→call:3, d→call:4)만 인용했고(답변 전문 확인) 검사 2/2 통과(`false`는 CONTRADICTED).
 - 한계: 표본 2회, Claude만. 두 실행 모두 로그의 호출 순서가 프롬프트의 명령 순서와 같아서, 둘이 어긋나는 경우(순번을 잘못 세기 쉬운 경우)는 시험하지 않았다. 호출 수십 번의 긴 실행, Codex·Grok 병렬 호출, 순번이 어긋나는 병렬 조합은 **NOT VERIFIED**. Codex 성공 사례(exit_code 0)도 이 PC 샌드박스 때문에 여전히 **NOT VERIFIED**(샌드박스 우회 실행은 승인 없이 하지 않았다).
+
+## Codex 성공 사례 (2026-11-28, 1.30.2, 모델 호출 1회)
+- 사용자 승인 후 `--dangerously-bypass-approvals-and-sandbox`로 임시 빈 폴더에서 `echo codex-ok` 한 번만 실행했다(샌드박스 없는 실행은 이 1회뿐). 실제 로그에서 `exit_code 0`, `status completed`, 출력 `codex-ok`를 확인했고 장부 1항목(`flags.ok` true)이 만들어졌다. 이전의 Codex 성공 사례 NOT VERIFIED 항목은 닫는다(Windows, Codex 0.172.0, 단일 호출 1회 기준).
+- 새로 관찰: 명령이 `powershell.exe -Command 'echo codex-ok'` 래퍼째 기록된다. 조건의 `command_regex`는 래퍼를 포함해야 한다. Codex 병렬 호출과 긴 실행은 여전히 NOT VERIFIED.

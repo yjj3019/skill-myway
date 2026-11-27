@@ -21,11 +21,18 @@ fixture(JSON 객체): {"claims": {"<id>": {"expected_status": 판정,
 이 검사는 형식과 일관성만 본다. 판정이 옳은지, 증거 ID가 실제 로그와 연결되는지(위조 가능), REQUIRED_EVIDENCE가 적절한지는
 검증하지 않는다. 증거 ID의 실제 연결은 외부 수집기의 몫이며, 통과는 의미 품질이나 독립 검증을 대체하지 않는다.
 
-종료 코드: 0 통과, 1 답변이 계약 위반(깨진 JSON 포함), 2 검사 불능(입력을 읽지 못함·fixture 오류·사용법 오류).
-사용: python check_evidence_answer.py ANSWER.json FIXTURE.json
+장부 모드(--ledger): 증거 ID를 모델이 아니라 실행 로그에서 만든 장부(build_evidence_ledger.py)로 검증한다.
+  증거 ID는 장부의 `call:N`(N번째 도구 호출)이다. fixture의 규칙은 허용·필요 증거 ID 대신 required_conditions를 쓴다.
+  조건 하나는 {"tool", "command_regex", "exit_code", "output_flags"} 중 1개 이상의 키이고, 주장이 인용한 장부 항목 중
+  그 조건을 모두 만족하는 항목이 있어야 한다. VERIFIED·CONTRADICTED가 기대값이면 조건이 1개 이상 있어야 한다.
+  조건이 느슨하면 사소한 명령으로도 통과하므로 명령·종료 코드·출력 플래그를 함께 거는 것은 fixture 작성자의 몫이다.
+
+종료 코드: 0 통과, 1 답변이 계약 위반(깨진 JSON 포함), 2 검사 불능(입력을 읽지 못함·fixture 또는 장부 오류·사용법 오류).
+사용: python check_evidence_answer.py ANSWER.json FIXTURE.json [--ledger LEDGER.json]
 """
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -34,6 +41,8 @@ PRECEDENCE = ("CONTRADICTED", "BLOCKED", "NOT_VERIFIED")  # 이 순서로 하나
 ANSWER_KEYS = {"EVIDENCE_STATUS", "CLAIMS", "REQUIRED_EVIDENCE"}
 CLAIM_KEYS = {"id", "status", "evidence_ids"}
 RULE_KEYS = {"expected_status", "allowed_evidence", "required_evidence"}
+LEDGER_RULE_KEYS = {"expected_status", "required_conditions"}
+CONDITION_KEYS = {"tool", "command_regex", "exit_code", "output_flags"}
 MAX_BYTES = 1024 * 1024
 
 
@@ -58,13 +67,77 @@ def _string_list(value):
     return isinstance(value, list) and all(isinstance(item, str) for item in value)
 
 
-def validate_fixture(fixture):
+def _validate_condition(cid, cond):
+    if not isinstance(cond, dict) or not cond or not set(cond) <= CONDITION_KEYS:
+        raise FixtureError(f"{cid}: 조건의 키는 {sorted(CONDITION_KEYS)} 중 1개 이상이어야 한다")
+    for key in ("tool", "command_regex"):
+        if key in cond and (not isinstance(cond[key], str) or not cond[key]):
+            raise FixtureError(f"{cid}: 조건 {key}는 비어 있지 않은 문자열이어야 한다")
+    if "command_regex" in cond:
+        try:
+            re.compile(cond["command_regex"])
+        except re.error as exc:
+            raise FixtureError(f"{cid}: command_regex가 올바르지 않다: {exc}") from exc
+    if "exit_code" in cond and (not isinstance(cond["exit_code"], int) or isinstance(cond["exit_code"], bool)):
+        raise FixtureError(f"{cid}: exit_code는 정수여야 한다")
+    if "output_flags" in cond and (not _string_list(cond["output_flags"]) or not cond["output_flags"]):
+        raise FixtureError(f"{cid}: output_flags는 비어 있지 않은 문자열 배열이어야 한다")
+
+
+def _validate_ledger_fixture(claims):
+    for cid, rule in claims.items():
+        if not isinstance(rule, dict) or set(rule) != LEDGER_RULE_KEYS:
+            raise FixtureError(f"{cid}: 장부 모드 규칙의 키는 정확히 {sorted(LEDGER_RULE_KEYS)}여야 한다")
+        if rule["expected_status"] not in STATUSES:
+            raise FixtureError(f"{cid}: expected_status가 올바르지 않다")
+        conditions = rule["required_conditions"]
+        if not isinstance(conditions, list):
+            raise FixtureError(f"{cid}: required_conditions는 배열이어야 한다")
+        for cond in conditions:
+            _validate_condition(cid, cond)
+        if rule["expected_status"] in ("VERIFIED", "CONTRADICTED") and not conditions:
+            raise FixtureError(f"{cid}: {rule['expected_status']}에는 required_conditions가 필요하다")
+
+
+def validate_ledger(ledger):
+    """장부 스키마를 검사하고 {id: 항목}을 반환한다. 문제가 있으면 FixtureError."""
+    if not isinstance(ledger, dict) or ledger.get("schema_version") != 1 or not isinstance(ledger.get("entries"), list):
+        raise FixtureError("장부는 schema_version 1과 entries 배열을 가진 객체여야 한다")
+    entries = {}
+    for entry in ledger["entries"]:
+        if not isinstance(entry, dict) or not isinstance(entry.get("id"), str) or entry["id"] in entries:
+            raise FixtureError("장부 항목의 id가 없거나 문자열이 아니거나 중복됐다")
+        code = entry.get("exit_code")
+        flags = entry.get("flags", {})
+        if not isinstance(entry.get("tool"), str) or not isinstance(entry.get("command"), str) \
+                or not (code is None or (isinstance(code, int) and not isinstance(code, bool))) \
+                or not isinstance(flags, dict) or not all(isinstance(v, bool) for v in flags.values()):
+            raise FixtureError(f"장부 항목 {entry['id']}의 필드가 올바르지 않다")
+        entries[entry["id"]] = entry
+    return entries
+
+
+def _satisfies(entry, cond):
+    if "tool" in cond and entry["tool"] != cond["tool"]:
+        return False
+    if "command_regex" in cond and not re.search(cond["command_regex"], entry["command"]):
+        return False
+    if "exit_code" in cond and entry.get("exit_code") != cond["exit_code"]:
+        return False
+    flags = entry.get("flags", {})
+    return all(flags.get(name) is True for name in cond.get("output_flags", []))
+
+
+def validate_fixture(fixture, ledger_mode=False):
     """fixture 스키마를 검사하고 문제가 있으면 FixtureError를 던진다."""
     if not isinstance(fixture, dict) or set(fixture) != {"claims"}:
         raise FixtureError("fixture는 키 'claims' 하나만 가진 객체여야 한다")
     claims = fixture["claims"]
     if not isinstance(claims, dict) or not claims:
         raise FixtureError("claims는 비어 있지 않은 객체여야 한다")
+    if ledger_mode:
+        _validate_ledger_fixture(claims)
+        return
     for cid, rule in claims.items():
         if not isinstance(rule, dict) or set(rule) != RULE_KEYS:
             raise FixtureError(f"{cid}: 규칙의 키는 정확히 {sorted(RULE_KEYS)}여야 한다")
@@ -88,8 +161,8 @@ def overall_status(statuses):
     return "VERIFIED"
 
 
-def check(answer, fixture):
-    """계약 위반 코드 목록을 반환한다. fixture는 이미 검증됐다고 가정한다."""
+def check(answer, fixture, ledger=None):
+    """계약 위반 코드 목록을 반환한다. fixture와 ledger({id: 항목})는 이미 검증됐다고 가정한다."""
     if not isinstance(answer, dict):
         return ["INVALID_ANSWER: 답변이 JSON 객체가 아니다"]
     if set(answer) != ANSWER_KEYS:
@@ -131,9 +204,16 @@ def check(answer, fixture):
         rule = expected[cid]
         if len(refs) != len(set(refs)):
             errors.append(f"DUPLICATE_EVIDENCE: {cid}")
-        if not set(refs) <= set(rule["allowed_evidence"]):
-            errors.append(f"UNKNOWN_EVIDENCE: {cid}")
-        if status in ("VERIFIED", "CONTRADICTED") and not set(rule["required_evidence"]) <= set(refs):
+        if ledger is None:
+            if not set(refs) <= set(rule["allowed_evidence"]):
+                errors.append(f"UNKNOWN_EVIDENCE: {cid}")
+            supported = set(rule["required_evidence"]) <= set(refs)
+        else:
+            cited = [ledger[ref] for ref in refs if ref in ledger]
+            if len(cited) != len(refs):
+                errors.append(f"UNKNOWN_EVIDENCE: {cid}")
+            supported = all(any(_satisfies(entry, cond) for entry in cited) for cond in rule["required_conditions"])
+        if status in ("VERIFIED", "CONTRADICTED") and not supported:
             errors.append(f"UNSUPPORTED_VERDICT: {cid}는 {status}이지만 필요한 증거가 없다")
         if status != rule["expected_status"]:
             errors.append(f"WRONG_VERDICT: {cid}는 {status}, 기대값은 {rule['expected_status']}")
@@ -166,6 +246,7 @@ def main(argv=None):
     cli = argparse.ArgumentParser(description="증거 판정 JSON 답변이 계약을 지키는지 검사한다(형식과 일관성만).")
     cli.add_argument("answer", type=Path, help="검사할 답변 JSON")
     cli.add_argument("fixture", type=Path, help="사람이 고정한 기대값 JSON")
+    cli.add_argument("--ledger", type=Path, help="실행 로그에서 만든 증거 장부 JSON(장부 모드)")
     args = cli.parse_args(argv)
     for stream in (sys.stdout, sys.stderr):  # 콘솔 인코딩이 한국어를 못 담아도 출력이 죽지 않게 한다
         if hasattr(stream, "reconfigure"):
@@ -173,7 +254,8 @@ def main(argv=None):
     try:
         answer_text = _read(args.answer)
         fixture = loads(_read(args.fixture))
-        validate_fixture(fixture)
+        validate_fixture(fixture, ledger_mode=args.ledger is not None)
+        ledger = validate_ledger(loads(_read(args.ledger))) if args.ledger is not None else None
     except (OSError, UnicodeDecodeError, ValueError) as exc:
         print(f"CHECKER_ERROR: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
@@ -183,7 +265,7 @@ def main(argv=None):
         print(f"위반 INVALID_JSON: {exc}")
         print("EVIDENCE-ANSWER: FAIL (1)")
         return 1
-    violations = check(answer, fixture)
+    violations = check(answer, fixture, ledger)
     lines = [f"위반 {item}" for item in violations]
     verdict = "FAIL" if violations else "PASS"
     print("\n".join(lines + [f"EVIDENCE-ANSWER: {verdict} ({len(violations)})"]))

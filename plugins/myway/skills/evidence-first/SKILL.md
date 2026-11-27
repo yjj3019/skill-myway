@@ -45,7 +45,7 @@ description: 작업·지침·스킬·절차를 검토하거나 개선할 때 근
 
 - 주장마다 VERIFIED, CONTRADICTED, NOT_VERIFIED, BLOCKED 중 하나로 판정하고 근거 증거를 가리킨다. 증거가 없거나 확인 범위를 벗어난 주장은 VERIFIED로 쓰지 않는다.
 - 종합 판정은 CONTRADICTED > BLOCKED > NOT_VERIFIED > VERIFIED 순서로 정한다. VERIFIED가 아니면 다음에 필요한 증거를 적는다.
-- 형식이 지정된 평가에서는 JSON(`EVIDENCE_STATUS`, `CLAIMS`, `REQUIRED_EVIDENCE`)으로 답하고 `scripts/check_evidence_answer.py`로 검사할 수 있다. 모델이 쓴 증거 ID는 증거가 아니다. 검사기를 실행하지 못했으면 통과로 보고하지 않는다.
+- 형식이 지정된 평가에서는 코드펜스 없는 JSON 객체 하나로 답한다. 키는 정확히 `EVIDENCE_STATUS`, `CLAIMS`, `REQUIRED_EVIDENCE`이고 `CLAIMS`의 원소는 `{"id": 주장 id, "status": 판정, "evidence_ids": [요청에 주어진 증거 ID]}`다. 주장 id는 요청에 적힌 이름을 그대로 쓴다. 이 답변은 `scripts/check_evidence_answer.py`로 검사할 수 있고, 직접 도구를 실행한 평가는 `scripts/build_evidence_ledger.py`로 실행 로그에서 장부를 만들어 `--ledger`로 대조한다. 모델이 쓴 증거 ID는 증거가 아니다. 검사기를 실행하지 못했으면 통과로 보고하지 않는다.
 - 계약 통과는 형식과 일관성만 뜻하며 의미 품질이나 독립 검증을 대체하지 않는다. 세부는 `references/answer-contract.md`를 따른다.
 
 기준선과 후보를 비교하면 예정된 짝, 양쪽 출력이 있는 짝, 양쪽 결과에 판정이 끝난 짝을 따로 센다. 개선·악화·동률은 판정 완료 사례에서만 집계한다. 시간 초과, 미채점과 미확인 안전 평가는 별도 상태로 남긴다.

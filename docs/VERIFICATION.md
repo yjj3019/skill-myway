@@ -649,3 +649,9 @@ Windows에서 저장소 검사와 세 스킬의 형식 검사가 통과했다. �
 ## Codex 성공 사례 (2026-11-28, 1.30.2, 모델 호출 1회)
 - 사용자 승인 후 `--dangerously-bypass-approvals-and-sandbox`로 임시 빈 폴더에서 `echo codex-ok` 한 번만 실행했다(샌드박스 없는 실행은 이 1회뿐). 실제 로그에서 `exit_code 0`, `status completed`, 출력 `codex-ok`를 확인했고 장부 1항목(`flags.ok` true)이 만들어졌다. 이전의 Codex 성공 사례 NOT VERIFIED 항목은 닫는다(Windows, Codex 0.172.0, 단일 호출 1회 기준).
 - 새로 관찰: 명령이 `powershell.exe -Command 'echo codex-ok'` 래퍼째 기록된다. 조건의 `command_regex`는 래퍼를 포함해야 한다. Codex 병렬 호출과 긴 실행은 여전히 NOT VERIFIED.
+
+## 긴 실행·어긋난 병렬·Grok 병렬 (2026-11-28, 1.30.3, Claude 모델 호출 4회 + Grok 1회)
+- 긴 실행(Claude, 순차 22호출, 2회): 장부 22항목, 인용한 `call:3`·`call:11`·`call:17`·`call:22`가 모두 정확했고 검사 2/2 통과(`false`는 CONTRADICTED).
+- 어긋난 병렬(Claude, 병렬 4호출에 `sleep 4`, `sleep 2`를 섞어 결과가 y, z, x, w 순으로 돌아온 경우, 2회): 모델이 호출 순서대로 `call:1`~`call:4`를 인용했고 장부의 짝짓기도 맞았다. 첫 검사는 4건 위반(UNSUPPORTED_VERDICT)이었으나 원인은 **내 fixture의 플래그**였다. 출력에 `Shell cwd was reset to ...` 꼬리말이 붙어 `^w$`가 맞지 않았다. 같은 로그에서 `(?m)^w$`로 장부만 다시 만들어 2/2 통과했다. 플래그를 결과를 본 뒤 고친 것이므로 이 두 건은 "검사 결과를 본 뒤 fixture를 고쳐 통과시킨" 사례로 읽어야 하며, 순번과 짝짓기가 맞았다는 근거는 로그의 호출 id·인용 ID 대조다.
+- Grok 병렬(모델 호출 1회, 답변 계약 없이 장부만): 4개 `tool_call`이 먼저 나오고 같은 `toolCallId`의 `tool_call_update`가 여러 번 반복됐다. 장부는 4항목으로 호출 순서(`echo w`~`echo z`)와 종료 코드 0이 맞았다. Grok의 답변 계약 준수는 **NOT VERIFIED**.
+- 여전히 NOT VERIFIED: Codex의 병렬 호출(Codex는 명령을 순차 실행하는 것으로 보이나 확인하지 않았고, 추가 실행은 샌드박스 우회 승인이 필요하다), 호출 22번을 넘는 실행, 일반 요청의 자동 기동(D-049).
